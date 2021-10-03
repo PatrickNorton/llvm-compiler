@@ -1,0 +1,399 @@
+use crate::parser::aug_assign::AugAssignTypeNode;
+use crate::parser::descriptor::DescriptorNode;
+use crate::parser::keyword::Keyword;
+use crate::parser::line_info::LineInfo;
+use crate::parser::operator::OperatorTypeNode;
+use crate::parser::operator_fn::OpFuncTypeNode;
+use crate::parser::operator_sp::OpSpTypeNode;
+use once_cell::sync::Lazy;
+use regex::Regex;
+use std::array;
+use std::mem::discriminant;
+use unicode_xid::UnicodeXID;
+
+#[derive(Debug)]
+pub struct Token {
+    token_type: TokenType,
+    line_info: LineInfo,
+}
+
+#[derive(Debug)]
+pub enum TokenType {
+    /// Whitespace. Matches comments, spaces, and escaped newlines. Should
+    /// not make it past the tokenizer.
+    Whitespace,
+    /// End of the file.
+    Epsilon,
+    /// Newlines,
+    Newline,
+    /// Descriptor words, such as public or static.
+    Descriptor(DescriptorNode),
+    /// Language-reserved keywords, like if, try, or enum.
+    Keyword(Keyword),
+    /// Open braces. Each token this matches corresponds with a [closing brace](b).
+    ///
+    /// [b]: TokenType::OpenBrace
+    OpenBrace(char),
+    /// Closing braces. Each token this matches corresponds with an [opening brace](b).
+    ///
+    /// [b]: TokenType::CloseBrace
+    CloseBrace(char),
+    /// The comma, such as in between items in a list.
+    Comma,
+    /// Augmented assignment operators, such as += or -=.
+    AugAssign(AugAssignTypeNode),
+    /// The magical arrow unicorn, for function return types.
+    Arrow,
+    /// The even more magical double arrow bi-corn.
+    DoubleArrow,
+    /// The ellipsis unicorn.
+    Ellipsis,
+    /// Dots that aren't an ellipsis.
+    Dot,
+    /// For increment and decrement operations.
+    Increment(bool),
+    /// Bog-standard operators, like + or <<
+    Operator(OperatorTypeNode),
+    /// Assignment, both static and dynamic (:=).
+    Assign(bool),
+    /// String literals of all sorts.
+    String(String),
+    /// Numbers in all bases and decimals.
+    Number,
+    /// Special operator names, for operator overload definitions.
+    OperatorSp(OpSpTypeNode),
+    /// Variable names.
+    Name(String),
+    /// Backslash-preceded operator functions, such as \\+ or \\<<.
+    OpFunc(OpFuncTypeNode),
+    /// Colons, for slices.
+    Colon,
+    /// The at symbol, for decorators.
+    At,
+    /// The dollar sign, for annotations.
+    Dollar,
+}
+
+impl Token {
+    pub fn new(token: TokenType, info: LineInfo) -> Token {
+        Token {
+            token_type: token,
+            line_info: info,
+        }
+    }
+
+    pub fn deconstruct(self) -> (TokenType, LineInfo) {
+        (self.token_type, self.line_info)
+    }
+
+    pub fn epsilon(info: LineInfo) -> Token {
+        Token::new(TokenType::Epsilon, info)
+    }
+
+    pub fn newline(info: LineInfo) -> Token {
+        Token::new(TokenType::Newline, info)
+    }
+
+    pub fn is_whitespace(&self) -> bool {
+        matches!(self.token_type, TokenType::Whitespace)
+    }
+
+    pub fn is_descriptor(&self) -> bool {
+        matches!(self.token_type, TokenType::Descriptor(_))
+    }
+
+    pub fn is_type(&self, tok_type: &TokenType) -> bool {
+        discriminant(&self.token_type) == discriminant(tok_type)
+    }
+}
+
+impl TokenType {
+    pub fn matchers() -> Matchers {
+        Matchers::new()
+    }
+}
+
+type MatcherFn = fn(&str) -> Option<(TokenType, usize)>;
+
+const MATCHER_LEN: usize = 26;
+const MATCHERS: [MatcherFn; MATCHER_LEN] = [
+    whitespace,
+    epsilon,
+    newline,
+    DescriptorNode::pattern,
+    Keyword::pattern,
+    open_brace,
+    close_brace,
+    comma,
+    AugAssignTypeNode::pattern,
+    arrow,
+    double_arrow,
+    ellipsis,
+    dot,
+    arrow,
+    double_arrow,
+    increment,
+    OperatorTypeNode::pattern,
+    assign,
+    string,
+    number,
+    name,
+    OpSpTypeNode::pattern,
+    OpFuncTypeNode::pattern,
+    colon,
+    at,
+    dollar,
+];
+
+pub struct Matchers {
+    value: array::IntoIter<MatcherFn, MATCHER_LEN>,
+}
+
+impl Matchers {
+    pub fn new() -> Matchers {
+        Matchers {
+            value: array::IntoIter::new(MATCHERS),
+        }
+    }
+}
+
+impl Iterator for Matchers {
+    type Item = MatcherFn;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.value.next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.value.size_hint()
+    }
+}
+
+static WHITESPACE_PATTERN: Lazy<Regex> =
+    Lazy::new(|| Regex::new("^(#\\|(.|[\r\n])*?\\|#|#.*|[\t ]+|\\\\[\r\n])").unwrap());
+
+fn whitespace(input: &str) -> Option<(TokenType, usize)> {
+    if let Option::Some(m) = WHITESPACE_PATTERN.find(input) {
+        assert_eq!(m.start(), 0);
+        Option::Some((TokenType::Whitespace, m.end()))
+    } else {
+        Option::None
+    }
+}
+
+fn epsilon(input: &str) -> Option<(TokenType, usize)> {
+    input.is_empty().then(|| (TokenType::Epsilon, 0))
+}
+
+fn newline(input: &str) -> Option<(TokenType, usize)> {
+    if input.starts_with("\r\n") {
+        Option::Some((TokenType::Newline, 2))
+    } else {
+        match input.chars().next()? {
+            x @ ('\n' | '\x0b' | '\x0c' | '\r' | '\u{85}' | '\u{2028}' | '\u{2029}') => {
+                Option::Some((TokenType::Newline, x.len_utf8()))
+            }
+            _ => Option::None,
+        }
+    }
+}
+
+fn open_brace(input: &str) -> Option<(TokenType, usize)> {
+    match input.chars().next()? {
+        x @ ('(' | '[' | '{') => Option::Some((TokenType::OpenBrace(x), 1)),
+        _ => Option::None,
+    }
+}
+
+fn close_brace(input: &str) -> Option<(TokenType, usize)> {
+    match input.chars().next()? {
+        x @ (')' | ']' | '}') => Option::Some((TokenType::CloseBrace(x), 1)),
+        _ => Option::None,
+    }
+}
+
+fn comma(input: &str) -> Option<(TokenType, usize)> {
+    if input.starts_with(',') {
+        Option::Some((TokenType::Comma, 1))
+    } else {
+        Option::None
+    }
+}
+
+fn arrow(input: &str) -> Option<(TokenType, usize)> {
+    if input.starts_with("->") {
+        Option::Some((TokenType::Arrow, 2))
+    } else {
+        Option::None
+    }
+}
+
+fn double_arrow(input: &str) -> Option<(TokenType, usize)> {
+    if input.starts_with("=>") {
+        Option::Some((TokenType::DoubleArrow, 2))
+    } else {
+        Option::None
+    }
+}
+
+fn ellipsis(input: &str) -> Option<(TokenType, usize)> {
+    if input.starts_with("...") {
+        Option::Some((TokenType::Ellipsis, 3))
+    } else {
+        Option::None
+    }
+}
+
+fn dot(input: &str) -> Option<(TokenType, usize)> {
+    if input.starts_with('.') {
+        Option::Some((TokenType::Dot, 1))
+    } else if input.starts_with("?.") {
+        Option::Some((TokenType::Dot, 2))
+    } else if input.starts_with("!!.") {
+        Option::Some((TokenType::Dot, 3))
+    } else {
+        Option::None
+    }
+}
+
+fn increment(input: &str) -> Option<(TokenType, usize)> {
+    if input.starts_with("++") {
+        Option::Some((TokenType::Increment(true), 2))
+    } else if input.starts_with("--") {
+        Option::Some((TokenType::Increment(false), 2))
+    } else {
+        Option::None
+    }
+}
+
+fn assign(input: &str) -> Option<(TokenType, usize)> {
+    if input.starts_with('=') {
+        Option::Some((TokenType::Assign(false), 1))
+    } else if input.starts_with("?=") {
+        Option::Some((TokenType::Assign(true), 2))
+    } else {
+        Option::None
+    }
+}
+
+const STRING_PREFIXES: &str = "refbcy";
+
+fn string(input: &str) -> Option<(TokenType, usize)> {
+    let mut cursor = input.char_indices().peekable();
+    while STRING_PREFIXES.contains(cursor.peek()?.1) {
+        cursor.next()?;
+    }
+    let terminator = cursor.next()?.1;
+    if terminator != '"' && terminator != '\'' {
+        return Option::None;
+    }
+    let mut backslash_count = 0;
+    for (i, chr) in cursor {
+        match chr {
+            '"' => {
+                if terminator == '"' && backslash_count % 2 == 0 {
+                    let value = input[..i + 1].to_string();
+                    return Option::Some((TokenType::String(value), i + 1));
+                }
+                backslash_count = 0;
+            }
+            '\'' => {
+                if terminator == '\'' && backslash_count % 2 == 0 {
+                    let value = input[..i + 1].to_string();
+                    return Option::Some((TokenType::String(value), i + 1));
+                }
+                backslash_count = 0;
+            }
+            '\\' => backslash_count += 1,
+            _ => backslash_count = 0,
+        }
+    }
+    Option::None
+}
+
+const HEX_DIGITS: &str = "0123456789abcdef_";
+const DEC_DIGITS: &str = "0123456789_";
+
+fn number(input: &str) -> Option<(TokenType, usize)> {
+    if input.starts_with("0x") {
+        number_of(input, "0x", HEX_DIGITS)
+    } else if input.starts_with("0o") {
+        number_of(input, "0o", DEC_DIGITS)
+    } else if input.starts_with("0b") {
+        number_of(input, "0b", DEC_DIGITS)
+    } else {
+        number_of(input, "", DEC_DIGITS)
+    }
+}
+
+fn number_of(input: &str, prefix: &str, digits: &str) -> Option<(TokenType, usize)> {
+    assert!(input.starts_with(prefix));
+    let mut cursor = input[prefix.len()..].char_indices().peekable();
+    if cursor.peek()?.1 == '_' {
+        return Option::None;
+    }
+    while digits.contains(cursor.peek()?.1) {
+        cursor.next()?;
+    }
+    if cursor.peek()?.1 == '.' {
+        cursor.next()?;
+        let (i, ch) = cursor.next()?;
+        if !digits.contains(ch) {
+            return (i == prefix.len() + 1).then(|| (TokenType::Number, i - 1));
+        }
+        while digits.contains(cursor.peek()?.1) {
+            cursor.next()?;
+            if cursor.peek().is_none() {
+                return Option::Some((TokenType::Number, input.len()));
+            }
+        }
+    }
+    if cursor.peek()?.0 == prefix.len() {
+        Option::None
+    } else {
+        Option::Some((TokenType::Number, cursor.peek()?.0))
+    }
+}
+
+fn name(input: &str) -> Option<(TokenType, usize)> {
+    if !UnicodeXID::is_xid_start(input.chars().next()?) {
+        Option::None
+    } else {
+        let count = input
+            .chars()
+            .take_while(|&ch| UnicodeXID::is_xid_continue(ch))
+            .map(char::len_utf8)
+            .sum();
+        if count == "operator".len() && input.starts_with("operator") {
+            Option::None
+        } else if count > 0 {
+            Option::Some((TokenType::Name(input[..count].to_string()), count))
+        } else {
+            Option::None
+        }
+    }
+}
+
+fn colon(input: &str) -> Option<(TokenType, usize)> {
+    if input.starts_with(':') {
+        Option::Some((TokenType::Colon, 1))
+    } else {
+        Option::None
+    }
+}
+
+fn at(input: &str) -> Option<(TokenType, usize)> {
+    if input.starts_with('@') {
+        Option::Some((TokenType::At, 1))
+    } else {
+        Option::None
+    }
+}
+
+fn dollar(input: &str) -> Option<(TokenType, usize)> {
+    if input.starts_with('$') {
+        Option::Some((TokenType::Dollar, 1))
+    } else {
+        Option::None
+    }
+}
