@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Eq, PartialEq, Hash)]
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct LineInfo {
     path: PathBuf,
     line_no: usize,
@@ -13,12 +13,21 @@ pub trait Lined {
 }
 
 impl LineInfo {
-    pub fn new(path: PathBuf, line_no: usize, line: String, start: usize) -> LineInfo {
+    pub const fn new(path: PathBuf, line_no: usize, line: String, start: usize) -> LineInfo {
         LineInfo {
             path,
             line_no,
             line,
             start,
+        }
+    }
+
+    pub fn empty() -> LineInfo {
+        LineInfo {
+            path: PathBuf::new(),
+            line_no: usize::MAX,
+            line: String::new(),
+            start: 0,
         }
     }
 
@@ -45,5 +54,14 @@ impl LineInfo {
 impl Lined for LineInfo {
     fn line_info(&self) -> &LineInfo {
         self
+    }
+}
+
+impl<T> Lined for &T
+where
+    T: Lined,
+{
+    fn line_info(&self) -> &LineInfo {
+        (*self).line_info()
     }
 }

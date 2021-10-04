@@ -1,4 +1,6 @@
+mod argument;
 mod aug_assign;
+mod base;
 mod descriptor;
 mod error;
 mod keyword;
@@ -6,6 +8,14 @@ mod line_info;
 mod operator;
 mod operator_fn;
 mod operator_sp;
+mod parse;
+mod string;
+mod string_like;
+mod ternary;
+mod test_node;
 mod token;
 mod token_list;
 mod tokenizer;
+mod variable;
+
+pub use parse::Parser;

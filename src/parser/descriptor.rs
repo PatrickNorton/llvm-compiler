@@ -215,7 +215,7 @@ impl DescriptorNode {
     pub fn parse_list(tokens: &mut TokenList) -> ParseResult<HashSet<DescriptorNode>> {
         let mut sets_num = 0;
         let mut descriptors = HashSet::new();
-        while tokens.token_is_descr()? {
+        while matches!(tokens.token_type()?, TokenType::Descriptor(_)) {
             let (node, line_info) = Self::deconstruct_token(tokens.next_token()?).unwrap();
             loop {
                 sets_num += 1;

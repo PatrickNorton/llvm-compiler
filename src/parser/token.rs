@@ -1,7 +1,7 @@
 use crate::parser::aug_assign::AugAssignTypeNode;
 use crate::parser::descriptor::DescriptorNode;
 use crate::parser::keyword::Keyword;
-use crate::parser::line_info::LineInfo;
+use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::operator::OperatorTypeNode;
 use crate::parser::operator_fn::OpFuncTypeNode;
 use crate::parser::operator_sp::OpSpTypeNode;
@@ -14,10 +14,11 @@ use unicode_xid::UnicodeXID;
 #[derive(Debug)]
 pub struct Token {
     token_type: TokenType,
+    sequence: String,
     line_info: LineInfo,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum TokenType {
     /// Whitespace. Matches comments, spaces, and escaped newlines. Should
     /// not make it past the tokenizer.
@@ -75,9 +76,10 @@ pub enum TokenType {
 }
 
 impl Token {
-    pub fn new(token: TokenType, info: LineInfo) -> Token {
+    pub fn new(token: TokenType, sequence: impl ToString, info: LineInfo) -> Token {
         Token {
             token_type: token,
+            sequence: sequence.to_string(),
             line_info: info,
         }
     }
@@ -86,30 +88,44 @@ impl Token {
         (self.token_type, self.line_info)
     }
 
+    pub fn token_type(&self) -> &TokenType {
+        &self.token_type
+    }
+
     pub fn epsilon(info: LineInfo) -> Token {
-        Token::new(TokenType::Epsilon, info)
+        Token::new(TokenType::Epsilon, String::new(), info)
     }
 
     pub fn newline(info: LineInfo) -> Token {
-        Token::new(TokenType::Newline, info)
+        Token::new(TokenType::Newline, "\n", info)
     }
 
     pub fn is_whitespace(&self) -> bool {
         matches!(self.token_type, TokenType::Whitespace)
     }
 
-    pub fn is_descriptor(&self) -> bool {
-        matches!(self.token_type, TokenType::Descriptor(_))
-    }
-
     pub fn is_type(&self, tok_type: &TokenType) -> bool {
         discriminant(&self.token_type) == discriminant(tok_type)
+    }
+
+    pub fn equals(&self, text: &str) -> bool {
+        self.sequence == text
+    }
+
+    pub fn is_kwd(&self, kwd: Keyword) -> bool {
+        self.token_type == TokenType::Keyword(kwd)
     }
 }
 
 impl TokenType {
     pub fn matchers() -> Matchers {
         Matchers::new()
+    }
+}
+
+impl Lined for Token {
+    fn line_info(&self) -> &LineInfo {
+        &self.line_info
     }
 }
 

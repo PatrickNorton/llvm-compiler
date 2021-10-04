@@ -1,5 +1,8 @@
 use crate::hash_map;
+use crate::parser::base::IndependentNode;
+use crate::parser::error::ParseResult;
 use crate::parser::token::TokenType;
+use crate::parser::token_list::TokenList;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
@@ -110,5 +113,10 @@ impl Keyword {
             }
         }
         Option::None
+    }
+
+    pub fn parse_left(self, tokens: &mut TokenList) -> ParseResult<IndependentNode> {
+        debug_assert_eq!(tokens.token_type()?, &TokenType::Keyword(self));
+        todo!("Keyword parsing")
     }
 }

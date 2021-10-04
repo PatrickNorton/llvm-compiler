@@ -1,6 +1,7 @@
 use crate::parser::error::{InvalidToken, ParseResult, ParserException};
 use crate::parser::line_info::LineInfo;
 use crate::parser::token::{Token, TokenType};
+use crate::parser::token_list::TokenList;
 use std::collections::BTreeSet;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -17,6 +18,16 @@ pub struct Tokenizer {
 }
 
 impl Tokenizer {
+    fn from_file(f: File) -> Tokenizer {
+        Tokenizer {
+            reader: BufReader::new(f),
+            file_name: PathBuf::new(), // FIXME
+            next: String::new(),
+            full_line: String::new(),
+            lb_indices: BTreeSet::new(),
+        }
+    }
+
     pub fn tokenize_next(&mut self) -> ParseResult<Token> {
         loop {
             let next_token = self.next_token()?.ok_or_else(|| self.invalid())?;
@@ -24,6 +35,10 @@ impl Tokenizer {
                 return ParseResult::Ok(next_token);
             }
         }
+    }
+
+    pub fn parse(f: File) -> TokenList {
+        TokenList::new(Tokenizer::from_file(f))
     }
 
     fn next_token(&mut self) -> ParseResult<Option<Token>> {
@@ -46,8 +61,8 @@ impl Tokenizer {
         for matcher in TokenType::matchers() {
             if let Option::Some((token, end)) = matcher(&self.next) {
                 let line_info = self.line_info();
-                self.next.drain(0..end);
-                return ParseResult::Ok(Option::Some(Token::new(token, line_info)));
+                let text = self.next.drain(0..end).collect::<String>();
+                return ParseResult::Ok(Option::Some(Token::new(token, text, line_info)));
             }
         }
         ParseResult::Ok(Option::None)
@@ -79,10 +94,10 @@ impl Tokenizer {
     fn adjust_for_multiline(&mut self) -> ParseResult<Option<Token>> {
         ParseResult::Ok(if self.multiline_comment() {
             let info = self.concat_comment()?;
-            Option::Some(Token::new(TokenType::Whitespace, info))
+            Option::Some(Token::new(TokenType::Whitespace, "", info))
         } else if self.multiline_string() {
             let (text, info) = self.concat_string()?;
-            Option::Some(Token::new(TokenType::String(text), info))
+            Option::Some(Token::new(TokenType::String(text.clone()), text, info))
         } else {
             Option::None
         })
