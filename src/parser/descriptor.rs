@@ -196,6 +196,10 @@ impl DescriptorNode {
         }
     }
 
+    pub fn is_mut_node(&self) -> bool {
+        MUT_NODES.contains(self)
+    }
+
     fn deconstruct_token(token: Token) -> Option<(DescriptorNode, LineInfo)> {
         match token.deconstruct() {
             (TokenType::Descriptor(descr), line_info) => Option::Some((descr, line_info)),

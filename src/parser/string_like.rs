@@ -1,4 +1,5 @@
 use crate::parser::error::{ParseResult, ParserError, ParserException};
+use crate::parser::formatted_string::FormattedStringNode;
 use crate::parser::line_info::LineInfo;
 use crate::parser::string::StringNode;
 use crate::parser::test_node::TestNode;
@@ -9,6 +10,7 @@ use std::collections::HashSet;
 #[derive(Debug)]
 pub enum StringLikeNode {
     Standard(StringNode),
+    Formatted(FormattedStringNode),
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
@@ -23,12 +25,13 @@ pub enum StringPrefix {
 
 impl StringLikeNode {
     pub fn parse(tokens: &mut TokenList) -> ParseResult<StringLikeNode> {
-        match tokens.token_type()? {
+        let (token, info) = tokens.next_token()?.deconstruct();
+        match token {
             TokenType::String(x) => {
-                if Self::get_prefixes(x)?.contains(&StringPrefix::Formatted) {
-                    todo!("FormattedStringNode::parse(tokens)")
+                if Self::get_prefixes(&x)?.contains(&StringPrefix::Formatted) {
+                    FormattedStringNode::parse(x, info).map(StringLikeNode::Formatted)
                 } else {
-                    StringNode::parse(tokens).map(StringLikeNode::Standard)
+                    StringNode::parse(x, info).map(StringLikeNode::Standard)
                 }
             }
             _ => panic!("Expected a string"),
@@ -181,6 +184,7 @@ impl From<StringLikeNode> for TestNode {
     fn from(x: StringLikeNode) -> Self {
         match x {
             StringLikeNode::Standard(s) => TestNode::String(s),
+            StringLikeNode::Formatted(s) => TestNode::Formatted(s),
         }
     }
 }

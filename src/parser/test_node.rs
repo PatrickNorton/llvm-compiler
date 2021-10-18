@@ -1,27 +1,55 @@
+use crate::parser::comprehension::{ComprehensionNode, DictComprehensionNode};
+use crate::parser::dotted::DottedVariableNode;
 use crate::parser::error::{ParseResult, ParserError, ParserException};
+use crate::parser::formatted_string::FormattedStringNode;
 use crate::parser::keyword::Keyword;
-use crate::parser::line_info::LineInfo;
+use crate::parser::line_info::{LineInfo, Lined};
+use crate::parser::literal::{DictLiteralNode, LiteralNode};
+use crate::parser::name::NameNode;
+use crate::parser::number::NumberNode;
 use crate::parser::operator::{OperatorNode, OperatorTypeNode};
+use crate::parser::operator_fn::EscapedOperatorNode;
+use crate::parser::post_dot::PostDottableNode;
+use crate::parser::range::RangeLiteralNode;
 use crate::parser::string::StringNode;
 use crate::parser::string_like::StringLikeNode;
 use crate::parser::ternary::TernaryNode;
 use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
-use crate::parser::variable::VariableNode;
 use std::collections::VecDeque;
+use std::convert::TryFrom;
 
 #[derive(Debug)]
 pub enum TestNode {
+    Comprehension(ComprehensionNode),
+    DictComp(DictComprehensionNode),
+    DictLiteral(DictLiteralNode),
+    Empty(EmptyTestNode),
+    Formatted(FormattedStringNode),
+    Literal(LiteralNode),
+    Name(NameNode),
+    Number(NumberNode),
     Operator(OperatorNode),
     OperatorType(OperatorTypeNode),
+    Range(RangeLiteralNode),
     String(StringNode),
     Ternary(Box<TernaryNode>),
-    Variable(VariableNode),
+}
+
+#[derive(Debug)]
+pub struct EmptyTestNode {
+    line_info: LineInfo,
 }
 
 impl TestNode {
     pub fn parse(tokens: &mut TokenList) -> ParseResult<TestNode> {
         Self::parse_newline(tokens, false)
+    }
+
+    pub fn empty() -> TestNode {
+        TestNode::Empty(EmptyTestNode {
+            line_info: LineInfo::empty(),
+        })
     }
 
     fn parse_no_ternary(tokens: &mut TokenList, ignore_newlines: bool) -> ParseResult<TestNode> {
@@ -36,7 +64,10 @@ impl TestNode {
                 line_info,
             )));
         }
-        todo!()
+        match PostDottableNode::try_from(node) {
+            Result::Ok(x) => Self::parse_post(tokens, x.into(), ignore_newlines),
+            Result::Err(node) => Ok(node),
+        }
     }
 
     pub fn parse_newline(tokens: &mut TokenList, ignore_newlines: bool) -> ParseResult<TestNode> {
@@ -54,6 +85,18 @@ impl TestNode {
             ))))
         } else {
             Ok(if_true)
+        }
+    }
+
+    pub fn parse_on_keyword(
+        tokens: &mut TokenList,
+        keyword: Keyword,
+        ignore_newlines: bool,
+    ) -> ParseResult<TestNode> {
+        if matches!(tokens.token_type()?, TokenType::Keyword(k) if k == &keyword) {
+            Self::parse_newline(tokens, ignore_newlines)
+        } else {
+            Ok(Self::empty())
         }
     }
 
@@ -106,19 +149,11 @@ impl TestNode {
             queue.push_back(StackValue::Op(x))
         }
         if queue.is_empty() {
-            todo!()
+            Err(tokens.error("Illegal empty statement"))
+        } else {
+            convert_queue_to_node(queue)
         }
-        convert_queue_to_node(queue)
     }
-
-    // private static TestNode parseNode(@NotNull TokenList tokens, boolean ignoreNewlines, boolean parseCurly) {
-    //         TestNode node = parseInternalNode(tokens, ignoreNewlines, parseCurly);
-    //         if (node instanceof PostDottableNode) {
-    //             return parsePost(tokens, node, ignoreNewlines);
-    //         } else {
-    //             return node;
-    //         }
-    //     }
 
     fn parse_node(
         tokens: &mut TokenList,
@@ -126,7 +161,13 @@ impl TestNode {
         parse_curly: bool,
     ) -> ParseResult<Option<TestNode>> {
         let node = Self::parse_internal_node(tokens, ignore_newlines, parse_curly)?;
-        todo!()
+        Ok(match node {
+            Option::Some(node) => match PostDottableNode::try_from(node) {
+                Result::Ok(x) => Option::Some(Self::parse_post(tokens, x.into(), ignore_newlines)?),
+                Result::Err(node) => Option::Some(node),
+            },
+            Option::None => Option::None,
+        })
     }
 
     fn parse_internal_node(
@@ -137,7 +178,7 @@ impl TestNode {
         if ignore_newlines {
             tokens.pass_newlines()?;
         }
-        match tokens.first()?.token_type() {
+        match tokens.token_type()? {
             TokenType::OpenBrace(c) => {
                 if parse_curly || *c != '{' {
                     Self::parse_open_brace(tokens, ignore_newlines).map(Option::Some)
@@ -145,10 +186,13 @@ impl TestNode {
                     ParseResult::Ok(Option::None)
                 }
             }
-            TokenType::Name(_) => todo!("NameNode::parse(tokens, ignore_newlines)"),
-            TokenType::Number => todo!("NumberNode::parse(tokens)"),
-            TokenType::Operator(_) => todo!("OperatorTypeNode::parse(tokens)"),
-            TokenType::OpFunc(_) => todo!("EscapedOperatorNode::parse(tokens, ignore_newlines)"),
+            TokenType::Name(_) => {
+                NameNode::parse_newline(tokens, ignore_newlines).map(|x| Some(TestNode::Name(x)))
+            }
+            TokenType::Number(_) => Ok(Some(TestNode::Number(NumberNode::parse(tokens)?))),
+            TokenType::Operator(op) => Ok(Some(TestNode::OperatorType(*op))),
+            TokenType::OpFunc(_) => EscapedOperatorNode::parse(tokens, ignore_newlines)
+                .map(|x| Some(TestNode::Name(NameNode::EscapedOp(x)))),
             TokenType::Newline => {
                 if ignore_newlines {
                     panic!("Illegal place for newline")
@@ -157,8 +201,26 @@ impl TestNode {
                 }
             }
             TokenType::String(_) => StringLikeNode::parse(tokens).map(|x| Some(x.into())),
-            TokenType::Keyword(_) => todo!("Self::parse_keyword_node(tokens, ignore_newlines)"),
+            TokenType::Keyword(_) => Self::parse_keyword_node(tokens, ignore_newlines),
             _ => ParseResult::Ok(Option::None),
+        }
+    }
+
+    fn parse_keyword_node(
+        tokens: &mut TokenList,
+        ignore_newlines: bool,
+    ) -> ParseResult<Option<TestNode>> {
+        let (token, _) = tokens.next_tok(ignore_newlines)?.deconstruct();
+        match token {
+            TokenType::Keyword(key) => match key {
+                Keyword::Some => todo!("SomeStatementNode::parse(tokens)"),
+                Keyword::In => todo!("OperatorTypeNode::parse(tokens)"),
+                Keyword::Switch => todo!("SwitchStatementNode::parse(tokens)"),
+                Keyword::Lambda => todo!("LambdaNode::parse(tokens)"),
+                Keyword::Raise => todo!("RaiseStatementNode::parse(tokens)"),
+                _ => Ok(None),
+            },
+            _ => panic!("Expected a token"),
         }
     }
 
@@ -172,11 +234,11 @@ impl TestNode {
         pre: TestNode,
         ignore_newlines: bool,
     ) -> ParseResult<TestNode> {
-        let value = Self::parse_post_braces(tokens, pre, ignore_newlines);
-        todo!("DottedVariableNode::parse_post_dots(tokens, value, ignore_newlines)")
+        let value = Self::parse_post_braces(tokens, pre, ignore_newlines)?;
+        DottedVariableNode::parse_post_dots(tokens, value, ignore_newlines)
     }
 
-    fn parse_post_braces(
+    pub(super) fn parse_post_braces(
         tokens: &mut TokenList,
         pre: TestNode,
         ignore_newlines: bool,
@@ -184,7 +246,7 @@ impl TestNode {
         if ignore_newlines {
             tokens.pass_newlines()?;
         }
-        while let TokenType::OpenBrace(c) = tokens.first()?.token_type() {
+        while let TokenType::OpenBrace(c) = tokens.token_type()? {
             match c {
                 '(' => {
                     todo!("pre = FunctionCallNode::new(pre, ArgumentNode::parse_list(tokens)?)")
@@ -205,14 +267,37 @@ impl TestNode {
         ParseResult::Ok(pre)
     }
 
+    pub fn parse_maybe_post_if(
+        tokens: &mut TokenList,
+        ignore_newlines: bool,
+    ) -> ParseResult<(TestNode, Option<TestNode>)> {
+        let pre_if = Self::parse_no_ternary(tokens, ignore_newlines)?;
+        if !matches!(tokens.token_type()?, TokenType::Keyword(Keyword::If)) {
+            return Ok((pre_if, Option::None));
+        }
+        tokens.next_tok(ignore_newlines)?;
+        let post_if = Self::parse_newline(tokens, ignore_newlines)?;
+        if parse_if_matches!(tokens, ignore_newlines, TokenType::Keyword(Keyword::Else))?.is_some()
+        {
+            let ternary = TernaryNode::new(
+                pre_if,
+                post_if,
+                Self::parse_newline(tokens, ignore_newlines)?,
+            );
+            Ok((TestNode::Ternary(Box::new(ternary)), Option::None))
+        } else {
+            Ok((pre_if, Option::Some(post_if)))
+        }
+    }
+
     fn parse_open_brace_no_dot(tokens: &mut TokenList) -> ParseResult<TestNode> {
-        match tokens.first()?.token_type() {
+        match tokens.token_type()? {
             TokenType::OpenBrace(c) => match c {
                 '(' => {
                     if tokens.brace_contains_kwd(Keyword::For)? {
-                        todo!("ComprehensionNode::parse(tokens)")
+                        ComprehensionNode::parse(tokens).map(TestNode::Comprehension)
                     } else if tokens.brace_contains_str(",")? || tokens.brace_is_empty()? {
-                        todo!("LiteralNode::parse(tokens)")
+                        LiteralNode::parse(tokens).map(TestNode::Literal)
                     } else {
                         tokens.next_token()?;
                         let contained = Self::parse_newline(tokens, true)?;
@@ -227,26 +312,44 @@ impl TestNode {
                 }
                 '[' => {
                     if tokens.brace_contains(&TokenType::Colon)? {
-                        todo!("RangeLiteralNode::parse(tokens)")
+                        RangeLiteralNode::parse(tokens).map(TestNode::Range)
                     } else if tokens.brace_contains_kwd(Keyword::For)? {
-                        todo!("ComprehensionNode::parse(tokens)")
+                        ComprehensionNode::parse(tokens).map(TestNode::Comprehension)
                     } else {
-                        todo!("LiteralNode::parse(tokens)")
+                        LiteralNode::parse(tokens).map(TestNode::Literal)
                     }
                 }
                 '{' => {
                     if tokens.brace_contains_kwd(Keyword::For)? {
-                        todo!("ComprehensionLikeNode::parse(tokens)")
+                        if tokens.brace_contains(&TokenType::Colon)? {
+                            DictComprehensionNode::parse(tokens).map(TestNode::DictComp)
+                        } else {
+                            ComprehensionNode::parse(tokens).map(TestNode::Comprehension)
+                        }
                     } else if tokens.brace_contains(&TokenType::Colon)? {
-                        todo!("DictLiteralNode::parse(tokens)")
+                        DictLiteralNode::parse(tokens).map(TestNode::DictLiteral)
                     } else {
-                        todo!("LiteralNode::parse(tokens)")
+                        LiteralNode::parse(tokens).map(TestNode::Literal)
                     }
                 }
                 x => panic!("Unknown brace found: {}", x),
             },
             _ => panic!(),
         }
+    }
+
+    pub fn next_is_test(tokens: &mut TokenList) -> ParseResult<bool> {
+        Ok(matches!(
+            tokens.token_type()?,
+            TokenType::Name(_)
+                | TokenType::OpenBrace(_)
+                | TokenType::Operator(_)
+                | TokenType::Number(_)
+                | TokenType::OpFunc(_)
+                | TokenType::Ellipsis
+                | TokenType::String(_)
+                | TokenType::Keyword(Keyword::Lambda | Keyword::Some | Keyword::Switch)
+        ))
     }
 }
 
@@ -291,8 +394,15 @@ fn convert_queue_to_node(queue: VecDeque<StackValue>) -> ParseResult<TestNode> {
         }
     }
     let node = temp.pop_front().unwrap();
-    if !temp.is_empty() {
-        todo!("Panic on invalid node")
+    if let Option::Some(x) = temp.pop_front() {
+        Err(ParserError::Normal(ParserException::of("Invalid node", x)))
+    } else {
+        Ok(node)
     }
-    Ok(node)
+}
+
+impl Lined for TestNode {
+    fn line_info(&self) -> &LineInfo {
+        todo!()
+    }
 }

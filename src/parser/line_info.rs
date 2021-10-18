@@ -49,6 +49,15 @@ impl LineInfo {
             spaces = num_spaces
         )
     }
+
+    pub fn substring(&self, start: usize) -> LineInfo {
+        LineInfo {
+            path: self.path.clone(),
+            line_no: self.line_no,
+            line: self.line.clone(),
+            start: self.start + start,
+        }
+    }
 }
 
 impl Lined for LineInfo {

@@ -1,5 +1,12 @@
+use crate::parser::line_info::LineInfo;
 use crate::parser::token::TokenType;
 use once_cell::sync::Lazy;
+
+#[derive(Debug)]
+pub struct SpecialOpNameNode {
+    line_info: LineInfo,
+    operator: OpSpTypeNode,
+}
 
 #[repr(u16)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
@@ -130,6 +137,15 @@ const VALUES: [OpSpTypeNode; 61] = [
     OpSpTypeNode::Enter,
     OpSpTypeNode::Exit,
 ];
+
+impl SpecialOpNameNode {
+    pub fn new(line_info: LineInfo, operator: OpSpTypeNode) -> Self {
+        Self {
+            line_info,
+            operator,
+        }
+    }
+}
 
 impl OpSpTypeNode {
     pub fn pattern(input: &str) -> Option<(TokenType, usize)> {

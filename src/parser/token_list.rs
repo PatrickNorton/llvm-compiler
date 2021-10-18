@@ -1,4 +1,4 @@
-use crate::parser::error::{ParseResult, ParserError, ParserException};
+use crate::parser::error::{ParseResult, ParserError, ParserException, ParserInternalError};
 use crate::parser::keyword::Keyword;
 use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::token::{Token, TokenType};
@@ -37,27 +37,66 @@ impl TokenList {
         token
     }
 
+    pub fn next_if(
+        &mut self,
+        predicate: impl FnOnce(&Token) -> bool,
+    ) -> ParseResult<Option<Token>> {
+        self.ensure_length(1)?;
+        if predicate(self.buffer.get(0).unwrap()) {
+            self.next_token().map(Option::Some)
+        } else {
+            ParseResult::Ok(Option::None)
+        }
+    }
+
+    pub fn next_if_ignoring(
+        &mut self,
+        ignore_newlines: bool,
+        predicate: impl FnOnce(&Token) -> bool,
+    ) -> ParseResult<Option<Token>> {
+        self.ensure_length(1)?;
+        if predicate(self.buffer.get(0).unwrap()) {
+            self.next_tok(ignore_newlines).map(Option::Some)
+        } else {
+            ParseResult::Ok(Option::None)
+        }
+    }
+
+    #[inline]
     pub fn first(&mut self) -> ParseResult<&Token> {
         self.ensure_length(1)?;
         ParseResult::Ok(&self.buffer[0])
     }
 
+    #[inline]
     pub fn get_token(&mut self, at: usize) -> ParseResult<&Token> {
         self.ensure_length(at + 1)?;
         ParseResult::Ok(&self.buffer[at])
     }
 
+    #[inline]
     pub fn token_type(&mut self) -> ParseResult<&TokenType> {
         ParseResult::Ok(self.first()?.token_type())
     }
 
+    #[inline]
     pub fn token_type_at(&mut self, at: usize) -> ParseResult<&TokenType> {
         self.ensure_length(at + 1)?;
         ParseResult::Ok(self.buffer[at].token_type())
     }
 
+    #[inline]
     pub fn token_equals(&mut self, text: impl AsRef<str>) -> ParseResult<bool> {
         ParseResult::Ok(self.first()?.equals(text.as_ref()))
+    }
+
+    pub fn token_eq_either(
+        &mut self,
+        first: impl AsRef<str>,
+        second: impl AsRef<str>,
+    ) -> ParseResult<bool> {
+        let value = self.first()?;
+        ParseResult::Ok(value.equals(first.as_ref()) || value.equals(second.as_ref()))
     }
 
     pub fn error(&mut self, message: impl AsRef<str>) -> ParserError {
@@ -66,6 +105,14 @@ impl TokenList {
             Err(e) => return e,
         };
         ParserError::Normal(ParserException::of(message.as_ref(), first))
+    }
+
+    pub fn internal_error(&mut self, message: impl AsRef<str>) -> ParserError {
+        let first = match self.first() {
+            Ok(x) => x,
+            Err(e) => return e,
+        };
+        ParserError::Internal(ParserInternalError::of(message.as_ref(), first))
     }
 
     pub fn default_error(&mut self) -> ParserError {
@@ -92,6 +139,24 @@ impl TokenList {
             format!("{} {:?}", message.as_ref(), first),
             first,
         ))
+    }
+
+    pub fn expect(&mut self, expected: &str, ignore_newlines: bool) -> ParseResult<()> {
+        if !self.token_equals(expected)? {
+            Err(self.error_expected(expected))
+        } else {
+            self.next_tok(ignore_newlines)?;
+            ParseResult::Ok(())
+        }
+    }
+
+    pub fn expect_keyword(&mut self, expected: Keyword, ignore_newlines: bool) -> ParseResult<()> {
+        if !self.token_equals(expected.name())? {
+            Err(self.error_expected(expected.name()))
+        } else {
+            self.next_tok(ignore_newlines)?;
+            ParseResult::Ok(())
+        }
     }
 
     pub fn line_info(&mut self) -> ParseResult<&LineInfo> {
@@ -173,7 +238,7 @@ impl TokenList {
                         was_var = true;
                     }
                 }
-                TokenType::Dot => {
+                TokenType::Dot(_) => {
                     was_var = false;
                 }
                 TokenType::Epsilon => match net_braces.cmp(&0) {
@@ -198,6 +263,15 @@ impl TokenList {
 
     pub fn expect_newline(&self) -> ParseResult<()> {
         todo!()
+    }
+
+    pub fn matching_brace(brace: char) -> char {
+        match brace {
+            '(' => ')',
+            '[' => ']',
+            '{' => '}',
+            _ => panic!("Unknown brace {}", brace),
+        }
     }
 
     fn first_level(&mut self) -> impl Iterator<Item = Token> + '_ {

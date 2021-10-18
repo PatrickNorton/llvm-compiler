@@ -1,4 +1,7 @@
+use crate::parser::error::ParseResult;
+use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::token::TokenType;
+use crate::parser::token_list::TokenList;
 use once_cell::sync::Lazy;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -31,6 +34,12 @@ pub enum OpFuncTypeNode {
     Is,
     NullCoerce,
     Compare,
+}
+
+#[derive(Debug)]
+pub struct EscapedOperatorNode {
+    line_info: LineInfo,
+    operator: OpFuncTypeNode,
 }
 
 const VALUES: [OpFuncTypeNode; 28] = [
@@ -107,6 +116,37 @@ impl OpFuncTypeNode {
             OpFuncTypeNode::NullCoerce => "??",
             OpFuncTypeNode::Compare => "<=>",
         }
+    }
+}
+
+impl EscapedOperatorNode {
+    pub const fn new(line_info: LineInfo, operator: OpFuncTypeNode) -> Self {
+        Self {
+            line_info,
+            operator,
+        }
+    }
+
+    pub fn parse(
+        tokens: &mut TokenList,
+        ignore_newlines: bool,
+    ) -> ParseResult<EscapedOperatorNode> {
+        let (token, info) = tokens.next_token()?.deconstruct();
+        match token {
+            TokenType::OpFunc(x) => {
+                if ignore_newlines {
+                    tokens.pass_newlines()?;
+                }
+                Ok(EscapedOperatorNode::new(info, x))
+            }
+            _ => panic!("Expected an escaped operator"),
+        }
+    }
+}
+
+impl Lined for EscapedOperatorNode {
+    fn line_info(&self) -> &LineInfo {
+        &self.line_info
     }
 }
 

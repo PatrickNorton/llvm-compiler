@@ -15,7 +15,9 @@ pub struct ParserException {
 }
 
 #[derive(Debug)]
-pub struct ParserInternalError {}
+pub struct ParserInternalError {
+    message: String,
+}
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum InvalidToken {
@@ -38,6 +40,22 @@ impl ParserException {
         )
         .unwrap();
         ParserException { message }
+    }
+}
+
+impl ParserInternalError {
+    pub fn of<T: ToString, U: Lined>(message: T, line_info: U) -> Self {
+        let mut message = message.to_string();
+        let line_info = line_info.line_info();
+        write!(
+            &mut message,
+            "\nError: File {} Line {}\n{}",
+            line_info.get_path().display(),
+            line_info.get_line_number(),
+            line_info.info_string()
+        )
+        .unwrap();
+        ParserInternalError { message }
     }
 }
 

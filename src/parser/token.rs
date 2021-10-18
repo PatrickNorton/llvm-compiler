@@ -1,7 +1,9 @@
 use crate::parser::aug_assign::AugAssignTypeNode;
 use crate::parser::descriptor::DescriptorNode;
+use crate::parser::dotted::DotPrefix;
 use crate::parser::keyword::Keyword;
 use crate::parser::line_info::{LineInfo, Lined};
+use crate::parser::number::Number;
 use crate::parser::operator::OperatorTypeNode;
 use crate::parser::operator_fn::OpFuncTypeNode;
 use crate::parser::operator_sp::OpSpTypeNode;
@@ -18,7 +20,7 @@ pub struct Token {
     line_info: LineInfo,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum TokenType {
     /// Whitespace. Matches comments, spaces, and escaped newlines. Should
     /// not make it past the tokenizer.
@@ -50,7 +52,7 @@ pub enum TokenType {
     /// The ellipsis unicorn.
     Ellipsis,
     /// Dots that aren't an ellipsis.
-    Dot,
+    Dot(DotPrefix),
     /// For increment and decrement operations.
     Increment(bool),
     /// Bog-standard operators, like + or <<
@@ -60,7 +62,7 @@ pub enum TokenType {
     /// String literals of all sorts.
     String(String),
     /// Numbers in all bases and decimals.
-    Number,
+    Number(Number),
     /// Special operator names, for operator overload definitions.
     OperatorSp(OpSpTypeNode),
     /// Variable names.
@@ -90,6 +92,14 @@ impl Token {
 
     pub fn token_type(&self) -> &TokenType {
         &self.token_type
+    }
+
+    pub fn into_sequence(self) -> String {
+        self.sequence
+    }
+
+    pub fn get_sequence(&self) -> &str {
+        &self.sequence
     }
 
     pub fn epsilon(info: LineInfo) -> Token {
@@ -152,7 +162,7 @@ const MATCHERS: [MatcherFn; MATCHER_LEN] = [
     OperatorTypeNode::pattern,
     assign,
     string,
-    number,
+    Number::parse,
     name,
     OpSpTypeNode::pattern,
     OpFuncTypeNode::pattern,
@@ -262,11 +272,11 @@ fn ellipsis(input: &str) -> Option<(TokenType, usize)> {
 
 fn dot(input: &str) -> Option<(TokenType, usize)> {
     if input.starts_with('.') {
-        Option::Some((TokenType::Dot, 1))
+        Option::Some((TokenType::Dot(DotPrefix::None), 1))
     } else if input.starts_with("?.") {
-        Option::Some((TokenType::Dot, 2))
+        Option::Some((TokenType::Dot(DotPrefix::Question), 2))
     } else if input.starts_with("!!.") {
-        Option::Some((TokenType::Dot, 3))
+        Option::Some((TokenType::Dot(DotPrefix::DoubleBang), 3))
     } else {
         Option::None
     }
@@ -325,50 +335,6 @@ fn string(input: &str) -> Option<(TokenType, usize)> {
         }
     }
     Option::None
-}
-
-const HEX_DIGITS: &str = "0123456789abcdef_";
-const DEC_DIGITS: &str = "0123456789_";
-
-fn number(input: &str) -> Option<(TokenType, usize)> {
-    if input.starts_with("0x") {
-        number_of(input, "0x", HEX_DIGITS)
-    } else if input.starts_with("0o") {
-        number_of(input, "0o", DEC_DIGITS)
-    } else if input.starts_with("0b") {
-        number_of(input, "0b", DEC_DIGITS)
-    } else {
-        number_of(input, "", DEC_DIGITS)
-    }
-}
-
-fn number_of(input: &str, prefix: &str, digits: &str) -> Option<(TokenType, usize)> {
-    assert!(input.starts_with(prefix));
-    let mut cursor = input[prefix.len()..].char_indices().peekable();
-    if cursor.peek()?.1 == '_' {
-        return Option::None;
-    }
-    while digits.contains(cursor.peek()?.1) {
-        cursor.next()?;
-    }
-    if cursor.peek()?.1 == '.' {
-        cursor.next()?;
-        let (i, ch) = cursor.next()?;
-        if !digits.contains(ch) {
-            return (i == prefix.len() + 1).then(|| (TokenType::Number, i - 1));
-        }
-        while digits.contains(cursor.peek()?.1) {
-            cursor.next()?;
-            if cursor.peek().is_none() {
-                return Option::Some((TokenType::Number, input.len()));
-            }
-        }
-    }
-    if cursor.peek()?.0 == prefix.len() {
-        Option::None
-    } else {
-        Option::Some((TokenType::Number, cursor.peek()?.0))
-    }
 }
 
 fn name(input: &str) -> Option<(TokenType, usize)> {

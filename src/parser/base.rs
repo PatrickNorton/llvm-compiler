@@ -1,4 +1,5 @@
 use crate::parser::error::ParseResult;
+use crate::parser::name::NameNode;
 use crate::parser::test_node::TestNode;
 use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
@@ -20,8 +21,8 @@ impl IndependentNode {
             TokenType::AugAssign(_) => Err(tokens.error("Unexpected operator")),
             TokenType::Operator(_)
             | TokenType::String(_)
-            | TokenType::Number
-            | TokenType::OpFunc(_) => Ok(IndependentNode::Test(TestNode::parse(tokens)?)),
+            | TokenType::Number(_)
+            | TokenType::OpFunc(_) => TestNode::parse(tokens).map(IndependentNode::Test),
             TokenType::Assign(_) => Err(tokens.error("Unexpected assignment")),
             TokenType::OperatorSp(_) => {
                 if matches!(tokens.token_type_at(1)?, TokenType::Assign(_)) {
@@ -31,7 +32,8 @@ impl IndependentNode {
                 }
             }
             TokenType::Ellipsis => VariableNode::parse_ellipsis(tokens)
-                .map(TestNode::Variable)
+                .map(NameNode::Variable)
+                .map(TestNode::Name)
                 .map(IndependentNode::Test),
             TokenType::At => todo!("DecoratableNode::parse_left_decorator(tokens)"),
             TokenType::Dollar => todo!("AnnotatableNode::parse_left_annotation(tokens)"),
@@ -40,7 +42,7 @@ impl IndependentNode {
             | TokenType::DoubleArrow
             | TokenType::Increment(_)
             | TokenType::Colon
-            | TokenType::Dot
+            | TokenType::Dot(_)
             | TokenType::Comma => Err(tokens.default_error()),
             _ => Err(tokens.error("Nonexistent token found")),
         }

@@ -5,6 +5,7 @@ use std::path::PathBuf;
 mod parser;
 #[macro_use]
 mod macros;
+mod util;
 
 fn main() {
     let file = PathBuf::from(args().nth(1).unwrap());

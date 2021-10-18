@@ -4,24 +4,40 @@ use crate::parser::token::{Token, TokenType};
 use crate::parser::token_list::TokenList;
 use std::collections::BTreeSet;
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Cursor, Read};
 use std::path::PathBuf;
 use unicode_normalization::UnicodeNormalization;
 
 #[derive(Debug)]
 pub struct Tokenizer {
-    reader: BufReader<File>,
+    reader: Reader,
     file_name: PathBuf,
     next: String,
     full_line: String,
     lb_indices: BTreeSet<usize>,
 }
 
+#[derive(Debug)]
+enum Reader {
+    File(BufReader<File>),
+    String(Cursor<Vec<u8>>),
+}
+
 impl Tokenizer {
     fn from_file(f: File) -> Tokenizer {
         Tokenizer {
-            reader: BufReader::new(f),
+            reader: Reader::File(BufReader::new(f)),
             file_name: PathBuf::new(), // FIXME
+            next: String::new(),
+            full_line: String::new(),
+            lb_indices: BTreeSet::new(),
+        }
+    }
+
+    fn from_str(str: &str, path: PathBuf, _line_no: usize) -> Tokenizer {
+        Tokenizer {
+            reader: Reader::String(Cursor::new(str.as_bytes().to_vec())),
+            file_name: path,
             next: String::new(),
             full_line: String::new(),
             lb_indices: BTreeSet::new(),
@@ -39,6 +55,10 @@ impl Tokenizer {
 
     pub fn parse(f: File) -> TokenList {
         TokenList::new(Tokenizer::from_file(f))
+    }
+
+    pub fn parse_str(str: &str, path: PathBuf, line_no: usize) -> TokenList {
+        TokenList::new(Tokenizer::from_str(str, path, line_no))
     }
 
     fn next_token(&mut self) -> ParseResult<Option<Token>> {
@@ -233,5 +253,37 @@ impl Tokenizer {
 
     fn line_index(&self) -> usize {
         todo!()
+    }
+}
+
+impl Read for Reader {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        match self {
+            Reader::File(f) => f.read(buf),
+            Reader::String(s) => s.read(buf),
+        }
+    }
+}
+
+impl BufRead for Reader {
+    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+        match self {
+            Reader::File(f) => f.fill_buf(),
+            Reader::String(s) => s.fill_buf(),
+        }
+    }
+
+    fn consume(&mut self, amt: usize) {
+        match self {
+            Reader::File(f) => f.consume(amt),
+            Reader::String(s) => s.consume(amt),
+        }
+    }
+
+    fn read_line(&mut self, buf: &mut String) -> std::io::Result<usize> {
+        match self {
+            Reader::File(f) => f.read_line(buf),
+            Reader::String(s) => s.read_line(buf),
+        }
     }
 }
