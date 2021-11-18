@@ -119,7 +119,7 @@ impl NumberNode {
     }
 
     pub fn parse(tokens: &mut TokenList) -> ParseResult<NumberNode> {
-        let (token, line_info) = tokens.next_token()?.deconstruct();
+        let (line_info, token) = tokens.next_token()?.deconstruct();
         match token {
             TokenType::Number(n) => Ok(NumberNode::new(line_info, n)),
             _ => panic!("Expected a number"),

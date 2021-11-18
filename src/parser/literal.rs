@@ -26,9 +26,13 @@ impl LiteralNode {
         }
     }
 
+    pub fn into_builders(self) -> Vec<(String, TestNode)> {
+        self.builders
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<LiteralNode> {
         let (line_info, brace_type) = match tokens.next_tok(true)?.deconstruct() {
-            (TokenType::OpenBrace(c), l) => (l, c),
+            (l, TokenType::OpenBrace(c)) => (l, c),
             _ => panic!("Expected an open brace"),
         };
         let matching_brace = TokenList::matching_brace(brace_type);
@@ -67,7 +71,7 @@ impl DictLiteralNode {
 
     pub fn parse(tokens: &mut TokenList) -> ParseResult<DictLiteralNode> {
         assert!(tokens.token_equals("{")?);
-        let info = tokens.next_tok(true)?.deconstruct().1;
+        let info = tokens.next_tok(true)?.deconstruct().0;
         let mut values = Vec::new();
         if parse_if_matches!(tokens, true, TokenType::Colon)?.is_some() {
             tokens.expect("}", true)?;

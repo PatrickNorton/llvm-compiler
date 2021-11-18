@@ -53,7 +53,7 @@ impl ComprehensionNode {
     }
 
     pub fn parse(tokens: &mut TokenList) -> ParseResult<ComprehensionNode> {
-        let (token, line_info) = tokens.next_tok(true)?.deconstruct();
+        let (line_info, token) = tokens.next_tok(true)?.deconstruct();
         let brace = match token {
             TokenType::OpenBrace(x) => x,
             _ => panic!("Expected an open brace"),
@@ -114,7 +114,7 @@ impl DictComprehensionNode {
 
     pub fn parse(tokens: &mut TokenList) -> ParseResult<DictComprehensionNode> {
         assert!(tokens.token_equals("{")?);
-        let line_info = tokens.next_tok(true)?.deconstruct().1;
+        let line_info = tokens.next_tok(true)?.deconstruct().0;
         let key = TestNode::parse_newline(tokens, true)?;
         tokens.expect(":", true)?;
         let val = TestNode::parse_newline(tokens, true)?;

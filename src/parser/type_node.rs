@@ -132,6 +132,13 @@ impl TypeNode {
 }
 
 impl TypeLikeNode {
+    pub fn is_decided(&self) -> bool {
+        match self {
+            TypeLikeNode::Type(_) => true,
+            TypeLikeNode::Var(_) => false,
+        }
+    }
+
     pub fn parse(tokens: &mut TokenList, ignore_newlines: bool) -> ParseResult<TypeLikeNode> {
         match *tokens.token_type()? {
             TokenType::Descriptor(descriptor) => {
@@ -146,6 +153,31 @@ impl TypeLikeNode {
             }
             _ => Self::parse_no_mut(tokens, ignore_newlines),
         }
+    }
+
+    pub fn parse_ret_val(
+        tokens: &mut TokenList,
+        ignore_newlines: bool,
+    ) -> ParseResult<Vec<TypeLikeNode>> {
+        if parse_if_matches!(tokens, ignore_newlines, TokenType::Arrow)?.is_some() {
+            Self::parse_list(tokens, ignore_newlines)
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    fn parse_list(tokens: &mut TokenList, ignore_newlines: bool) -> ParseResult<Vec<TypeLikeNode>> {
+        let mut types = Vec::new();
+        while let TokenType::Name(_) | TokenType::Descriptor(_) | TokenType::Keyword(Keyword::Var) =
+            tokens.token_type()?
+        {
+            types.push(Self::parse(tokens, ignore_newlines)?);
+            if matches!(tokens.token_type()?, TokenType::Comma) {
+                break;
+            }
+            tokens.next_tok(ignore_newlines)?;
+        }
+        Ok(types)
     }
 
     fn parse_no_mut(tokens: &mut TokenList, ignore_newlines: bool) -> ParseResult<TypeLikeNode> {

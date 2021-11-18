@@ -1,4 +1,5 @@
 use crate::parser::error::ParseResult;
+use crate::parser::keyword::Keyword;
 use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
@@ -45,17 +46,26 @@ impl VariableNode {
         tokens: &mut TokenList,
         ignore_newlines: bool,
     ) -> ParseResult<VariableNode> {
-        let (token_type, line_info) = tokens.next_tok(ignore_newlines)?.deconstruct();
+        let (line_info, token_type) = tokens.next_tok(ignore_newlines)?.deconstruct();
         match token_type {
             TokenType::Name(string) => ParseResult::Ok(VariableNode::new(line_info, string)),
             _ => ParseResult::Err(tokens.error_expected("name")),
         }
     }
 
+    pub fn parse_on_keyword(tokens: &mut TokenList, keyword: Keyword) -> ParseResult<VariableNode> {
+        if let TokenType::Keyword(key) = *(tokens.token_type()?) {
+            if key == keyword {
+                return Self::parse(tokens);
+            }
+        }
+        Ok(VariableNode::empty())
+    }
+
     pub fn parse_ellipsis(tokens: &mut TokenList) -> ParseResult<VariableNode> {
         let next = tokens.next_token()?;
         assert!(matches!(next.token_type(), TokenType::Ellipsis));
-        let info = next.deconstruct().1;
+        let info = next.deconstruct().0;
         ParseResult::Ok(VariableNode::new(info, "...".to_string()))
     }
 }

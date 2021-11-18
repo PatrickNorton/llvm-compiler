@@ -62,6 +62,18 @@ impl TokenList {
         }
     }
 
+    pub fn next_if_equals(&mut self, text: impl AsRef<str>) -> ParseResult<Option<Token>> {
+        self.next_if(|x| x.equals(text.as_ref()))
+    }
+
+    pub fn next_if_eq_ignore(
+        &mut self,
+        text: impl AsRef<str>,
+        ignore_newlines: bool,
+    ) -> ParseResult<Option<Token>> {
+        self.next_if_ignoring(ignore_newlines, |x| x.equals(text.as_ref()))
+    }
+
     #[inline]
     pub fn first(&mut self) -> ParseResult<&Token> {
         self.ensure_length(1)?;
@@ -261,8 +273,11 @@ impl TokenList {
         unreachable!("Infinite loop")
     }
 
-    pub fn expect_newline(&self) -> ParseResult<()> {
-        todo!()
+    pub fn expect_newline(&mut self) -> ParseResult<()> {
+        match parse_if_matches!(self, TokenType::Newline)? {
+            Option::Some(_) => Ok(()),
+            Option::None => Err(self.error("Expected newline")),
+        }
     }
 
     pub fn matching_brace(brace: char) -> char {
@@ -272,6 +287,14 @@ impl TokenList {
             '{' => '}',
             _ => panic!("Unknown brace {}", brace),
         }
+    }
+
+    pub fn number_of_newlines(&mut self, start: usize) -> ParseResult<usize> {
+        let mut count = 0;
+        while let TokenType::Newline = self.token_type_at(start + count)? {
+            count += 1;
+        }
+        Ok(count)
     }
 
     fn first_level(&mut self) -> impl Iterator<Item = Token> + '_ {

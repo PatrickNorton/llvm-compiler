@@ -125,7 +125,7 @@ impl DottedVar {
         names_only: bool,
         ignore_newlines: bool,
     ) -> ParseResult<DottedVar> {
-        let (token, info) = tokens.next_tok(true)?.deconstruct();
+        let (info, token) = tokens.next_tok(true)?.deconstruct();
         match token {
             TokenType::Dot(prefix) => {
                 let post_dot = if let TokenType::OperatorSp(op) = tokens.token_type()? {
@@ -133,7 +133,7 @@ impl DottedVar {
                         return Err(tokens.default_error());
                     }
                     let op = *op;
-                    let line_info = tokens.next_tok(ignore_newlines)?.deconstruct().1;
+                    let line_info = tokens.next_tok(ignore_newlines)?.deconstruct().0;
                     NameNode::SpecialOp(SpecialOpNameNode::new(line_info, op))
                 } else if let TokenType::Number(_) = tokens.token_type()? {
                     let number = NumberNode::parse(tokens)?;

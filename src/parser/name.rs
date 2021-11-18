@@ -1,5 +1,7 @@
 use crate::parser::dotted::DottedVariableNode;
 use crate::parser::error::ParseResult;
+use crate::parser::fn_call::FunctionCallNode;
+use crate::parser::index::IndexNode;
 use crate::parser::operator_fn::EscapedOperatorNode;
 use crate::parser::operator_sp::SpecialOpNameNode;
 use crate::parser::test_node::TestNode;
@@ -11,6 +13,8 @@ use crate::parser::variable::VariableNode;
 pub enum NameNode {
     Dotted(DottedVariableNode),
     EscapedOp(EscapedOperatorNode),
+    Function(FunctionCallNode),
+    Index(IndexNode),
     SpecialOp(SpecialOpNameNode),
     Variable(VariableNode),
 }

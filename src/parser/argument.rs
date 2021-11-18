@@ -1,4 +1,6 @@
+use crate::parser::comprehension::ComprehensionNode;
 use crate::parser::error::ParseResult;
+use crate::parser::keyword::Keyword;
 use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::test_node::TestNode;
 use crate::parser::token::TokenType;
@@ -38,6 +40,23 @@ impl ArgumentNode {
             vararg,
             argument,
         }
+    }
+
+    pub fn parse_list(tokens: &mut TokenList) -> ParseResult<Vec<ArgumentNode>> {
+        if !tokens.token_equals("(")? {
+            return Err(tokens.error("Function call must start with open-paren"));
+        }
+        if tokens.brace_contains_kwd(Keyword::For)? {
+            let comp = TestNode::Comprehension(ComprehensionNode::parse(tokens)?);
+            return Ok(vec![ArgumentNode::from_test_node(comp)]);
+        }
+        tokens.next_tok(true)?;
+        if tokens.next_if_equals(")")?.is_some() {
+            return Ok(vec![]);
+        }
+        let args = Self::parse_brace_free_list(tokens)?;
+        tokens.expect(")", false)?;
+        Ok(args)
     }
 
     pub fn parse_brace_free_list(tokens: &mut TokenList) -> ParseResult<Vec<ArgumentNode>> {

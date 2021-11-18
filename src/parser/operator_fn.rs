@@ -131,7 +131,7 @@ impl EscapedOperatorNode {
         tokens: &mut TokenList,
         ignore_newlines: bool,
     ) -> ParseResult<EscapedOperatorNode> {
-        let (token, info) = tokens.next_token()?.deconstruct();
+        let (info, token) = tokens.next_token()?.deconstruct();
         match token {
             TokenType::OpFunc(x) => {
                 if ignore_newlines {

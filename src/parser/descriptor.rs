@@ -202,7 +202,7 @@ impl DescriptorNode {
 
     fn deconstruct_token(token: Token) -> Option<(DescriptorNode, LineInfo)> {
         match token.deconstruct() {
-            (TokenType::Descriptor(descr), line_info) => Option::Some((descr, line_info)),
+            (line_info, TokenType::Descriptor(descr)) => Option::Some((descr, line_info)),
             _ => Option::None,
         }
     }

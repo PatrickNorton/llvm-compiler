@@ -1,8 +1,12 @@
+use crate::parser::argument::ArgumentNode;
 use crate::parser::comprehension::{ComprehensionNode, DictComprehensionNode};
 use crate::parser::dotted::DottedVariableNode;
 use crate::parser::error::{ParseResult, ParserError, ParserException};
+use crate::parser::fn_call::FunctionCallNode;
 use crate::parser::formatted_string::FormattedStringNode;
+use crate::parser::index::IndexNode;
 use crate::parser::keyword::Keyword;
+use crate::parser::lambda::LambdaNode;
 use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::literal::{DictLiteralNode, LiteralNode};
 use crate::parser::name::NameNode;
@@ -11,13 +15,16 @@ use crate::parser::operator::{OperatorNode, OperatorTypeNode};
 use crate::parser::operator_fn::EscapedOperatorNode;
 use crate::parser::post_dot::PostDottableNode;
 use crate::parser::range::RangeLiteralNode;
+use crate::parser::slice::SliceNode;
 use crate::parser::string::StringNode;
 use crate::parser::string_like::StringLikeNode;
+use crate::parser::switch_stmt::SwitchStatementNode;
 use crate::parser::ternary::TernaryNode;
 use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
 use std::collections::VecDeque;
 use std::convert::TryFrom;
+use std::mem::replace;
 
 #[derive(Debug)]
 pub enum TestNode {
@@ -26,13 +33,16 @@ pub enum TestNode {
     DictLiteral(DictLiteralNode),
     Empty(EmptyTestNode),
     Formatted(FormattedStringNode),
+    Lambda(LambdaNode),
     Literal(LiteralNode),
     Name(NameNode),
     Number(NumberNode),
     Operator(OperatorNode),
     OperatorType(OperatorTypeNode),
     Range(RangeLiteralNode),
+    Slice(SliceNode),
     String(StringNode),
+    Switch(SwitchStatementNode),
     Ternary(Box<TernaryNode>),
 }
 
@@ -94,6 +104,18 @@ impl TestNode {
         ignore_newlines: bool,
     ) -> ParseResult<TestNode> {
         if matches!(tokens.token_type()?, TokenType::Keyword(k) if k == &keyword) {
+            Self::parse_newline(tokens, ignore_newlines)
+        } else {
+            Ok(Self::empty())
+        }
+    }
+
+    pub fn parse_on_str(
+        tokens: &mut TokenList,
+        text: impl AsRef<str>,
+        ignore_newlines: bool,
+    ) -> ParseResult<TestNode> {
+        if tokens.next_if_eq_ignore(text, ignore_newlines)?.is_some() {
             Self::parse_newline(tokens, ignore_newlines)
         } else {
             Ok(Self::empty())
@@ -210,13 +232,17 @@ impl TestNode {
         tokens: &mut TokenList,
         ignore_newlines: bool,
     ) -> ParseResult<Option<TestNode>> {
-        let (token, _) = tokens.next_tok(ignore_newlines)?.deconstruct();
+        let (_, token) = tokens.next_tok(ignore_newlines)?.deconstruct();
         match token {
             TokenType::Keyword(key) => match key {
                 Keyword::Some => todo!("SomeStatementNode::parse(tokens)"),
                 Keyword::In => todo!("OperatorTypeNode::parse(tokens)"),
-                Keyword::Switch => todo!("SwitchStatementNode::parse(tokens)"),
-                Keyword::Lambda => todo!("LambdaNode::parse(tokens)"),
+                Keyword::Switch => SwitchStatementNode::parse(tokens)
+                    .map(TestNode::Switch)
+                    .map(Option::Some),
+                Keyword::Lambda => LambdaNode::parse(tokens, ignore_newlines)
+                    .map(TestNode::Lambda)
+                    .map(Option::Some),
                 Keyword::Raise => todo!("RaiseStatementNode::parse(tokens)"),
                 _ => Ok(None),
             },
@@ -240,24 +266,31 @@ impl TestNode {
 
     pub(super) fn parse_post_braces(
         tokens: &mut TokenList,
-        pre: TestNode,
+        mut pre: TestNode,
         ignore_newlines: bool,
     ) -> ParseResult<TestNode> {
         if ignore_newlines {
             tokens.pass_newlines()?;
         }
         while let TokenType::OpenBrace(c) = tokens.token_type()? {
-            match c {
+            pre = match c {
                 '(' => {
-                    todo!("pre = FunctionCallNode::new(pre, ArgumentNode::parse_list(tokens)?)")
+                    let temp = replace(&mut pre, TestNode::empty());
+                    TestNode::Name(NameNode::Function(FunctionCallNode::new(
+                        temp,
+                        ArgumentNode::parse_list(tokens)?,
+                    )))
                 }
                 '[' => {
+                    let temp = replace(&mut pre, TestNode::empty());
                     if tokens.brace_contains(&TokenType::Colon)? {
-                        todo!("pre = IndexNode::new(pre, SliceNode::parse(tokens)?)")
+                        let slice = TestNode::Slice(SliceNode::parse(tokens)?);
+                        TestNode::Name(NameNode::Index(IndexNode::new(temp, vec![slice])))
                     } else {
-                        todo!(
-                            "pre = IndexNode::new(pre, LiteralNode::parse(tokens)?.get_builders()"
-                        )
+                        let temp = replace(&mut pre, TestNode::empty());
+                        let literal = LiteralNode::parse(tokens)?.into_builders();
+                        let builders = literal.into_iter().map(|(_, x)| x).collect();
+                        TestNode::Name(NameNode::Index(IndexNode::new(temp, builders)))
                     }
                 }
                 '{' => return ParseResult::Ok(pre),
@@ -336,6 +369,20 @@ impl TestNode {
             },
             _ => panic!(),
         }
+    }
+
+    pub fn parse_list(tokens: &mut TokenList, ignore_newlines: bool) -> ParseResult<Vec<TestNode>> {
+        if !ignore_newlines && matches!(tokens.token_type()?, TokenType::Newline) {
+            return Ok(Vec::new());
+        }
+        let mut tests = Vec::new();
+        while Self::next_is_test(tokens)? {
+            tests.push(Self::parse_newline(tokens, ignore_newlines)?);
+            if parse_if_matches!(tokens, true, TokenType::Comma)?.is_none() {
+                break;
+            }
+        }
+        Ok(tests)
     }
 
     pub fn next_is_test(tokens: &mut TokenList) -> ParseResult<bool> {

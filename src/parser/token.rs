@@ -86,8 +86,8 @@ impl Token {
         }
     }
 
-    pub fn deconstruct(self) -> (TokenType, LineInfo) {
-        (self.token_type, self.line_info)
+    pub fn deconstruct(self) -> (LineInfo, TokenType) {
+        (self.line_info, self.token_type)
     }
 
     pub fn token_type(&self) -> &TokenType {

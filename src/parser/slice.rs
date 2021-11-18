@@ -25,7 +25,7 @@ impl SliceNode {
 
     pub fn parse(tokens: &mut TokenList) -> ParseResult<SliceNode> {
         assert!(tokens.token_equals("[")?);
-        let line_info = tokens.next_tok(true)?.deconstruct().1;
+        let line_info = tokens.next_tok(true)?.deconstruct().0;
         let start = if let TokenType::Colon = tokens.token_type()? {
             TestNode::empty()
         } else {
