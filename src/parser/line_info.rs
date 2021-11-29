@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use once_cell::sync::Lazy;
+
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct LineInfo {
     inner: Arc<InfoInner>,
@@ -18,6 +20,15 @@ pub trait Lined {
     fn line_info(&self) -> &LineInfo;
 }
 
+static EMPTY: Lazy<LineInfo> = Lazy::new(|| LineInfo {
+    inner: Arc::new(InfoInner {
+        path: PathBuf::new(),
+        line_no: usize::MAX,
+        line: String::new(),
+        start: 0,
+    }),
+});
+
 impl LineInfo {
     pub fn new(path: PathBuf, line_no: usize, line: String, start: usize) -> LineInfo {
         LineInfo {
@@ -31,14 +42,11 @@ impl LineInfo {
     }
 
     pub fn empty() -> LineInfo {
-        LineInfo {
-            inner: Arc::new(InfoInner {
-                path: PathBuf::new(),
-                line_no: usize::MAX,
-                line: String::new(),
-                start: 0,
-            }),
-        }
+        EMPTY.clone()
+    }
+
+    pub fn empty_ref<'a>() -> &'a LineInfo {
+        &*EMPTY
     }
 
     pub fn get_path(&self) -> &Path {
