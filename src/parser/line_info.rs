@@ -1,7 +1,13 @@
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct LineInfo {
+    inner: Arc<InfoInner>,
+}
+
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
+struct InfoInner {
     path: PathBuf,
     line_no: usize,
     line: String,
@@ -13,38 +19,42 @@ pub trait Lined {
 }
 
 impl LineInfo {
-    pub const fn new(path: PathBuf, line_no: usize, line: String, start: usize) -> LineInfo {
+    pub fn new(path: PathBuf, line_no: usize, line: String, start: usize) -> LineInfo {
         LineInfo {
-            path,
-            line_no,
-            line,
-            start,
+            inner: Arc::new(InfoInner {
+                path,
+                line_no,
+                line,
+                start,
+            }),
         }
     }
 
     pub fn empty() -> LineInfo {
         LineInfo {
-            path: PathBuf::new(),
-            line_no: usize::MAX,
-            line: String::new(),
-            start: 0,
+            inner: Arc::new(InfoInner {
+                path: PathBuf::new(),
+                line_no: usize::MAX,
+                line: String::new(),
+                start: 0,
+            }),
         }
     }
 
     pub fn get_path(&self) -> &Path {
-        &self.path
+        &self.inner.path
     }
 
     pub fn get_line_number(&self) -> usize {
-        self.line_no
+        self.inner.line_no
     }
 
     pub fn info_string(&self) -> String {
-        let num_spaces = self.start + self.line_no.to_string().len() + 2;
+        let num_spaces = self.inner.start + self.inner.line_no.to_string().len() + 2;
         format!(
             "{}: {}\n{:spaces$}^",
-            self.line_no,
-            self.line,
+            self.inner.line_no,
+            self.inner.line,
             "",
             spaces = num_spaces
         )
@@ -52,10 +62,12 @@ impl LineInfo {
 
     pub fn substring(&self, start: usize) -> LineInfo {
         LineInfo {
-            path: self.path.clone(),
-            line_no: self.line_no,
-            line: self.line.clone(),
-            start: self.start + start,
+            inner: Arc::new(InfoInner {
+                path: self.inner.path.clone(),
+                line_no: self.inner.line_no,
+                line: self.inner.line.clone(),
+                start: self.inner.start + start,
+            }),
         }
     }
 }
