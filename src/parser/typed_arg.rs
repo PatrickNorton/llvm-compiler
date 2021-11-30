@@ -1,6 +1,7 @@
 use crate::parser::error::ParseResult;
 use crate::parser::keyword::Keyword;
 use crate::parser::line_info::{LineInfo, Lined};
+use crate::parser::macros::parse_if_matches;
 use crate::parser::test_node::TestNode;
 use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
@@ -83,7 +84,7 @@ impl TypedArgumentNode {
         let type_var = if is_typed {
             TypeLikeNode::parse(tokens, true)?
         } else {
-            todo!("TypeNode::var()")
+            TypeLikeNode::Var(LineInfo::empty())
         };
         let var = VariableNode::parse(tokens)?;
         tokens.pass_newlines()?;
@@ -111,6 +112,15 @@ impl TypedArgumentNode {
 }
 
 impl TypedArgumentListNode {
+    pub fn empty() -> Self {
+        Self {
+            line_info: LineInfo::empty(),
+            position_args: Vec::new(),
+            normal_args: Vec::new(),
+            name_args: Vec::new(),
+        }
+    }
+
     pub fn new(
         line_info: LineInfo,
         position_args: Vec<TypedArgumentNode>,
@@ -139,6 +149,14 @@ impl TypedArgumentListNode {
         } else {
             let line_info = tokens.line_info()?.clone();
             Self::parse_inside_parens(tokens, line_info, true)
+        }
+    }
+
+    pub fn parse_on_open_brace(tokens: &mut TokenList) -> ParseResult<TypedArgumentListNode> {
+        if tokens.token_equals("(")? {
+            Self::parse_untyped(tokens)
+        } else {
+            Ok(Self::empty())
         }
     }
 
@@ -196,6 +214,9 @@ impl TypedArgumentListNode {
                 current_arg_list.push(TypedArgumentNode::parse(tokens, !allow_untyped)?);
                 tokens.pass_newlines()?;
             }
+            if parse_if_matches!(tokens, TokenType::Comma)?.is_none() {
+                break;
+            }
         }
         Ok(TypedArgumentListNode::new(
             info,
@@ -219,6 +240,23 @@ impl VarargType {
             }
             "**" => {
                 tokens.next_tok(true)?;
+                VarargType::Double
+            }
+            _ => VarargType::None,
+        })
+    }
+
+    pub fn parse_ignoring(
+        tokens: &mut TokenList,
+        ignore_newlines: bool,
+    ) -> ParseResult<VarargType> {
+        Ok(match tokens.first()?.get_sequence() {
+            "*" => {
+                tokens.next_tok(ignore_newlines)?;
+                VarargType::Single
+            }
+            "**" => {
+                tokens.next_tok(ignore_newlines)?;
                 VarargType::Double
             }
             _ => VarargType::None,

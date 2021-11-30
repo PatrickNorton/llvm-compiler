@@ -1,4 +1,3 @@
-#[macro_export]
 macro_rules! hash_set {
     () => {::std::collections::HashSet::new()};
     ($($x:expr),+ $(,)?) => (
@@ -12,7 +11,6 @@ macro_rules! hash_set {
     );
 }
 
-#[macro_export]
 macro_rules! hash_map {
     () => {::std::collections::HashMap::new()};
     ($($x:expr => $y:expr),+ $(,)?) => (
@@ -25,3 +23,5 @@ macro_rules! hash_map {
         }
     );
 }
+
+pub(crate) use {hash_map, hash_set};

@@ -1,6 +1,7 @@
 use crate::parser::aug_assign::AugAssignTypeNode;
 use crate::parser::descriptor::DescriptorNode;
 use crate::parser::dotted::DotPrefix;
+use crate::parser::inc_dec::IncDecType;
 use crate::parser::keyword::Keyword;
 use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::number::Number;
@@ -9,8 +10,6 @@ use crate::parser::operator_fn::OpFuncTypeNode;
 use crate::parser::operator_sp::OpSpTypeNode;
 use once_cell::sync::Lazy;
 use regex::Regex;
-use std::array;
-use std::mem::discriminant;
 use unicode_xid::UnicodeXID;
 
 #[derive(Debug)]
@@ -54,7 +53,7 @@ pub enum TokenType {
     /// Dots that aren't an ellipsis.
     Dot(DotPrefix),
     /// For increment and decrement operations.
-    Increment(bool),
+    Increment(IncDecType),
     /// Bog-standard operators, like + or <<
     Operator(OperatorTypeNode),
     /// Assignment, both static and dynamic (:=).
@@ -114,10 +113,6 @@ impl Token {
         matches!(self.token_type, TokenType::Whitespace)
     }
 
-    pub fn is_type(&self, tok_type: &TokenType) -> bool {
-        discriminant(&self.token_type) == discriminant(tok_type)
-    }
-
     pub fn equals(&self, text: &str) -> bool {
         self.sequence == text
     }
@@ -128,8 +123,25 @@ impl Token {
 }
 
 impl TokenType {
-    pub fn matchers() -> Matchers {
-        Matchers::new()
+    pub fn matchers() -> impl Iterator<Item = MatcherFn> {
+        MATCHERS.into_iter()
+    }
+
+    /// If this token is one that precedes a "literal brace", e.g. the beginning
+    /// of a `dict` or `set` literal (in particular, not a code block).
+    pub fn precedes_literal_brace(&self) -> bool {
+        matches!(
+            self,
+            TokenType::OpenBrace(_)
+                | TokenType::Newline
+                | TokenType::Keyword(_)
+                | TokenType::Comma
+                | TokenType::Operator(_)
+                | TokenType::Colon
+                | TokenType::At
+                | TokenType::Dollar
+                | TokenType::Assign(_)
+        )
     }
 }
 
@@ -170,30 +182,6 @@ const MATCHERS: [MatcherFn; MATCHER_LEN] = [
     at,
     dollar,
 ];
-
-pub struct Matchers {
-    value: array::IntoIter<MatcherFn, MATCHER_LEN>,
-}
-
-impl Matchers {
-    pub fn new() -> Matchers {
-        Matchers {
-            value: array::IntoIter::new(MATCHERS),
-        }
-    }
-}
-
-impl Iterator for Matchers {
-    type Item = MatcherFn;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.value.next()
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.value.size_hint()
-    }
-}
 
 static WHITESPACE_PATTERN: Lazy<Regex> =
     Lazy::new(|| Regex::new("^(#\\|(.|[\r\n])*?\\|#|#.*|[\t ]+|\\\\[\r\n])").unwrap());
@@ -284,9 +272,9 @@ fn dot(input: &str) -> Option<(TokenType, usize)> {
 
 fn increment(input: &str) -> Option<(TokenType, usize)> {
     if input.starts_with("++") {
-        Option::Some((TokenType::Increment(true), 2))
+        Option::Some((TokenType::Increment(IncDecType::Plus), 2))
     } else if input.starts_with("--") {
-        Option::Some((TokenType::Increment(false), 2))
+        Option::Some((TokenType::Increment(IncDecType::Minus), 2))
     } else {
         Option::None
     }

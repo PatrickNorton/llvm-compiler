@@ -23,3 +23,23 @@ macro_rules! parse_if_matches {
         }
     };
 }
+
+macro_rules! expect_matches {
+    ($tokens:expr, $pattern:pat, $message:expr) => {
+        match $tokens.token_type() {
+            Result::Ok(x) => match x {
+                $pattern => $tokens.next_token(),
+                _ => Result::Err($tokens.error_expected($message)),
+            },
+            Result::Err(x) => Result::Err(x),
+        }
+    };
+}
+
+macro_rules! line_matches {
+    ($tokens:expr, $pattern:pat) => {
+        $tokens.line_contains(|x| matches!(x.token_type(), $pattern))
+    };
+}
+
+pub(crate) use {expect_matches, line_matches, parse_if_matches};

@@ -1,4 +1,9 @@
+use crate::parser::error::ParseResult;
+use crate::parser::line_info::{LineInfo, Lined};
+use crate::parser::name::NameNode;
+use crate::parser::test_node::TestNode;
 use crate::parser::token::TokenType;
+use crate::parser::token_list::TokenList;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum AugAssignTypeNode {
@@ -19,6 +24,14 @@ pub enum AugAssignTypeNode {
     BoolAnd,
     BoolOr,
     BoolXor,
+}
+
+#[derive(Debug)]
+pub struct AugmentedAssignmentNode {
+    line_info: LineInfo,
+    operator: AugAssignTypeNode,
+    name: NameNode,
+    value: Box<TestNode>,
 }
 
 const VALUES: [AugAssignTypeNode; 17] = [
@@ -72,5 +85,34 @@ impl AugAssignTypeNode {
             AugAssignTypeNode::BoolOr => "or",
             AugAssignTypeNode::BoolXor => "xor",
         }
+    }
+}
+
+impl AugmentedAssignmentNode {
+    pub fn new(operator: AugAssignTypeNode, name: NameNode, value: Box<TestNode>) -> Self {
+        Self {
+            line_info: name.line_info().clone(),
+            operator,
+            name,
+            value,
+        }
+    }
+
+    pub fn parse(tokens: &mut TokenList) -> ParseResult<AugmentedAssignmentNode> {
+        let var = NameNode::parse(tokens)?;
+        match *(tokens.token_type()?) {
+            TokenType::AugAssign(op) => {
+                tokens.next_token()?;
+                let assignment = TestNode::parse(tokens)?;
+                Ok(AugmentedAssignmentNode::new(op, var, Box::new(assignment)))
+            }
+            _ => Err(tokens.error_expected("augmented assignment")),
+        }
+    }
+}
+
+impl Lined for AugmentedAssignmentNode {
+    fn line_info(&self) -> &LineInfo {
+        &self.line_info
     }
 }

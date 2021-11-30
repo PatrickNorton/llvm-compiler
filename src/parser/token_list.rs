@@ -1,6 +1,7 @@
 use crate::parser::error::{ParseResult, ParserError, ParserException, ParserInternalError};
 use crate::parser::keyword::Keyword;
 use crate::parser::line_info::{LineInfo, Lined};
+use crate::parser::macros::parse_if_matches;
 use crate::parser::token::{Token, TokenType};
 use crate::parser::tokenizer::Tokenizer;
 use std::cmp::Ordering;
@@ -102,6 +103,12 @@ impl TokenList {
         ParseResult::Ok(self.first()?.equals(text.as_ref()))
     }
 
+    #[inline]
+    pub fn token_eq_at(&mut self, at: usize, text: impl AsRef<str>) -> ParseResult<bool> {
+        self.ensure_length(at + 1)?;
+        ParseResult::Ok(self.buffer[at].equals(text.as_ref()))
+    }
+
     pub fn token_eq_either(
         &mut self,
         first: impl AsRef<str>,
@@ -182,32 +189,64 @@ impl TokenList {
         ParseResult::Ok(())
     }
 
-    pub fn brace_contains(&mut self, tok: &TokenType) -> ParseResult<bool> {
-        for token in self.first_level() {
-            if token.is_type(tok) {
-                return ParseResult::Ok(true);
-            }
-        }
-        ParseResult::Ok(false)
-    }
-
     pub fn brace_contains_str(&mut self, text: impl AsRef<str>) -> ParseResult<bool> {
         let text = text.as_ref();
-        for token in self.first_level() {
-            if token.equals(text) {
-                return ParseResult::Ok(true);
-            }
-        }
-        ParseResult::Ok(false)
+        self.brace_contains(|x| x.equals(text))
     }
 
     pub fn brace_contains_kwd(&mut self, kwd: Keyword) -> ParseResult<bool> {
-        for token in self.first_level() {
-            if token.is_kwd(kwd) {
-                return ParseResult::Ok(true);
-            }
+        self.brace_contains(|x| x.is_kwd(kwd))
+    }
+
+    pub fn brace_contains_kwds<const N: usize>(&mut self, kwd: [Keyword; N]) -> ParseResult<bool> {
+        self.brace_contains(|x| kwd.iter().any(|y| x.is_kwd(*y)))
+    }
+
+    pub fn brace_contains(&mut self, mut pred: impl FnMut(&Token) -> bool) -> ParseResult<bool> {
+        let mut net_braces = 0;
+        let mut index = 0;
+        let first = self.first()?;
+        if let TokenType::OpenBrace(_) = first.token_type() {
+            index += 1;
+            net_braces += 1;
+        } else {
+            return Ok(false);
         }
-        ParseResult::Ok(false)
+        while net_braces > 0 {
+            let token = self.get_token(index)?;
+            if net_braces == 1 && pred(token) {
+                return Ok(true);
+            } else {
+                match token.token_type() {
+                    TokenType::Epsilon => {
+                        if net_braces > 0 {
+                            return Err(self.error("Unmatched brace"));
+                        } else {
+                            return Ok(false);
+                        }
+                    }
+                    TokenType::OpenBrace(o) => {
+                        if net_braces == 0
+                            && *o == '{'
+                            && self.token_type_at(index - 1)?.precedes_literal_brace()
+                        {
+                            return Ok(false);
+                        } else {
+                            net_braces += 1;
+                        }
+                    }
+                    TokenType::CloseBrace(_) => {
+                        net_braces -= 1;
+                        if net_braces == 0 {
+                            return Ok(false);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            index += 1;
+        }
+        Ok(false)
     }
 
     pub fn brace_is_empty(&mut self) -> ParseResult<bool> {
@@ -221,13 +260,66 @@ impl TokenList {
         ))
     }
 
+    pub fn line_contains(&mut self, mut pred: impl FnMut(&Token) -> bool) -> ParseResult<bool> {
+        let mut net_braces = 0;
+        let mut index = 0;
+        let first = self.first()?;
+        if pred(first) {
+            return Ok(true);
+        }
+        match first.token_type() {
+            TokenType::OpenBrace(_) => {
+                index += 1;
+                net_braces += 1;
+            }
+            TokenType::Newline | TokenType::Epsilon => return Ok(false),
+            _ => {}
+        }
+        loop {
+            let token = self.get_token(index)?;
+            if net_braces == 0 && pred(token) {
+                return Ok(true);
+            } else {
+                match token.token_type() {
+                    TokenType::Epsilon => {
+                        if net_braces > 0 {
+                            return Err(self.error("Unmatched brace"));
+                        } else {
+                            return Ok(false);
+                        }
+                    }
+                    TokenType::OpenBrace(o) => {
+                        if net_braces == 0
+                            && *o == '{'
+                            && self.token_type_at(index - 1)?.precedes_literal_brace()
+                        {
+                            return Ok(false);
+                        } else {
+                            net_braces += 1;
+                        }
+                    }
+                    TokenType::CloseBrace(_) => {
+                        net_braces -= 1;
+                    }
+                    TokenType::Newline => {
+                        if net_braces == 0 {
+                            return Ok(false);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            index += 1;
+        }
+    }
+
     pub fn size_of_variable(&mut self) -> ParseResult<usize> {
         self.size_of_variable_at(0)
     }
 
     pub fn size_of_variable_at(&mut self, offset: usize) -> ParseResult<usize> {
         assert!(matches!(
-            self.token_type()?,
+            self.token_type_at(offset)?,
             TokenType::Name(_) | TokenType::OpenBrace(_)
         ));
         let mut net_braces = 0;
@@ -297,39 +389,11 @@ impl TokenList {
         Ok(count)
     }
 
-    fn first_level(&mut self) -> impl Iterator<Item = Token> + '_ {
-        LevelIterator::new(1)
-    }
-
     fn ensure_length(&mut self, len: usize) -> ParseResult<()> {
         while self.buffer.len() < len {
             let token = self.tokenizer.tokenize_next()?;
             self.buffer.push_back(token)
         }
         ParseResult::Ok(())
-    }
-}
-
-impl Iterator for TokenList {
-    type Item = ParseResult<Token>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        Option::Some(self.next_token())
-    }
-}
-
-struct LevelIterator {}
-
-impl LevelIterator {
-    pub fn new(level: u32) -> LevelIterator {
-        todo!()
-    }
-}
-
-impl Iterator for LevelIterator {
-    type Item = Token;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        todo!()
     }
 }

@@ -2,6 +2,7 @@ use crate::parser::argument::ArgumentNode;
 use crate::parser::error::ParseResult;
 use crate::parser::keyword::Keyword;
 use crate::parser::line_info::{LineInfo, Lined};
+use crate::parser::macros::parse_if_matches;
 use crate::parser::test_list::TestListNode;
 use crate::parser::test_node::TestNode;
 use crate::parser::token::TokenType;
@@ -64,6 +65,9 @@ impl ComprehensionNode {
             return Err(tokens.error("Invalid start to comprehension"));
         }
         let variables = VarLikeNode::parse_list(tokens, true)?;
+        if parse_if_matches!(tokens, TokenType::Keyword(Keyword::In))?.is_none() {
+            return Err(tokens.error("Comprehension body must have in after variable list"));
+        }
         let (looped, condition) = TestListNode::parse_post_if(tokens, true)?;
         let while_cond = TestNode::parse_on_keyword(tokens, Keyword::While, true)?;
         if !tokens.token_equals(close_brace.to_string())? {

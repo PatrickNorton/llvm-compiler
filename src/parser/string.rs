@@ -1,5 +1,5 @@
 use crate::parser::error::ParseResult;
-use crate::parser::line_info::LineInfo;
+use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::string_like::{StringLikeNode, StringPrefix};
 use std::collections::HashSet;
 
@@ -33,5 +33,11 @@ impl StringNode {
         } else {
             Ok(StringNode::new(info, prefixes, contents.to_string()))
         }
+    }
+}
+
+impl Lined for StringNode {
+    fn line_info(&self) -> &LineInfo {
+        &self.line_info
     }
 }

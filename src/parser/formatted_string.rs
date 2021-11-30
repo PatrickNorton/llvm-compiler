@@ -72,7 +72,7 @@ impl FormattedStringNode {
             });
             current.clear();
             let new_end = match size_of_brace(post, is_raw) {
-                Option::Some(x) => x,
+                Option::Some(x) => new_start + x,
                 Option::None => {
                     return Err(ParserError::Normal(ParserException::of(
                         "Unmatched braces in f-string",
@@ -101,7 +101,7 @@ impl FormattedStringNode {
             section,
             line_info.get_path().to_path_buf(),
             line_info.get_line_number(),
-        );
+        )?;
         let test = TestNode::parse(&mut tokens)?;
         if !matches!(tokens.token_type()?, TokenType::Epsilon) {
             Err(tokens.default_error())
@@ -180,7 +180,7 @@ impl FormatInfo {
         let (pre, post) = text.split_at(i);
         if pre.ends_with('!')
             || post.starts_with("!=")
-            || post.chars().all(|c| !FORMAT_INVALID.contains(c))
+            || post.chars().any(|c| FORMAT_INVALID.contains(c))
         {
             Option::None
         } else {

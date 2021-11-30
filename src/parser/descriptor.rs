@@ -1,12 +1,21 @@
-use crate::parser::error::{ParseResult, ParserException};
-use crate::parser::line_info::LineInfo;
+use crate::macros::{hash_map, hash_set};
+use crate::parser::assign::{AssignStatementNode, AssignmentNode};
+use crate::parser::base::IndependentNode;
+use crate::parser::declaration::DeclarationNode;
+use crate::parser::error::{ParseResult, ParserError, ParserException};
+use crate::parser::func_def::FunctionDefinitionNode;
+use crate::parser::interface::InterfaceStatementNode;
+use crate::parser::keyword::Keyword;
+use crate::parser::line_info::{LineInfo, Lined};
+use crate::parser::macros::line_matches;
+use crate::parser::operator_def::OperatorDefinitionNode;
 use crate::parser::token::{Token, TokenType};
 use crate::parser::token_list::TokenList;
-use crate::{hash_map, hash_set};
+use itertools::Itertools;
 use once_cell::sync::Lazy;
 use std::collections::{HashMap, HashSet};
-use std::fmt;
-use std::fmt::Formatter;
+use std::fmt::{self, Formatter};
+use unicode_xid::UnicodeXID;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum DescriptorNode {
@@ -25,6 +34,13 @@ pub enum DescriptorNode {
     Synced,
     Auto,
     Const,
+}
+
+#[derive(Debug)]
+pub enum DescribableNode {
+    Assign(AssignmentNode),
+    Function(FunctionDefinitionNode),
+    Interface(InterfaceStatementNode),
 }
 
 static MUT_NODES: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
@@ -75,7 +91,7 @@ static SETS: Lazy<Vec<&'static HashSet<DescriptorNode>>> = Lazy::new(|| {
     ]
 });
 
-static DEFINITION_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
+pub static DEFINITION_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
     hash_set!(
         DescriptorNode::Public,
         DescriptorNode::Private,
@@ -88,14 +104,14 @@ static DEFINITION_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
         DescriptorNode::Const,
     )
 });
-static FUNCTION_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
+pub static FUNCTION_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
     hash_set!(
         DescriptorNode::Generator,
         DescriptorNode::Synced,
         DescriptorNode::Native,
     )
 });
-static DECLARATION_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
+pub static DECLARATION_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
     hash_set!(
         DescriptorNode::Public,
         DescriptorNode::Private,
@@ -109,7 +125,7 @@ static DECLARATION_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
         DescriptorNode::Native,
     )
 });
-static CONTEXT_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
+pub static CONTEXT_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
     hash_set!(
         DescriptorNode::Public,
         DescriptorNode::Private,
@@ -122,7 +138,7 @@ static CONTEXT_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
         DescriptorNode::Native,
     )
 });
-static METHOD_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
+pub static METHOD_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
     hash_set!(
         DescriptorNode::Public,
         DescriptorNode::Private,
@@ -136,8 +152,8 @@ static METHOD_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
         DescriptorNode::Synced,
     )
 });
-static STATIC_BLOCK_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| hash_set!());
-static INTERFACE_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
+pub static STATIC_BLOCK_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| hash_set!());
+pub static INTERFACE_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
     hash_set!(
         DescriptorNode::Public,
         DescriptorNode::Private,
@@ -171,11 +187,6 @@ static VALUES: Lazy<HashMap<&'static str, DescriptorNode>> = Lazy::new(|| {
 });
 
 impl DescriptorNode {
-    /// Get a `DescriptorNode` based on the string given.
-    pub fn find(name: &str) -> DescriptorNode {
-        VALUES[name]
-    }
-
     pub fn name(&self) -> &'static str {
         match self {
             DescriptorNode::Public => "public",
@@ -209,8 +220,13 @@ impl DescriptorNode {
 
     pub fn pattern(input: &str) -> Option<(TokenType, usize)> {
         for (key, value) in &*VALUES {
-            if input.starts_with(key) {
-                return Option::Some((TokenType::Descriptor(*value), input.len()));
+            if input.starts_with(key)
+                && input[key.len()..]
+                    .chars()
+                    .next()
+                    .map_or_else(|| true, |x| !UnicodeXID::is_xid_continue(x))
+            {
+                return Option::Some((TokenType::Descriptor(*value), key.len()));
             }
         }
         Option::None
@@ -238,8 +254,124 @@ impl DescriptorNode {
     }
 }
 
+impl DescribableNode {
+    pub fn valid_descriptors(&self) -> &'static HashSet<DescriptorNode> {
+        match self {
+            DescribableNode::Assign(a) => a.valid_descriptors(),
+            DescribableNode::Function(f) => f.valid_descriptors(),
+            DescribableNode::Interface(i) => i.valid_descriptors(),
+        }
+    }
+
+    pub fn add_descriptors(&mut self, descriptors: HashSet<DescriptorNode>) {
+        match self {
+            DescribableNode::Assign(a) => a.add_descriptors(descriptors),
+            DescribableNode::Function(f) => f.add_descriptors(descriptors),
+            DescribableNode::Interface(i) => i.add_descriptors(descriptors),
+        }
+    }
+
+    pub fn parse(tokens: &mut TokenList) -> ParseResult<DescribableNode> {
+        let descriptors = if let TokenType::Descriptor(_) = tokens.token_type()? {
+            DescriptorNode::parse_list(tokens)?
+        } else {
+            HashSet::new()
+        };
+        if !descriptors.is_disjoint(&MUT_NODES) {
+            Self::parse_mutability(tokens, descriptors)
+        } else {
+            Self::finish_parse(IndependentNode::parse(tokens)?, descriptors)
+        }
+    }
+
+    fn parse_mutability(
+        tokens: &mut TokenList,
+        descriptors: HashSet<DescriptorNode>,
+    ) -> ParseResult<DescribableNode> {
+        assert!(!descriptors.is_disjoint(&MUT_NODES));
+        if let TokenType::Keyword(Keyword::Var) = tokens.token_type()? {
+            Self::finish_parse(IndependentNode::parse_var(tokens)?, descriptors)
+        } else if let TokenType::Keyword(_) = tokens.token_type()? {
+            Self::finish_parse(IndependentNode::parse(tokens)?, descriptors)
+        } else if let TokenType::OperatorSp(_) = tokens.token_type()? {
+            Self::finish_parse(
+                IndependentNode::OpDef(OperatorDefinitionNode::parse(tokens)?),
+                descriptors,
+            )
+        } else if line_matches!(tokens, TokenType::Assign(_))? {
+            Self::finish_parse(AssignStatementNode::parse(tokens)?.into(), descriptors)
+        } else if line_matches!(tokens, TokenType::AugAssign(_))? {
+            Err(tokens.error("mut cannot be used in augmented assignment"))
+        } else {
+            Self::finish_parse(DeclarationNode::parse(tokens)?.into(), descriptors)
+        }
+    }
+
+    fn finish_parse(
+        stmt: IndependentNode,
+        descriptors: HashSet<DescriptorNode>,
+    ) -> ParseResult<DescribableNode> {
+        match DescribableNode::try_from(stmt) {
+            Result::Ok(mut statement) => {
+                if !statement.valid_descriptors().is_superset(&descriptors) {
+                    Err(ParserError::Normal(ParserException::of(
+                        Self::error_message(&statement, &descriptors),
+                        statement,
+                    )))
+                } else {
+                    statement.add_descriptors(descriptors);
+                    Ok(statement)
+                }
+            }
+            Result::Err(stmt) => {
+                Err(ParserException::of("Descriptor not allowed in statement", stmt).into())
+            }
+        }
+    }
+
+    fn error_message(statement: &DescribableNode, descriptors: &HashSet<DescriptorNode>) -> String {
+        let disjoint = descriptors.difference(statement.valid_descriptors());
+        format!(
+            "Invalid descriptor(s): {} not allowed in statement",
+            disjoint.map(|x| x.name()).format(", ")
+        )
+    }
+}
+
 impl fmt::Display for DescriptorNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         fmt::Display::fmt(self.name(), f)
+    }
+}
+
+impl Lined for DescribableNode {
+    fn line_info(&self) -> &LineInfo {
+        match self {
+            DescribableNode::Assign(a) => a.line_info(),
+            DescribableNode::Function(f) => f.line_info(),
+            DescribableNode::Interface(i) => i.line_info(),
+        }
+    }
+}
+
+impl TryFrom<IndependentNode> for DescribableNode {
+    type Error = IndependentNode;
+
+    fn try_from(value: IndependentNode) -> Result<Self, Self::Error> {
+        Ok(match value {
+            IndependentNode::Assign(a) => DescribableNode::Assign(a),
+            IndependentNode::FunctionDef(f) => DescribableNode::Function(f),
+            value => DescribableNode::Interface(InterfaceStatementNode::try_from(value)?),
+        })
+    }
+}
+
+impl From<DescribableNode> for IndependentNode {
+    fn from(node: DescribableNode) -> Self {
+        match node {
+            DescribableNode::Assign(a) => IndependentNode::Assign(a),
+            DescribableNode::Function(f) => IndependentNode::FunctionDef(f),
+            DescribableNode::Interface(i) => i.into(),
+        }
     }
 }

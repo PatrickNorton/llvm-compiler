@@ -1,5 +1,6 @@
 use crate::parser::error::ParseResult;
 use crate::parser::line_info::{LineInfo, Lined};
+use crate::parser::macros::parse_if_matches;
 use crate::parser::test_node::TestNode;
 use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;

@@ -63,7 +63,11 @@ impl Number {
                 },
                 _ => {
                     digit_count = Some(i);
-                    break;
+                    if i == 0 {
+                        return None;
+                    } else {
+                        break;
+                    }
                 }
             };
             if d < radix as u8 {

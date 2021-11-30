@@ -1,8 +1,13 @@
 use crate::parser::error::ParseResult;
+use crate::parser::keyword::Keyword;
 use crate::parser::line_info::{LineInfo, Lined};
+use crate::parser::macros::parse_if_matches;
+use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
 use crate::parser::type_node::TypeLikeNode;
 use crate::parser::variable::VariableNode;
+
+use crate::parser::type_node::TypeNode;
 
 #[derive(Debug)]
 pub struct TypedVariableNode {
@@ -24,6 +29,29 @@ impl TypedVariableNode {
         let type_node = TypeLikeNode::parse(tokens, ignore_newlines)?;
         let var = VariableNode::parse_newline(tokens, ignore_newlines)?;
         Ok(TypedVariableNode::new(type_node, var))
+    }
+
+    pub fn parse_list(tokens: &mut TokenList) -> ParseResult<Vec<TypedVariableNode>> {
+        let mut vars = Vec::new();
+        while TypeNode::next_is_type(tokens)? {
+            vars.push(Self::parse(tokens, false)?);
+            if !tokens.token_equals(",")? {
+                break;
+            }
+            tokens.next_token()?;
+        }
+        Ok(vars)
+    }
+
+    pub fn parse_list_on_keyword(
+        tokens: &mut TokenList,
+        keyword: Keyword,
+    ) -> ParseResult<Vec<TypedVariableNode>> {
+        if parse_if_matches!(tokens, TokenType::Keyword(k) if k == &keyword)?.is_some() {
+            Self::parse_list(tokens)
+        } else {
+            Ok(Vec::new())
+        }
     }
 }
 

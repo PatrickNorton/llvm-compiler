@@ -1,5 +1,8 @@
+use std::fmt::{Display, Write};
+
+use backtrace::Backtrace;
+
 use crate::parser::line_info::Lined;
-use std::fmt::Write;
 
 pub type ParseResult<T> = Result<T, ParserError>;
 
@@ -12,11 +15,13 @@ pub enum ParserError {
 #[derive(Debug)]
 pub struct ParserException {
     message: String,
+    backtrace: Backtrace,
 }
 
 #[derive(Debug)]
 pub struct ParserInternalError {
     message: String,
+    backtrace: Backtrace,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
@@ -39,7 +44,10 @@ impl ParserException {
             line_info.info_string()
         )
         .unwrap();
-        ParserException { message }
+        ParserException {
+            message,
+            backtrace: Backtrace::new(),
+        }
     }
 }
 
@@ -55,7 +63,10 @@ impl ParserInternalError {
             line_info.info_string()
         )
         .unwrap();
-        ParserInternalError { message }
+        ParserInternalError {
+            message,
+            backtrace: Backtrace::new(),
+        }
     }
 }
 
@@ -93,5 +104,26 @@ impl InvalidToken {
             InvalidToken::Operator => "Invalid operator definition",
             InvalidToken::Backslash => "Invalid backslash escape",
         }
+    }
+}
+
+impl Display for ParserError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParserError::Normal(n) => write!(f, "{}", n),
+            ParserError::Internal(i) => write!(f, "{}", i),
+        }
+    }
+}
+
+impl Display for ParserException {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}\n{:?}", self.message, self.backtrace)
+    }
+}
+
+impl Display for ParserInternalError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}\n{:?}", self.message, self.backtrace)
     }
 }

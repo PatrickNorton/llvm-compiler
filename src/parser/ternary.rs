@@ -19,3 +19,9 @@ impl TernaryNode {
         }
     }
 }
+
+impl Lined for TernaryNode {
+    fn line_info(&self) -> &LineInfo {
+        &self.line_info
+    }
+}

@@ -56,6 +56,7 @@ impl VariableNode {
     pub fn parse_on_keyword(tokens: &mut TokenList, keyword: Keyword) -> ParseResult<VariableNode> {
         if let TokenType::Keyword(key) = *(tokens.token_type()?) {
             if key == keyword {
+                tokens.next_token()?;
                 return Self::parse(tokens);
             }
         }

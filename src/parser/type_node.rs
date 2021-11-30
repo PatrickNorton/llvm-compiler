@@ -3,6 +3,7 @@ use crate::parser::dotted::DottedVariableNode;
 use crate::parser::error::ParseResult;
 use crate::parser::keyword::Keyword;
 use crate::parser::line_info::{LineInfo, Lined};
+use crate::parser::macros::parse_if_matches;
 use crate::parser::operator::OperatorTypeNode;
 use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
@@ -11,7 +12,7 @@ use crate::parser::token_list::TokenList;
 pub struct TypeNode {
     line_info: LineInfo,
     name: DottedVariableNode,
-    sub_types: Vec<TypeLikeNode>,
+    sub_types: Vec<TypeNode>,
     is_vararg: bool,
     optional: bool,
     mutability: Option<DescriptorNode>,
@@ -37,7 +38,7 @@ impl TypeNode {
 
     pub fn new(
         name: DottedVariableNode,
-        sub_types: Vec<TypeLikeNode>,
+        sub_types: Vec<TypeNode>,
         is_vararg: bool,
         optional: bool,
     ) -> TypeNode {
@@ -59,27 +60,65 @@ impl TypeNode {
         Self::parse_internal(tokens, false, false, ignore_newlines)
     }
 
+    pub fn parse_ret_val(
+        tokens: &mut TokenList,
+        ignore_newlines: bool,
+    ) -> ParseResult<Vec<TypeNode>> {
+        if parse_if_matches!(tokens, ignore_newlines, TokenType::Arrow)?.is_some() {
+            Self::parse_list(tokens, ignore_newlines)
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    pub fn parse_list_on_keyword(
+        tokens: &mut TokenList,
+        keyword: Keyword,
+    ) -> ParseResult<Vec<TypeNode>> {
+        tokens
+            .next_if(|x| x.is_kwd(keyword))?
+            .map_or_else(|| Ok(Vec::new()), |_| Self::parse_list(tokens, false))
+    }
+
+    pub fn parse_list(tokens: &mut TokenList, ignore_newlines: bool) -> ParseResult<Vec<TypeNode>> {
+        let mut types = Vec::new();
+        while let TokenType::Name(_) | TokenType::Descriptor(_) = tokens.token_type()? {
+            types.push(Self::parse_newline(tokens, ignore_newlines)?);
+            if !matches!(tokens.token_type()?, TokenType::Comma) {
+                break;
+            }
+            tokens.next_tok(ignore_newlines)?;
+        }
+        Ok(types)
+    }
+
+    pub fn set_mutability(&mut self, descriptor: DescriptorNode) {
+        self.mutability = Some(descriptor);
+    }
+
     fn parse_internal(
         tokens: &mut TokenList,
         allow_empty: bool,
         is_vararg: bool,
         ignore_newlines: bool,
     ) -> ParseResult<TypeNode> {
-        if parse_if_matches!(tokens, true, TokenType::Keyword(Keyword::Var))?.is_some() {
-            todo!("Self::parse_var()")
-        }
-        let main;
-        if !matches!(tokens.token_type()?, TokenType::Name(_)) {
+        let main = if !matches!(tokens.token_type()?, TokenType::Name(_)) {
             if allow_empty && tokens.token_equals("[")? {
-                main = DottedVariableNode::empty();
+                DottedVariableNode::empty()
             } else {
                 return Err(tokens.error_expected("type name"));
             }
         } else {
-            main = DottedVariableNode::parse_names_only(tokens, ignore_newlines)?;
-        }
+            DottedVariableNode::parse_names_only(tokens, ignore_newlines)?
+        };
         if !tokens.token_equals("[")? {
-            return Ok(TypeNode::from_dotted_var(main, false));
+            let optional = parse_if_matches!(
+                tokens,
+                true,
+                TokenType::Operator(OperatorTypeNode::Optional)
+            )?
+            .is_some();
+            return Ok(TypeNode::from_dotted_var(main, optional));
         }
         tokens.next_tok(true)?;
         let mut subtypes = Vec::new();
@@ -102,7 +141,7 @@ impl TypeNode {
             } else {
                 Self::parse_internal(tokens, true, subclass_is_vararg, true)?
             };
-            subtypes.push(TypeLikeNode::Type(subtype));
+            subtypes.push(subtype);
             if parse_if_matches!(tokens, true, TokenType::Comma)?.is_some() {
                 continue;
             }
@@ -139,13 +178,24 @@ impl TypeLikeNode {
         }
     }
 
+    pub fn set_mutability(&mut self, descriptor: DescriptorNode) {
+        match self {
+            TypeLikeNode::Type(t) => t.set_mutability(descriptor),
+            TypeLikeNode::Var(_) => todo!(),
+        }
+    }
+
     pub fn parse(tokens: &mut TokenList, ignore_newlines: bool) -> ParseResult<TypeLikeNode> {
         match *tokens.token_type()? {
+            TokenType::Keyword(Keyword::Var) => {
+                let (line_info, _) = tokens.next_tok(ignore_newlines)?.deconstruct();
+                Ok(TypeLikeNode::Var(line_info))
+            }
             TokenType::Descriptor(descriptor) => {
                 tokens.next_tok(ignore_newlines)?;
                 if descriptor.is_mut_node() {
-                    let node = Self::parse_no_mut(tokens, ignore_newlines)?;
-                    // FIXME: node.set_mutability(descriptor);
+                    let mut node = Self::parse_no_mut(tokens, ignore_newlines)?;
+                    node.set_mutability(descriptor);
                     Ok(node)
                 } else {
                     Err(tokens.error("Invalid descriptor for type"))
@@ -153,31 +203,6 @@ impl TypeLikeNode {
             }
             _ => Self::parse_no_mut(tokens, ignore_newlines),
         }
-    }
-
-    pub fn parse_ret_val(
-        tokens: &mut TokenList,
-        ignore_newlines: bool,
-    ) -> ParseResult<Vec<TypeLikeNode>> {
-        if parse_if_matches!(tokens, ignore_newlines, TokenType::Arrow)?.is_some() {
-            Self::parse_list(tokens, ignore_newlines)
-        } else {
-            Ok(Vec::new())
-        }
-    }
-
-    fn parse_list(tokens: &mut TokenList, ignore_newlines: bool) -> ParseResult<Vec<TypeLikeNode>> {
-        let mut types = Vec::new();
-        while let TokenType::Name(_) | TokenType::Descriptor(_) | TokenType::Keyword(Keyword::Var) =
-            tokens.token_type()?
-        {
-            types.push(Self::parse(tokens, ignore_newlines)?);
-            if matches!(tokens.token_type()?, TokenType::Comma) {
-                break;
-            }
-            tokens.next_tok(ignore_newlines)?;
-        }
-        Ok(types)
     }
 
     fn parse_no_mut(tokens: &mut TokenList, ignore_newlines: bool) -> ParseResult<TypeLikeNode> {

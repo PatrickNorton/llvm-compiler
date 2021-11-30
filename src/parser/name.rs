@@ -2,6 +2,7 @@ use crate::parser::dotted::DottedVariableNode;
 use crate::parser::error::ParseResult;
 use crate::parser::fn_call::FunctionCallNode;
 use crate::parser::index::IndexNode;
+use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::operator_fn::EscapedOperatorNode;
 use crate::parser::operator_sp::SpecialOpNameNode;
 use crate::parser::test_node::TestNode;
@@ -58,6 +59,19 @@ impl NameNode {
             ParseResult::Ok(name)
         } else {
             ParseResult::Err(tokens.internal_error("Error in post-brace parsing"))
+        }
+    }
+}
+
+impl Lined for NameNode {
+    fn line_info(&self) -> &LineInfo {
+        match self {
+            NameNode::Dotted(d) => d.line_info(),
+            NameNode::EscapedOp(e) => e.line_info(),
+            NameNode::Function(f) => f.line_info(),
+            NameNode::Index(i) => i.line_info(),
+            NameNode::SpecialOp(s) => s.line_info(),
+            NameNode::Variable(v) => v.line_info(),
         }
     }
 }

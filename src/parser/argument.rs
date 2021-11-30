@@ -42,6 +42,10 @@ impl ArgumentNode {
         }
     }
 
+    pub fn into_argument(self) -> TestNode {
+        self.argument
+    }
+
     pub fn parse_list(tokens: &mut TokenList) -> ParseResult<Vec<ArgumentNode>> {
         if !tokens.token_equals("(")? {
             return Err(tokens.error("Function call must start with open-paren"));

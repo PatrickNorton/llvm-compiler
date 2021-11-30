@@ -1,14 +1,16 @@
 use crate::parser::error::ParseResult;
 use crate::parser::keyword::Keyword;
 use crate::parser::line_info::{LineInfo, Lined};
+use crate::parser::macros::parse_if_matches;
 use crate::parser::test_node::TestNode;
 use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
+use crate::parser::typed_arg::VarargType;
 
 #[derive(Debug)]
 pub struct TestListNode {
     line_info: LineInfo,
-    values: Vec<(String, TestNode)>,
+    values: Vec<(VarargType, TestNode)>,
 }
 
 impl TestListNode {
@@ -16,8 +18,25 @@ impl TestListNode {
         Self::new(LineInfo::empty(), vec![])
     }
 
-    pub fn new(line_info: LineInfo, values: Vec<(String, TestNode)>) -> TestListNode {
+    pub fn new(line_info: LineInfo, values: Vec<(VarargType, TestNode)>) -> TestListNode {
         Self { line_info, values }
+    }
+
+    pub fn parse(tokens: &mut TokenList, ignore_newlines: bool) -> ParseResult<TestListNode> {
+        if !ignore_newlines && matches!(tokens.token_type()?, TokenType::Newline) {
+            return Ok(TestListNode::empty());
+        }
+        let mut values = Vec::new();
+        while TestNode::next_is_test(tokens)? {
+            let vararg = VarargType::parse_ignoring(tokens, ignore_newlines)?;
+            let test = TestNode::parse_newline(tokens, ignore_newlines)?;
+            values.push((vararg, test));
+            if !matches!(tokens.token_type()?, TokenType::Comma) {
+                break;
+            }
+            tokens.next_tok(ignore_newlines)?;
+        }
+        Ok(TestListNode::new(LineInfo::empty(), values))
     }
 
     pub fn parse_post_if(
@@ -38,11 +57,7 @@ impl TestListNode {
                 post_if = Option::Some(TestNode::parse_newline(tokens, ignore_newlines)?);
                 break;
             }
-            let vararg = if tokens.token_eq_either("*", "**")? {
-                tokens.next_tok(ignore_newlines)?.into_sequence()
-            } else {
-                String::new()
-            };
+            let vararg = VarargType::parse_ignoring(tokens, ignore_newlines)?;
             let (next, cond) = TestNode::parse_maybe_post_if(tokens, ignore_newlines)?;
             values.push((vararg, next));
             if let Option::Some(cond) = cond {

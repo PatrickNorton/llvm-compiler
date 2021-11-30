@@ -1,8 +1,9 @@
 use crate::parser::argument::ArgumentNode;
-use crate::parser::line_info::LineInfo;
+use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::test_node::TestNode;
 use crate::parser::token::TokenType;
 use once_cell::sync::Lazy;
+use unicode_xid::UnicodeXID;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum OperatorTypeNode {
@@ -94,7 +95,14 @@ impl OperatorTypeNode {
         static SORTED_VALUES: Lazy<[OperatorTypeNode; VALUES_LEN]> =
             Lazy::new(|| sort_str_len(VALUES));
         for &value in &*SORTED_VALUES {
-            if input.starts_with(value.sequence()) {
+            if value != OperatorTypeNode::USubtract
+                && input.starts_with(value.sequence())
+                && (!value.requires_boundary()
+                    || input[value.sequence().len()..]
+                        .chars()
+                        .next()
+                        .map_or_else(|| true, |x| !UnicodeXID::is_xid_continue(x)))
+            {
                 return Some((TokenType::Operator(value), value.sequence().len()));
             }
         }
@@ -195,6 +203,10 @@ impl OperatorTypeNode {
     pub const fn is_postfix(&self) -> bool {
         matches!(self, OperatorTypeNode::NotNull | OperatorTypeNode::Optional)
     }
+
+    fn requires_boundary(&self) -> bool {
+        UnicodeXID::is_xid_start(self.sequence().chars().next().unwrap())
+    }
 }
 
 impl OperatorNode {
@@ -208,6 +220,10 @@ impl OperatorNode {
             operator,
             arguments,
         }
+    }
+
+    pub fn deconstruct(self) -> (OperatorTypeNode, Vec<ArgumentNode>) {
+        (self.operator, self.arguments)
     }
 
     pub fn from_nodes(
@@ -227,4 +243,27 @@ fn sort_str_len<const N: usize>(mut value: [OperatorTypeNode; N]) -> [OperatorTy
     value.sort_unstable_by_key(|k| k.sequence().len());
     value.reverse();
     value
+}
+
+impl Lined for OperatorNode {
+    fn line_info(&self) -> &LineInfo {
+        &self.line_info
+    }
+}
+
+impl Lined for OperatorTypeNode {
+    fn line_info(&self) -> &LineInfo {
+        LineInfo::empty_ref()
+    }
+}
+
+impl TryFrom<TestNode> for OperatorNode {
+    type Error = TestNode;
+
+    fn try_from(value: TestNode) -> Result<Self, Self::Error> {
+        match value {
+            TestNode::Operator(o) => Ok(o),
+            value => Err(value),
+        }
+    }
 }

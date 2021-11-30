@@ -1,10 +1,42 @@
-use crate::hash_map;
+use crate::macros::hash_map;
+use crate::parser::assert::AssertStatementNode;
 use crate::parser::base::IndependentNode;
+use crate::parser::break_stmt::BreakStatementNode;
+use crate::parser::class_def::ClassDefinitionNode;
+use crate::parser::context::ContextDefinitionNode;
+use crate::parser::continue_stmt::ContinueStatementNode;
+use crate::parser::defer::DeferStatementNode;
+use crate::parser::delete::DeleteStatementNode;
+use crate::parser::do_stmt::DoStatementNode;
+use crate::parser::dotimes::DotimesStatementNode;
+use crate::parser::enum_def::EnumDefinitionNode;
 use crate::parser::error::ParseResult;
+use crate::parser::for_loop::ForStatementNode;
+use crate::parser::func_def::FunctionDefinitionNode;
+use crate::parser::generalizable::GeneralizableNode;
+use crate::parser::if_stmt::IfStatementNode;
+use crate::parser::import::ImportExportNode;
+use crate::parser::interface::InterfaceDefinitionNode;
+use crate::parser::lambda::LambdaNode;
+use crate::parser::method::MethodDefinitionNode;
+use crate::parser::operator_fn::OpFuncTypeNode;
+use crate::parser::property::PropertyDefinitionNode;
+use crate::parser::raise_stmt::RaiseStatementNode;
+use crate::parser::return_stmt::ReturnStatementNode;
+use crate::parser::switch_stmt::SwitchStatementNode;
+use crate::parser::synchronized::SynchronizedStatementNode;
+use crate::parser::test_node::TestNode;
 use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
+use crate::parser::try_stmt::TryStatementNode;
+use crate::parser::typedef::TypedefStatementNode;
+use crate::parser::union_def::UnionDefinitionNode;
+use crate::parser::while_stmt::WhileStatementNode;
+use crate::parser::with_stmt::WithStatementNode;
+use crate::parser::yield_stmt::YieldStatementNode;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
+use unicode_xid::UnicodeXID;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum Keyword {
@@ -25,6 +57,7 @@ pub enum Keyword {
     Typeget,
     Break,
     Continue,
+    Nobreak,
     Return,
     Property,
     Enter,
@@ -74,6 +107,7 @@ static VALUES: Lazy<HashMap<&'static str, Keyword>> = Lazy::new(|| {
         "typeget" => Keyword::Typeget,
         "break" => Keyword::Break,
         "continue" => Keyword::Continue,
+        "nobreak" => Keyword::Nobreak,
         "return" => Keyword::Return,
         "property" => Keyword::Property,
         "enter" => Keyword::Enter,
@@ -108,8 +142,13 @@ static VALUES: Lazy<HashMap<&'static str, Keyword>> = Lazy::new(|| {
 impl Keyword {
     pub fn pattern(input: &str) -> Option<(TokenType, usize)> {
         for (key, value) in &*VALUES {
-            if input.starts_with(key) {
-                return Option::Some((TokenType::Keyword(*value), input.len()));
+            if input.starts_with(key)
+                && input[key.len()..]
+                    .chars()
+                    .next()
+                    .map_or_else(|| true, |x| !UnicodeXID::is_xid_continue(x))
+            {
+                return Option::Some((TokenType::Keyword(*value), key.len()));
             }
         }
         Option::None
@@ -117,10 +156,71 @@ impl Keyword {
 
     pub fn parse_left(self, tokens: &mut TokenList) -> ParseResult<IndependentNode> {
         debug_assert_eq!(tokens.token_type()?, &TokenType::Keyword(self));
-        todo!("Keyword parsing")
+        match self {
+            Keyword::Class => ClassDefinitionNode::parse(tokens).map(IndependentNode::ClassDef),
+            Keyword::Func => {
+                FunctionDefinitionNode::parse(tokens).map(IndependentNode::FunctionDef)
+            }
+            Keyword::If => IfStatementNode::parse(tokens).map(IndependentNode::If),
+            Keyword::For => ForStatementNode::parse(tokens).map(IndependentNode::For),
+            Keyword::Elif => Err(tokens.error("elif must have a preceding if")),
+            Keyword::Else => Err(tokens.error("else must have a preceding if")),
+            Keyword::Do => DoStatementNode::parse(tokens).map(IndependentNode::Do),
+            Keyword::Dotimes => DotimesStatementNode::parse(tokens).map(IndependentNode::Dotimes),
+            Keyword::Method => MethodDefinitionNode::parse(tokens).map(IndependentNode::Method),
+            Keyword::While => WhileStatementNode::parse(tokens).map(IndependentNode::While),
+            Keyword::In => Err(tokens.error("in does not begin any statements")),
+            Keyword::From => ImportExportNode::parse(tokens).map(IndependentNode::Import),
+            Keyword::Import => ImportExportNode::parse(tokens).map(IndependentNode::Import),
+            Keyword::Export => ImportExportNode::parse(tokens).map(IndependentNode::Import),
+            Keyword::Typeget => ImportExportNode::parse(tokens).map(IndependentNode::Import),
+            Keyword::Break => BreakStatementNode::parse(tokens).map(IndependentNode::Break),
+            Keyword::Continue => {
+                ContinueStatementNode::parse(tokens).map(IndependentNode::Continue)
+            }
+            Keyword::Nobreak => Err(tokens.error("nobreak must be part of a loop")),
+            Keyword::Return => ReturnStatementNode::parse(tokens).map(IndependentNode::Return),
+            Keyword::Property => {
+                PropertyDefinitionNode::parse(tokens).map(IndependentNode::Property)
+            }
+            Keyword::Enter => Err(tokens.error("enter must be in a property block")),
+            Keyword::Exit => Err(tokens.error("exit must be in a property block")),
+            Keyword::Try => TryStatementNode::parse(tokens).map(IndependentNode::Try),
+            Keyword::Except => Err(tokens.error("except must be in a try statement")),
+            Keyword::Finally => Err(tokens.error("finally must be in a try statement")),
+            Keyword::With => WithStatementNode::parse(tokens).map(IndependentNode::With),
+            Keyword::As => Err(tokens.error("as must be with a with or import/typeget")),
+            Keyword::Assert => AssertStatementNode::parse(tokens).map(IndependentNode::Assert),
+            Keyword::Del => DeleteStatementNode::parse(tokens).map(IndependentNode::Delete),
+            Keyword::Yield => YieldStatementNode::parse(tokens).map(IndependentNode::Yield),
+            Keyword::Context => ContextDefinitionNode::parse(tokens).map(IndependentNode::Context),
+            Keyword::Lambda => LambdaNode::parse(tokens, false)
+                .map(TestNode::Lambda)
+                .map(IndependentNode::Test),
+            Keyword::Raise => RaiseStatementNode::parse(tokens, false)
+                .map(TestNode::Raise)
+                .map(IndependentNode::Test),
+            Keyword::Typedef => TypedefStatementNode::parse(tokens).map(IndependentNode::Typedef),
+            Keyword::Some => TestNode::parse(tokens).map(IndependentNode::Test),
+            Keyword::Interface => {
+                InterfaceDefinitionNode::parse(tokens).map(IndependentNode::Interface)
+            }
+            Keyword::Switch => SwitchStatementNode::parse(tokens)
+                .map(TestNode::Switch)
+                .map(IndependentNode::Test),
+            Keyword::Case => Err(tokens.error("Case statements are illegal outside switch")),
+            Keyword::Enum => EnumDefinitionNode::parse(tokens).map(IndependentNode::Enum),
+            Keyword::Default => Err(tokens.error("Default statements are illegal outside switch")),
+            Keyword::Goto => Err(tokens.error("This language doesn't use goto, go use C++")),
+            Keyword::Defer => DeferStatementNode::parse(tokens).map(IndependentNode::Defer),
+            Keyword::Var => IndependentNode::parse_var(tokens),
+            Keyword::Sync => SynchronizedStatementNode::parse(tokens).map(IndependentNode::Sync),
+            Keyword::Generic => GeneralizableNode::parse(tokens).map(Into::into),
+            Keyword::Union => UnionDefinitionNode::parse(tokens).map(IndependentNode::Union),
+        }
     }
 
-    pub fn name(self) -> &'static str {
+    pub const fn name(self) -> &'static str {
         match self {
             Keyword::Class => "class",
             Keyword::Func => "func",
@@ -139,6 +239,7 @@ impl Keyword {
             Keyword::Typeget => "typeget",
             Keyword::Break => "break",
             Keyword::Continue => "continue",
+            Keyword::Nobreak => "nobreak",
             Keyword::Return => "return",
             Keyword::Property => "property",
             Keyword::Enter => "enter",

@@ -15,6 +15,7 @@ pub struct Tokenizer {
     next: String,
     full_line: String,
     lb_indices: BTreeSet<usize>,
+    line_number: usize,
 }
 
 #[derive(Debug)]
@@ -24,24 +25,32 @@ enum Reader {
 }
 
 impl Tokenizer {
-    fn from_file(f: File) -> Tokenizer {
-        Tokenizer {
+    fn from_file(f: File) -> ParseResult<Tokenizer> {
+        let mut tokenizer = Tokenizer {
             reader: Reader::File(BufReader::new(f)),
             file_name: PathBuf::new(), // FIXME
             next: String::new(),
             full_line: String::new(),
             lb_indices: BTreeSet::new(),
-        }
+            line_number: 0,
+        };
+        // Get rid of leading newline
+        tokenizer.next_token()?;
+        Ok(tokenizer)
     }
 
-    fn from_str(str: &str, path: PathBuf, _line_no: usize) -> Tokenizer {
-        Tokenizer {
+    fn from_str(str: &str, path: PathBuf, _line_no: usize) -> ParseResult<Tokenizer> {
+        let mut tokenizer = Tokenizer {
             reader: Reader::String(Cursor::new(str.as_bytes().to_vec())),
             file_name: path,
             next: String::new(),
             full_line: String::new(),
             lb_indices: BTreeSet::new(),
-        }
+            line_number: 0,
+        };
+        // Get rid of leading newline
+        tokenizer.next_token()?;
+        Ok(tokenizer)
     }
 
     pub fn tokenize_next(&mut self) -> ParseResult<Token> {
@@ -53,12 +62,12 @@ impl Tokenizer {
         }
     }
 
-    pub fn parse(f: File) -> TokenList {
-        TokenList::new(Tokenizer::from_file(f))
+    pub fn parse(f: File) -> ParseResult<TokenList> {
+        Ok(TokenList::new(Tokenizer::from_file(f)?))
     }
 
-    pub fn parse_str(str: &str, path: PathBuf, line_no: usize) -> TokenList {
-        TokenList::new(Tokenizer::from_str(str, path, line_no))
+    pub fn parse_str(str: &str, path: PathBuf, line_no: usize) -> ParseResult<TokenList> {
+        Ok(TokenList::new(Tokenizer::from_str(str, path, line_no)?))
     }
 
     fn next_token(&mut self) -> ParseResult<Option<Token>> {
@@ -241,6 +250,7 @@ impl Tokenizer {
             Result::Ok(x) => ParseResult::Ok(if x == 0 {
                 Option::None
             } else {
+                self.line_number += 1;
                 Option::Some(buffer)
             }),
             Result::Err(e) => ParseResult::Err(ParserException::of(e, self.line_info()).into()),
@@ -248,11 +258,18 @@ impl Tokenizer {
     }
 
     fn line_number(&self) -> usize {
-        todo!()
+        self.line_number
     }
 
     fn line_index(&self) -> usize {
-        todo!()
+        // FIXME? Deal with non-Ascii chars
+        let full_len = self.full_line.len() - self.next.len();
+        if self.lb_indices.is_empty() {
+            full_len
+        } else {
+            let index = self.lb_indices.range(..full_len).next_back();
+            full_len - *index.unwrap_or(&0)
+        }
     }
 }
 

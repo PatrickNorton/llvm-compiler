@@ -9,6 +9,8 @@ mod util;
 
 fn main() {
     let file = PathBuf::from(args().nth(1).unwrap());
-    Parser::parse_file(file).unwrap().unwrap();
-    println!("Hello, world!");
+    match Parser::parse_file(file).unwrap() {
+        Result::Ok(_) => {}
+        Result::Err(err) => println!("{}", err),
+    }
 }

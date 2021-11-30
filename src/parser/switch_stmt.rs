@@ -2,6 +2,7 @@ use crate::parser::base::IndependentNode;
 use crate::parser::error::ParseResult;
 use crate::parser::keyword::Keyword;
 use crate::parser::line_info::{LineInfo, Lined};
+use crate::parser::macros::parse_if_matches;
 use crate::parser::stmt_body::StatementBodyNode;
 use crate::parser::test_node::TestNode;
 use crate::parser::token::TokenType;
@@ -22,6 +23,7 @@ pub struct CaseStatementNode {
     body: StatementBodyNode,
     arrow: bool,
     as_stmt: VariableNode,
+    is_default: bool,
 }
 
 impl SwitchStatementNode {
@@ -74,16 +76,49 @@ impl CaseStatementNode {
             body,
             arrow,
             as_stmt,
+            is_default: false,
+        }
+    }
+
+    pub fn new_default(
+        line_info: LineInfo,
+        body: StatementBodyNode,
+        arrow: bool,
+        as_stmt: VariableNode,
+    ) -> Self {
+        Self {
+            line_info,
+            label: Vec::new(),
+            body,
+            arrow,
+            as_stmt,
+            is_default: true,
         }
     }
 
     pub fn parse(tokens: &mut TokenList) -> ParseResult<CaseStatementNode> {
         if let TokenType::Keyword(Keyword::Default) = tokens.token_type()? {
-            todo!("Parse default stmt")
+            return Self::parse_default(tokens);
         }
         let (line_info, token_type) = tokens.next_token()?.deconstruct();
-        assert!(matches!(token_type, TokenType::Keyword(Keyword::Default)));
+        assert!(matches!(token_type, TokenType::Keyword(Keyword::Case)));
         let label = TestNode::parse_list(tokens, false)?;
+        let (body, arrow, as_stmt) = Self::parse_body(tokens)?;
+        Ok(CaseStatementNode::new(
+            line_info, label, body, arrow, as_stmt,
+        ))
+    }
+
+    fn parse_default(tokens: &mut TokenList) -> ParseResult<CaseStatementNode> {
+        let (line_info, tok) = tokens.next_token()?.deconstruct();
+        assert!(matches!(tok, TokenType::Keyword(Keyword::Default)));
+        let (body, arrow, as_stmt) = Self::parse_body(tokens)?;
+        Ok(CaseStatementNode::new_default(
+            line_info, body, arrow, as_stmt,
+        ))
+    }
+
+    fn parse_body(tokens: &mut TokenList) -> ParseResult<(StatementBodyNode, bool, VariableNode)> {
         let as_stmt = VariableNode::parse_on_keyword(tokens, Keyword::As)?;
         let arrow = matches!(tokens.token_type()?, TokenType::DoubleArrow);
         let body =
@@ -96,9 +131,7 @@ impl CaseStatementNode {
             } else {
                 StatementBodyNode::parse(tokens)?
             };
-        Ok(CaseStatementNode::new(
-            line_info, label, body, arrow, as_stmt,
-        ))
+        Ok((body, arrow, as_stmt))
     }
 }
 

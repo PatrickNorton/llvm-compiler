@@ -1,5 +1,7 @@
-use crate::parser::line_info::LineInfo;
+use crate::parser::error::ParseResult;
+use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::token::TokenType;
+use crate::parser::token_list::TokenList;
 use once_cell::sync::Lazy;
 
 #[derive(Debug)]
@@ -145,6 +147,16 @@ impl SpecialOpNameNode {
             operator,
         }
     }
+
+    pub fn parse(tokens: &mut TokenList) -> ParseResult<SpecialOpNameNode> {
+        match *tokens.token_type()? {
+            TokenType::OperatorSp(o) => {
+                let (info, _) = tokens.next_token()?.deconstruct();
+                Ok(SpecialOpNameNode::new(info, o))
+            }
+            _ => Err(tokens.internal_error("Expected a special operator")),
+        }
+    }
 }
 
 impl OpSpTypeNode {
@@ -236,4 +248,10 @@ fn sort_str_len<const N: usize>(mut value: [OpSpTypeNode; N]) -> [OpSpTypeNode; 
     value.sort_unstable_by_key(|k| k.sequence().len());
     value.reverse();
     value
+}
+
+impl Lined for SpecialOpNameNode {
+    fn line_info(&self) -> &LineInfo {
+        &self.line_info
+    }
 }

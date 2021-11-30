@@ -35,7 +35,7 @@ impl Parser {
 
     pub fn parse_file(f: PathBuf) -> io::Result<ParseResult<TopNode>> {
         let file = File::open(&f)?;
-        Ok(Self::parse(f, Tokenizer::parse(file)))
+        Ok(Tokenizer::parse(file).and_then(|t| Self::parse(f, t)))
     }
 }
 

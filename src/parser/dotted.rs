@@ -1,4 +1,5 @@
 use crate::parser::error::{ParseResult, ParserError, ParserException};
+use crate::parser::keyword::Keyword;
 use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::name::NameNode;
 use crate::parser::number::{Number, NumberNode};
@@ -62,6 +63,33 @@ impl DottedVariableNode {
         ))
     }
 
+    pub fn parse_names_only_list(tokens: &mut TokenList) -> ParseResult<Vec<DottedVariableNode>> {
+        let mut variables = Vec::new();
+        let is_braced = if tokens.token_equals("(")?
+            && !tokens.brace_contains_kwds([Keyword::In, Keyword::For])?
+        {
+            tokens.next_tok(true)?;
+            true
+        } else {
+            false
+        };
+        while let TokenType::Name(_) = tokens.token_type()? {
+            variables.push(Self::parse_names_only(tokens, is_braced)?);
+            if let TokenType::Comma = tokens.token_type()? {
+                tokens.next_tok(is_braced)?;
+            } else {
+                break;
+            }
+        }
+        if is_braced {
+            if !tokens.token_equals(")")? {
+                return Err(tokens.error("Unmatched braces"));
+            }
+            tokens.next_token()?;
+        }
+        Ok(variables)
+    }
+
     pub fn parse_post_dots(
         tokens: &mut TokenList,
         pre_dot: TestNode,
@@ -88,7 +116,15 @@ impl DottedVariableNode {
         }
     }
 
-    fn from_expr(
+    pub fn parse_on_name(tokens: &mut TokenList) -> ParseResult<DottedVariableNode> {
+        if let TokenType::Name(_) = tokens.token_type()? {
+            Self::parse_names_only(tokens, false)
+        } else {
+            Ok(Self::empty())
+        }
+    }
+
+    pub fn from_expr(
         tokens: &mut TokenList,
         pre_dot: TestNode,
         ignore_newlines: bool,
