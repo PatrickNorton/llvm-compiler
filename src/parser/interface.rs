@@ -92,7 +92,7 @@ impl InterfaceDefinitionNode {
 
     pub fn parse(tokens: &mut TokenList) -> ParseResult<InterfaceDefinitionNode> {
         let (info, tok) = tokens.next_token()?.deconstruct();
-        assert!(matches!(tok, TokenType::Keyword(Keyword::Class)));
+        assert!(matches!(tok, TokenType::Keyword(Keyword::Interface)));
         if !matches!(tokens.token_type()?, TokenType::Name(_)) {
             return Err(tokens.error("class keyword must be followed by class name"));
         }

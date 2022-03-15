@@ -326,7 +326,7 @@ fn string(input: &str) -> Option<(TokenType, usize)> {
 }
 
 fn name(input: &str) -> Option<(TokenType, usize)> {
-    if !UnicodeXID::is_xid_start(input.chars().next()?) {
+    if !UnicodeXID::is_xid_start(input.chars().next()?) && !input.starts_with('_') {
         Option::None
     } else {
         let count = input

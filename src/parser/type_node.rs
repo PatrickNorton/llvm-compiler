@@ -45,13 +45,23 @@ impl TypeNode {
         is_vararg: bool,
         optional: bool,
     ) -> TypeNode {
+        Self::new_mutability(name, sub_types, is_vararg, optional, None)
+    }
+
+    pub fn new_mutability(
+        name: DottedVariableNode,
+        sub_types: Vec<TypeNode>,
+        is_vararg: bool,
+        optional: bool,
+        mutability: Option<DescriptorNode>,
+    ) -> TypeNode {
         TypeNode {
             line_info: name.line_info().clone(),
             name,
             sub_types,
             is_vararg,
             optional,
-            mutability: Option::None,
+            mutability,
         }
     }
 
@@ -149,6 +159,12 @@ impl TypeNode {
         is_vararg: bool,
         ignore_newlines: bool,
     ) -> ParseResult<TypeNode> {
+        let mutability = if let TokenType::Descriptor(DescriptorNode::Mut) = tokens.token_type()? {
+            tokens.next_token()?;
+            Some(DescriptorNode::Mut)
+        } else {
+            None
+        };
         let main = if !matches!(tokens.token_type()?, TokenType::Name(_)) {
             if allow_empty && tokens.token_equals("[")? {
                 DottedVariableNode::empty()
@@ -204,7 +220,9 @@ impl TypeNode {
             TokenType::Operator(OperatorTypeNode::Optional)
         )?
         .is_some();
-        Ok(TypeNode::new(main, subtypes, is_vararg, optional))
+        Ok(TypeNode::new_mutability(
+            main, subtypes, is_vararg, optional, mutability,
+        ))
     }
 
     pub fn next_is_type(tokens: &mut TokenList) -> ParseResult<bool> {

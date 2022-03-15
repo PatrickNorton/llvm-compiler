@@ -7,6 +7,7 @@ use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
 use once_cell::sync::Lazy;
 
+use super::error::ParserInternalError;
 use super::operator::OperatorTypeNode;
 
 #[derive(Debug)]
@@ -164,6 +165,13 @@ impl SpecialOpNameNode {
                 Ok(SpecialOpNameNode::new(info, o))
             }
             _ => Err(tokens.internal_error("Expected a special operator")),
+        }
+    }
+
+    pub fn parse_single(info: LineInfo, tok: TokenType) -> ParseResult<SpecialOpNameNode> {
+        match tok {
+            TokenType::OperatorSp(o) => Ok(SpecialOpNameNode::new(info, o)),
+            _ => Err(ParserInternalError::of("Expected an operator here", info).into()),
         }
     }
 }

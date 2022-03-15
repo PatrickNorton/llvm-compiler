@@ -150,8 +150,8 @@ impl GenericOperatorNode {
 
     pub fn parse(tokens: &mut TokenList) -> ParseResult<GenericOperatorNode> {
         let (info, tok) = tokens.next_token()?.deconstruct();
-        assert!(matches!(tok, TokenType::Keyword(Keyword::Method)));
-        let name = SpecialOpNameNode::parse(tokens)?;
+        assert!(matches!(tok, TokenType::OperatorSp(_)));
+        let name = SpecialOpNameNode::parse_single(info.clone(), tok)?;
         let args = TypedArgumentListNode::parse_on_open_brace(tokens)?;
         let retval = if let TokenType::Arrow = tokens.token_type()? {
             TypeNode::parse_ret_val(tokens, false)?

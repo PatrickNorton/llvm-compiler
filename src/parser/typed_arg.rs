@@ -82,6 +82,11 @@ impl TypedArgumentNode {
     ) -> ParseResult<Option<TypedArgumentNode>> {
         tokens.pass_newlines()?;
         let vararg_type = VarargType::parse(tokens)?;
+        if matches!(vararg_type, VarargType::Single | VarargType::Double)
+            && tokens.token_type()? == &TokenType::Comma
+        {
+            return Ok(None);
+        }
         if !type_decided {
             let arg_is_untyped = Self::argument_is_untyped(tokens)?;
             Self::parse_vararg(tokens, !arg_is_untyped, vararg_type).map(Option::Some)
