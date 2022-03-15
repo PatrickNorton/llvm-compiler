@@ -46,12 +46,32 @@ impl FunctionDefinitionNode {
         }
     }
 
+    pub fn get_name(&self) -> &VariableNode {
+        &self.name
+    }
+
+    pub fn get_args(&self) -> &TypedArgumentListNode {
+        &self.args
+    }
+
+    pub fn get_ret_val(&self) -> &[TypeNode] {
+        &self.ret_val
+    }
+
+    pub fn get_body(&self) -> &StatementBodyNode {
+        &self.body
+    }
+
     pub fn valid_descriptors(&self) -> &'static HashSet<DescriptorNode> {
         &FUNCTION_VALID
     }
 
     pub fn add_descriptors(&mut self, descriptors: HashSet<DescriptorNode>) {
         self.descriptors = descriptors;
+    }
+
+    pub fn get_descriptors(&self) -> &HashSet<DescriptorNode> {
+        &self.descriptors
     }
 
     pub fn get_annotations(&self) -> &Vec<NameNode> {
@@ -64,6 +84,10 @@ impl FunctionDefinitionNode {
 
     pub fn add_generics(&mut self, generics: Vec<TypeNode>) {
         self.generics = generics;
+    }
+
+    pub fn get_generics(&self) -> &[TypeNode] {
+        &self.generics
     }
 
     pub fn parse(tokens: &mut TokenList) -> ParseResult<FunctionDefinitionNode> {

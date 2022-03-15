@@ -4,7 +4,7 @@ use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
 use crate::util::decimal::BigDecimal;
 use num::bigint::Sign;
-use num::{BigInt, BigUint, Zero};
+use num::{BigInt, BigUint, ToPrimitive, Zero};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Number {
@@ -99,16 +99,10 @@ impl Number {
             let scale = v_len - dot;
             let dec = BigDecimal::new(BigInt::from_biguint(Sign::Plus, res), scale as isize);
             let num = Number::Decimal(dec);
-            Some((
-                TokenType::Number(num),
-                digit_count.unwrap_or_else(|| input.len()),
-            ))
+            Some((TokenType::Number(num), digit_count.unwrap_or(input.len())))
         } else {
             let num = Number::Integer(BigInt::from_biguint(Sign::Plus, res));
-            Some((
-                TokenType::Number(num),
-                digit_count.unwrap_or_else(|| input.len()),
-            ))
+            Some((TokenType::Number(num), digit_count.unwrap_or(input.len())))
         }
     }
 }
@@ -122,6 +116,10 @@ impl NumberNode {
         (self.line_info, self.value)
     }
 
+    pub fn get_value(&self) -> &Number {
+        &self.value
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<NumberNode> {
         let (line_info, token) = tokens.next_token()?.deconstruct();
         match token {
@@ -129,6 +127,32 @@ impl NumberNode {
             _ => panic!("Expected a number"),
         }
     }
+}
+
+macro_rules! to_primitive_fn {
+    ($name:ident, $ty:ty) => {
+        fn $name(&self) -> Option<$ty> {
+            match self {
+                Number::Integer(i) => i.$name(),
+                Number::Decimal(_) => None,
+            }
+        }
+    };
+}
+
+impl ToPrimitive for Number {
+    to_primitive_fn!(to_u8, u8);
+    to_primitive_fn!(to_i8, i8);
+    to_primitive_fn!(to_u16, u16);
+    to_primitive_fn!(to_i16, i16);
+    to_primitive_fn!(to_u32, u32);
+    to_primitive_fn!(to_i32, i32);
+    to_primitive_fn!(to_u64, u64);
+    to_primitive_fn!(to_i64, i64);
+    to_primitive_fn!(to_u128, u128);
+    to_primitive_fn!(to_i128, i128);
+    to_primitive_fn!(to_usize, usize);
+    to_primitive_fn!(to_isize, isize);
 }
 
 impl Lined for NumberNode {

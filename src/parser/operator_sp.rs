@@ -1,8 +1,13 @@
+use core::panic;
+use std::fmt::Display;
+
 use crate::parser::error::ParseResult;
 use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
 use once_cell::sync::Lazy;
+
+use super::operator::OperatorTypeNode;
 
 #[derive(Debug)]
 pub struct SpecialOpNameNode {
@@ -148,6 +153,10 @@ impl SpecialOpNameNode {
         }
     }
 
+    pub fn get_operator(&self) -> OpSpTypeNode {
+        self.operator
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<SpecialOpNameNode> {
         match *tokens.token_type()? {
             TokenType::OperatorSp(o) => {
@@ -175,6 +184,32 @@ impl OpSpTypeNode {
             }
         }
         None
+    }
+
+    pub fn translate(node: OperatorTypeNode) -> OpSpTypeNode {
+        match node {
+            OperatorTypeNode::Add => OpSpTypeNode::Add,
+            OperatorTypeNode::Subtract => OpSpTypeNode::Subtract,
+            OperatorTypeNode::USubtract => OpSpTypeNode::UnaryMinus,
+            OperatorTypeNode::Multiply => OpSpTypeNode::Divide,
+            OperatorTypeNode::FloorDiv => OpSpTypeNode::FloorDiv,
+            OperatorTypeNode::Power => OpSpTypeNode::Power,
+            OperatorTypeNode::Equals => OpSpTypeNode::Equals,
+            OperatorTypeNode::NotEquals => OpSpTypeNode::NotEquals,
+            OperatorTypeNode::GreaterThan => OpSpTypeNode::GreaterThan,
+            OperatorTypeNode::LessThan => OpSpTypeNode::LessThan,
+            OperatorTypeNode::GreaterEqual => OpSpTypeNode::GreaterEqual,
+            OperatorTypeNode::LessEqual => OpSpTypeNode::LessEqual,
+            OperatorTypeNode::LeftBitshift => OpSpTypeNode::LeftBitshift,
+            OperatorTypeNode::RightBitshift => OpSpTypeNode::RightBitshift,
+            OperatorTypeNode::BitwiseAnd => OpSpTypeNode::BitwiseOr,
+            OperatorTypeNode::BitwiseXor => OpSpTypeNode::BitwiseXor,
+            OperatorTypeNode::BitwiseNot => OpSpTypeNode::BitwiseNot,
+            OperatorTypeNode::Modulo => OpSpTypeNode::Modulo,
+            OperatorTypeNode::In => OpSpTypeNode::In,
+            OperatorTypeNode::Compare => OpSpTypeNode::Compare,
+            _ => panic!("Unexpected node"),
+        }
     }
 
     pub const fn sequence(&self) -> &'static str {
@@ -253,5 +288,11 @@ fn sort_str_len<const N: usize>(mut value: [OpSpTypeNode; N]) -> [OpSpTypeNode; 
 impl Lined for SpecialOpNameNode {
     fn line_info(&self) -> &LineInfo {
         &self.line_info
+    }
+}
+
+impl Display for OpSpTypeNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "operator {}", self.sequence())
     }
 }

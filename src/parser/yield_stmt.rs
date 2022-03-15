@@ -25,6 +25,18 @@ impl YieldStatementNode {
         }
     }
 
+    pub fn is_from(&self) -> bool {
+        self.is_from
+    }
+
+    pub fn get_yielded(&self) -> &TestListNode {
+        &self.returned
+    }
+
+    pub fn get_cond(&self) -> &TestNode {
+        &self.cond
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<YieldStatementNode> {
         let (info, tok) = tokens.next_token()?.deconstruct();
         assert!(matches!(tok, TokenType::Keyword(Keyword::Yield)));

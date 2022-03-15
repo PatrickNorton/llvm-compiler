@@ -43,6 +43,8 @@ pub enum DescribableNode {
     Interface(InterfaceStatementNode),
 }
 
+// FIXME? Make these slices instead of sets
+
 static MUT_NODES: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
     hash_set!(
         DescriptorNode::Mut,

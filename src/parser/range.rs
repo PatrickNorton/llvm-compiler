@@ -36,6 +36,18 @@ impl RangeLiteralNode {
         }
     }
 
+    pub fn get_start(&self) -> &TestNode {
+        &self.start
+    }
+
+    pub fn get_stop(&self) -> &TestNode {
+        &self.start
+    }
+
+    pub fn get_step(&self) -> &TestNode {
+        &self.start
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<RangeLiteralNode> {
         SliceNode::parse(tokens).map(Into::into)
     }

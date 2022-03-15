@@ -19,6 +19,10 @@ impl DeleteStatementNode {
         }
     }
 
+    pub fn get_deleted(&self) -> &TestNode {
+        &self.deletion
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<DeleteStatementNode> {
         let (info, tok) = tokens.next_token()?.deconstruct();
         assert!(matches!(tok, TokenType::Keyword(Keyword::Del)));

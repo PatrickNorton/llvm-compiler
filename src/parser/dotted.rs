@@ -47,6 +47,26 @@ impl DottedVariableNode {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.pre_dot.is_empty()
+    }
+
+    pub fn get_pre_dot(&self) -> &TestNode {
+        &self.pre_dot
+    }
+
+    pub fn get_post_dots(&self) -> &[DottedVar] {
+        &self.post_dots
+    }
+
+    pub fn get_last(&self) -> &DottedVar {
+        self.post_dots.last().expect("Dot list should not be empty")
+    }
+
+    pub fn name_string(&self) -> String {
+        todo!()
+    }
+
     pub fn parse_names_only(
         tokens: &mut TokenList,
         ignore_newlines: bool,
@@ -148,6 +168,14 @@ impl DottedVar {
         }
     }
 
+    pub fn get_post_dot(&self) -> &NameNode {
+        &self.post_dot
+    }
+
+    pub fn get_dot_prefix(&self) -> DotPrefix {
+        self.dot_prefix
+    }
+
     fn parse_all(tokens: &mut TokenList, ignore_newlines: bool) -> ParseResult<Vec<DottedVar>> {
         let mut result = Vec::new();
         while let TokenType::Dot(_) = tokens.token_type()? {
@@ -203,6 +231,12 @@ impl DottedVar {
     }
 }
 
+impl DotPrefix {
+    pub fn is_empty(&self) -> bool {
+        matches!(self, DotPrefix::None)
+    }
+}
+
 impl Lined for DottedVariableNode {
     fn line_info(&self) -> &LineInfo {
         &self.line_info
@@ -212,5 +246,27 @@ impl Lined for DottedVariableNode {
 impl Lined for DottedVar {
     fn line_info(&self) -> &LineInfo {
         &self.line_info
+    }
+}
+
+impl<'a> TryFrom<&'a NameNode> for &'a DottedVariableNode {
+    type Error = ();
+
+    fn try_from(value: &'a NameNode) -> Result<Self, Self::Error> {
+        match value {
+            NameNode::Dotted(d) => Ok(d),
+            _ => Err(()),
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a TestNode> for &'a DottedVariableNode {
+    type Error = ();
+
+    fn try_from(value: &'a TestNode) -> Result<Self, Self::Error> {
+        match value {
+            TestNode::Name(NameNode::Dotted(d)) => Ok(d),
+            _ => Err(()),
+        }
     }
 }

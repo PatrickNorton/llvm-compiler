@@ -5,6 +5,7 @@ use crate::parser::test_node::TestNode;
 use crate::parser::token::TokenType;
 use crate::parser::tokenizer::Tokenizer;
 use std::collections::HashSet;
+use std::fmt::{Display, Write};
 use std::iter::Peekable;
 use std::str::Chars;
 
@@ -17,16 +18,16 @@ pub struct FormattedStringNode {
     formats: Vec<FormatInfo>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FormatInfo {
-    fill: char,
-    align: char,
-    sign: char,
-    hash: bool,
-    zero: bool,
-    min_width: usize,
-    precision: usize,
-    fmt_type: char,
+    pub fill: char,
+    pub align: char,
+    pub sign: char,
+    pub hash: bool,
+    pub zero: bool,
+    pub min_width: usize,
+    pub precision: usize,
+    pub fmt_type: char,
     line_info: LineInfo,
 }
 
@@ -45,6 +46,18 @@ impl FormattedStringNode {
             tests,
             formats,
         }
+    }
+
+    pub fn get_strings(&self) -> &[String] {
+        &self.strings
+    }
+
+    pub fn get_tests(&self) -> &[TestNode] {
+        &self.tests
+    }
+
+    pub fn get_formats(&self) -> &[FormatInfo] {
+        &self.formats
     }
 
     pub fn parse(text: String, info: LineInfo) -> ParseResult<FormattedStringNode> {
@@ -131,6 +144,20 @@ impl FormatInfo {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.only_type() && self.fmt_type == '\0'
+    }
+
+    pub fn only_type(&self) -> bool {
+        self.fill == '\0'
+            && self.align == '\0'
+            && self.sign == '\0'
+            && !self.hash
+            && !self.zero
+            && self.min_width == 0
+            && self.precision == 0
+    }
+
     fn parse(text: &str, line_info: LineInfo) -> ParseResult<(FormatInfo, usize)> {
         let (specifier, bang_place) = match Self::specifier(text) {
             Option::Some((s, b)) => (s, b),
@@ -202,6 +229,12 @@ impl Lined for FormattedStringNode {
     }
 }
 
+impl Lined for FormatInfo {
+    fn line_info(&self) -> &LineInfo {
+        &self.line_info
+    }
+}
+
 fn is_escaped(text: &str) -> bool {
     let mut backslash_count = 0usize;
     for chr in text.chars().rev() {
@@ -242,4 +275,38 @@ fn parse_int(chars: &mut Peekable<Chars<'_>>) -> usize {
         result += x.to_digit(10).unwrap() as usize;
     }
     result
+}
+
+impl Display for FormatInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_empty() {
+            return Ok(());
+        }
+        f.write_char('!')?;
+        if self.fill != '\0' {
+            f.write_char(self.fill)?;
+        }
+        if self.align != '\0' {
+            f.write_char(self.align)?;
+        }
+        if self.sign != '\0' {
+            f.write_char(self.sign)?;
+        }
+        if self.hash {
+            f.write_char('#')?;
+        }
+        if self.zero {
+            f.write_char('0')?;
+        }
+        if self.min_width != 0 {
+            write!(f, "{}", self.min_width)?;
+        }
+        if self.precision != 0 {
+            write!(f, "{}", self.precision)?;
+        }
+        if self.fmt_type != '\0' {
+            f.write_char(self.fmt_type)?;
+        }
+        Ok(())
+    }
 }

@@ -1,3 +1,6 @@
+use std::fmt::Display;
+
+use crate::parser::base::IndependentNode;
 use crate::parser::dotted::{DotPrefix, DottedVariableNode};
 use crate::parser::error::ParseResult;
 use crate::parser::keyword::Keyword;
@@ -59,6 +62,30 @@ impl ImportExportNode {
             pre_dots,
             is_wildcard: true,
         }
+    }
+
+    pub fn get_type(&self) -> ImportExportType {
+        self.import_type
+    }
+
+    pub fn get_from(&self) -> &DottedVariableNode {
+        &self.from
+    }
+
+    pub fn get_values(&self) -> &[DottedVariableNode] {
+        &self.ports
+    }
+
+    pub fn is_wildcard(&self) -> bool {
+        self.is_wildcard
+    }
+
+    pub fn get_as(&self) -> &[DottedVariableNode] {
+        &self.as_stmt
+    }
+
+    pub fn get_pre_dots(&self) -> usize {
+        self.pre_dots
     }
 
     pub fn parse(tokens: &mut TokenList) -> ParseResult<ImportExportNode> {
@@ -163,8 +190,25 @@ impl ImportExportType {
     }
 }
 
+impl Display for ImportExportType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 impl Lined for ImportExportNode {
     fn line_info(&self) -> &LineInfo {
         &self.line_info
+    }
+}
+
+impl<'a> TryFrom<&'a IndependentNode> for &'a ImportExportNode {
+    type Error = ();
+
+    fn try_from(value: &'a IndependentNode) -> Result<Self, Self::Error> {
+        match value {
+            IndependentNode::Import(i) => Ok(i),
+            _ => Err(()),
+        }
     }
 }

@@ -42,6 +42,8 @@ use crate::parser::while_stmt::WhileStatementNode;
 use crate::parser::with_stmt::WithStatementNode;
 use crate::parser::yield_stmt::YieldStatementNode;
 
+use super::derived_op::DerivedOperatorNode;
+
 #[derive(Debug)]
 pub enum IndependentNode {
     Assert(AssertStatementNode),
@@ -55,6 +57,7 @@ pub enum IndependentNode {
     DeclaredAssign(DeclaredAssignmentNode),
     Defer(DeferStatementNode),
     Delete(DeleteStatementNode),
+    Derived(DerivedOperatorNode),
     Do(DoStatementNode),
     Dotimes(DotimesStatementNode),
     Enum(EnumDefinitionNode),
@@ -213,6 +216,7 @@ impl Lined for IndependentNode {
             IndependentNode::DeclaredAssign(d) => d.line_info(),
             IndependentNode::Defer(d) => d.line_info(),
             IndependentNode::Delete(d) => d.line_info(),
+            IndependentNode::Derived(d) => d.line_info(),
             IndependentNode::Do(d) => d.line_info(),
             IndependentNode::Dotimes(d) => d.line_info(),
             IndependentNode::Enum(e) => e.line_info(),

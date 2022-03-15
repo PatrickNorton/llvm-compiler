@@ -1,5 +1,7 @@
 use std::collections::HashSet;
 
+use once_cell::sync::Lazy;
+
 use crate::parser::descriptor::{DescriptorNode, STATIC_BLOCK_VALID};
 use crate::parser::error::ParseResult;
 use crate::parser::line_info::{LineInfo, Lined};
@@ -23,6 +25,11 @@ impl StaticBlockNode {
 
     pub fn add_descriptors(&mut self, descriptors: HashSet<DescriptorNode>) {
         assert!(descriptors.is_empty());
+    }
+
+    pub fn get_descriptors(&self) -> &HashSet<DescriptorNode> {
+        static EMPTY: Lazy<HashSet<DescriptorNode>> = Lazy::new(HashSet::new);
+        &EMPTY
     }
 
     pub fn parse(tokens: &mut TokenList) -> ParseResult<StaticBlockNode> {

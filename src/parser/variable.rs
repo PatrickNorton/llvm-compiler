@@ -1,6 +1,8 @@
 use crate::parser::error::ParseResult;
 use crate::parser::keyword::Keyword;
 use crate::parser::line_info::{LineInfo, Lined};
+use crate::parser::name::NameNode;
+use crate::parser::test_node::TestNode;
 use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
 use crate::parser::type_node::{TypeLikeNode, TypeNode};
@@ -28,6 +30,14 @@ impl VariableNode {
             line_info: LineInfo::empty(),
             name: String::new(),
         }
+    }
+
+    pub fn get_name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.name.is_empty()
     }
 
     pub fn parse_on_name(tokens: &mut TokenList) -> ParseResult<VariableNode> {
@@ -101,10 +111,59 @@ impl VarLikeNode {
             )?))
         }
     }
+
+    pub fn get_variable(&self) -> &VariableNode {
+        match self {
+            VarLikeNode::Typed(t) => t.get_variable(),
+            VarLikeNode::Variable(v) => v,
+        }
+    }
 }
 
 impl Lined for VariableNode {
     fn line_info(&self) -> &LineInfo {
         &self.line_info
+    }
+}
+
+impl Lined for VarLikeNode {
+    fn line_info(&self) -> &LineInfo {
+        match self {
+            VarLikeNode::Typed(t) => t.line_info(),
+            VarLikeNode::Variable(v) => v.line_info(),
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a TestNode> for &'a VariableNode {
+    type Error = ();
+
+    fn try_from(value: &'a TestNode) -> Result<Self, Self::Error> {
+        match value {
+            TestNode::Name(NameNode::Variable(v)) => Ok(v),
+            _ => Err(()),
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a NameNode> for &'a VariableNode {
+    type Error = ();
+
+    fn try_from(value: &'a NameNode) -> Result<Self, Self::Error> {
+        match value {
+            NameNode::Variable(v) => Ok(v),
+            _ => Err(()),
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a VarLikeNode> for &'a VariableNode {
+    type Error = ();
+
+    fn try_from(value: &'a VarLikeNode) -> Result<Self, Self::Error> {
+        match value {
+            VarLikeNode::Variable(v) => Ok(v),
+            _ => Err(()),
+        }
     }
 }

@@ -31,6 +31,14 @@ impl LiteralNode {
         self.builders
     }
 
+    pub fn get_brace_type(&self) -> char {
+        self.brace_type
+    }
+
+    pub fn get_builders(&self) -> &[(String, TestNode)] {
+        &self.builders
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<LiteralNode> {
         let (line_info, brace_type) = match tokens.next_tok(true)?.deconstruct() {
             (l, TokenType::OpenBrace(c)) => (l, c),
@@ -68,6 +76,14 @@ impl LiteralNode {
 impl DictLiteralNode {
     pub fn new(line_info: LineInfo, values: Vec<(TestNode, TestNode)>) -> Self {
         Self { line_info, values }
+    }
+
+    pub fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    pub fn get_values(&self) -> &[(TestNode, TestNode)] {
+        &self.values
     }
 
     pub fn parse(tokens: &mut TokenList) -> ParseResult<DictLiteralNode> {
@@ -118,5 +134,16 @@ impl Lined for LiteralNode {
 impl Lined for DictLiteralNode {
     fn line_info(&self) -> &LineInfo {
         &self.line_info
+    }
+}
+
+impl<'a> TryFrom<&'a TestNode> for &'a LiteralNode {
+    type Error = ();
+
+    fn try_from(value: &'a TestNode) -> Result<Self, Self::Error> {
+        match value {
+            TestNode::Literal(l) => Ok(l),
+            _ => Err(()),
+        }
     }
 }

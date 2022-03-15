@@ -44,3 +44,13 @@ impl TopNode {
         Self { path, nodes }
     }
 }
+
+impl<'a> IntoIterator for &'a TopNode {
+    type Item = &'a IndependentNode;
+
+    type IntoIter = <&'a [IndependentNode] as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.nodes.iter()
+    }
+}

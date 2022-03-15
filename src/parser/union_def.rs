@@ -39,6 +39,14 @@ impl UnionDefinitionNode {
         }
     }
 
+    pub fn get_superclasses(&self) -> &[TypeNode] {
+        &self.superclasses
+    }
+
+    pub fn get_body(&self) -> &ClassBodyNode {
+        &self.body
+    }
+
     pub fn valid_descriptors(&self) -> &'static HashSet<DescriptorNode> {
         &DEFINITION_VALID
     }
@@ -47,12 +55,20 @@ impl UnionDefinitionNode {
         self.descriptors = descriptors;
     }
 
+    pub fn get_descriptors(&self) -> &HashSet<DescriptorNode> {
+        &self.descriptors
+    }
+
     pub fn get_annotations(&self) -> &Vec<NameNode> {
         &self.annotations
     }
 
     pub fn add_annotations(&mut self, annotations: Vec<NameNode>) {
         self.annotations = annotations;
+    }
+
+    pub fn get_name(&self) -> &TypeNode {
+        &self.name
     }
 
     pub fn parse(tokens: &mut TokenList) -> ParseResult<UnionDefinitionNode> {

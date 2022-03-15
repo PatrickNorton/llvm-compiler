@@ -39,6 +39,26 @@ impl TryStatementNode {
         }
     }
 
+    pub fn get_body(&self) -> &StatementBodyNode {
+        &self.body
+    }
+
+    pub fn get_except(&self) -> &StatementBodyNode {
+        &self.except
+    }
+
+    pub fn get_excepted(&self) -> &[TypeNode] {
+        &self.excepted
+    }
+
+    pub fn get_as(&self) -> &VariableNode {
+        &self.as_var
+    }
+
+    pub fn get_finally(&self) -> &StatementBodyNode {
+        &self.finally_stmt
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<TryStatementNode> {
         let (info, tok) = tokens.next_token()?.deconstruct();
         assert!(matches!(tok, TokenType::Keyword(Keyword::Try)));

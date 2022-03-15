@@ -1,3 +1,6 @@
+use std::iter::Map;
+use std::ops::Index;
+
 use crate::parser::error::ParseResult;
 use crate::parser::keyword::Keyword;
 use crate::parser::line_info::{LineInfo, Lined};
@@ -20,6 +23,33 @@ impl TestListNode {
 
     pub fn new(line_info: LineInfo, values: Vec<(VarargType, TestNode)>) -> TestListNode {
         Self { line_info, values }
+    }
+
+    pub fn from_one(value: TestNode) -> TestListNode {
+        Self {
+            line_info: value.line_info().clone(),
+            values: vec![(VarargType::None, value)],
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    pub fn get_vararg(&self, index: usize) -> Option<&VarargType> {
+        self.values.get(index).map(|(x, _)| x)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.values.is_empty()
+    }
+
+    pub fn iter(&self) -> <&Self as IntoIterator>::IntoIter {
+        self.into_iter()
+    }
+
+    pub fn pairs(&self) -> impl Iterator<Item = &'_ (VarargType, TestNode)> {
+        self.values.iter()
     }
 
     pub fn parse(tokens: &mut TokenList, ignore_newlines: bool) -> ParseResult<TestListNode> {
@@ -72,6 +102,27 @@ impl TestListNode {
         }
         let node = TestListNode::new(LineInfo::empty(), values);
         Ok((node, post_if))
+    }
+}
+
+impl Index<usize> for TestListNode {
+    type Output = TestNode;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.values.index(index).1
+    }
+}
+
+type SliceIter<'a> = <&'a [(VarargType, TestNode)] as IntoIterator>::IntoIter;
+type SliceFn<'a> = fn(&'a (VarargType, TestNode)) -> &'a TestNode;
+
+impl<'a> IntoIterator for &'a TestListNode {
+    type Item = &'a TestNode;
+
+    type IntoIter = Map<SliceIter<'a>, SliceFn<'a>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.values.iter().map(|x| &x.1)
     }
 }
 

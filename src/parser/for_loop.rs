@@ -33,6 +33,22 @@ impl ForStatementNode {
         }
     }
 
+    pub fn get_vars(&self) -> &[VarLikeNode] {
+        &self.vars
+    }
+
+    pub fn get_iterables(&self) -> &TestListNode {
+        &self.iterables
+    }
+
+    pub fn get_body(&self) -> &StatementBodyNode {
+        &self.body
+    }
+
+    pub fn get_nobreak(&self) -> &StatementBodyNode {
+        &self.nobreak
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<ForStatementNode> {
         let (info, tok) = tokens.next_token()?.deconstruct();
         assert!(matches!(tok, TokenType::Keyword(Keyword::For)));

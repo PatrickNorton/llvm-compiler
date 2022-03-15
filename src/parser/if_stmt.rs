@@ -44,6 +44,26 @@ impl IfStatementNode {
         }
     }
 
+    pub fn get_conditional(&self) -> &TestNode {
+        &self.conditional
+    }
+
+    pub fn get_as(&self) -> &VariableNode {
+        &self.as_stmt
+    }
+
+    pub fn get_body(&self) -> &StatementBodyNode {
+        &self.body
+    }
+
+    pub fn get_elifs(&self) -> &[ElifStatementNode] {
+        &self.elifs
+    }
+
+    pub fn get_else(&self) -> &StatementBodyNode {
+        &self.else_stmt
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<IfStatementNode> {
         let (info, token) = tokens.next_token()?.deconstruct();
         assert_eq!(token, TokenType::Keyword(Keyword::If));
@@ -93,6 +113,18 @@ impl ElifStatementNode {
             as_stmt,
             body,
         }
+    }
+
+    pub fn get_test(&self) -> &TestNode {
+        &self.test
+    }
+
+    pub fn get_as(&self) -> &VariableNode {
+        &self.as_stmt
+    }
+
+    pub fn get_body(&self) -> &StatementBodyNode {
+        &self.body
     }
 }
 

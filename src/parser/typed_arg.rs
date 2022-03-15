@@ -7,6 +7,7 @@ use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
 use crate::parser::type_node::{TypeLikeNode, TypeNode};
 use crate::parser::variable::VariableNode;
+use std::iter::Chain;
 use std::mem::take;
 
 #[derive(Debug)]
@@ -51,6 +52,22 @@ impl TypedArgumentNode {
             is_vararg,
             vararg_type,
         }
+    }
+
+    pub fn get_type(&self) -> &TypeLikeNode {
+        &self.type_val
+    }
+
+    pub fn get_name(&self) -> &VariableNode {
+        &self.name
+    }
+
+    pub fn get_default_val(&self) -> &TestNode {
+        &self.default_val
+    }
+
+    pub fn get_vararg(&self) -> VarargType {
+        self.vararg_type
     }
 
     pub fn parse(tokens: &mut TokenList, is_typed: bool) -> ParseResult<TypedArgumentNode> {
@@ -135,6 +152,18 @@ impl TypedArgumentListNode {
         }
     }
 
+    pub fn get_name_args(&self) -> &[TypedArgumentNode] {
+        &self.name_args
+    }
+
+    pub fn get_args(&self) -> &[TypedArgumentNode] {
+        &self.normal_args
+    }
+
+    pub fn get_pos_args(&self) -> &[TypedArgumentNode] {
+        &self.position_args
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<TypedArgumentListNode> {
         Self::parse_inner(tokens, false)
     }
@@ -184,7 +213,7 @@ impl TypedArgumentListNode {
         let mut current_arg_list = &mut args;
         while TypeNode::next_is_type(tokens)? || tokens.token_equals("/")? {
             if tokens.token_equals("/")? {
-                if pos_args.is_none() || current_is_kw {
+                if pos_args.is_some() || current_is_kw {
                     return Err(tokens.error("Illegal use of name-only tokens"));
                 }
                 pos_args = Some(take(&mut args));
@@ -220,7 +249,7 @@ impl TypedArgumentListNode {
         }
         Ok(TypedArgumentListNode::new(
             info,
-            pos_args.unwrap_or_else(Vec::new),
+            pos_args.unwrap_or_default(),
             args,
             kw_args,
         ))
@@ -261,5 +290,46 @@ impl VarargType {
             }
             _ => VarargType::None,
         })
+    }
+}
+
+type SliceIter<'a> = <&'a [TypedArgumentNode] as IntoIterator>::IntoIter;
+
+#[derive(Debug)]
+pub struct TALNIter<'a> {
+    iter: Chain<SliceIter<'a>, Chain<SliceIter<'a>, SliceIter<'a>>>,
+}
+
+impl<'a> IntoIterator for &'a TypedArgumentListNode {
+    type IntoIter = TALNIter<'a>;
+    type Item = &'a TypedArgumentNode;
+
+    fn into_iter(self) -> Self::IntoIter {
+        TALNIter {
+            iter: self
+                .position_args
+                .iter()
+                .chain(self.normal_args.iter().chain(&*self.name_args)),
+        }
+    }
+}
+
+impl<'a> Iterator for TALNIter<'a> {
+    type Item = &'a TypedArgumentNode;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next()
+    }
+}
+
+impl Lined for TypedArgumentNode {
+    fn line_info(&self) -> &LineInfo {
+        &self.line_info
+    }
+}
+
+impl Lined for TypedArgumentListNode {
+    fn line_info(&self) -> &LineInfo {
+        &self.line_info
     }
 }

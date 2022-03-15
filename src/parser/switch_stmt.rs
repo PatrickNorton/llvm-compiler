@@ -39,6 +39,14 @@ impl SwitchStatementNode {
         }
     }
 
+    pub fn get_switched(&self) -> &TestNode {
+        &self.switched
+    }
+
+    pub fn get_cases(&self) -> &[CaseStatementNode] {
+        &self.cases
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<SwitchStatementNode> {
         let (line_info, token_type) = tokens.next_token()?.deconstruct();
         assert!(matches!(token_type, TokenType::Keyword(Keyword::Switch)));
@@ -132,6 +140,28 @@ impl CaseStatementNode {
                 StatementBodyNode::parse(tokens)?
             };
         Ok((body, arrow, as_stmt))
+    }
+}
+
+impl CaseStatementNode {
+    pub fn get_label(&self) -> &[TestNode] {
+        &self.label
+    }
+
+    pub fn get_body(&self) -> &StatementBodyNode {
+        &self.body
+    }
+
+    pub fn is_arrow(&self) -> bool {
+        self.arrow
+    }
+
+    pub fn get_as(&self) -> &VariableNode {
+        &self.as_stmt
+    }
+
+    pub fn is_default(&self) -> bool {
+        self.is_default
     }
 }
 

@@ -23,6 +23,14 @@ impl BreakStatementNode {
         }
     }
 
+    pub fn get_loops(&self) -> usize {
+        self.loops
+    }
+
+    pub fn get_cond(&self) -> &TestNode {
+        &self.cond
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<BreakStatementNode> {
         let (info, tok) = tokens.next_token()?.deconstruct();
         assert!(matches!(tok, TokenType::Keyword(Keyword::Break)));

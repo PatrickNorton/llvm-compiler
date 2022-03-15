@@ -5,6 +5,8 @@ use crate::parser::test_node::TestNode;
 use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
 
+use super::operator::OperatorTypeNode;
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum AugAssignTypeNode {
     Add,
@@ -86,6 +88,28 @@ impl AugAssignTypeNode {
             AugAssignTypeNode::BoolXor => "xor",
         }
     }
+
+    pub const fn get_operator(&self) -> OperatorTypeNode {
+        match self {
+            AugAssignTypeNode::Add => OperatorTypeNode::Add,
+            AugAssignTypeNode::Subtract => OperatorTypeNode::Subtract,
+            AugAssignTypeNode::Multiply => OperatorTypeNode::Multiply,
+            AugAssignTypeNode::Divide => OperatorTypeNode::Divide,
+            AugAssignTypeNode::FloorDiv => OperatorTypeNode::FloorDiv,
+            AugAssignTypeNode::Power => OperatorTypeNode::Power,
+            AugAssignTypeNode::LeftBitshift => OperatorTypeNode::LeftBitshift,
+            AugAssignTypeNode::RightBitshift => OperatorTypeNode::RightBitshift,
+            AugAssignTypeNode::BitwiseAnd => OperatorTypeNode::BitwiseAnd,
+            AugAssignTypeNode::BitwiseOr => OperatorTypeNode::BitwiseOr,
+            AugAssignTypeNode::BitwiseXor => OperatorTypeNode::BitwiseXor,
+            AugAssignTypeNode::BitwiseNot => OperatorTypeNode::BitwiseNot,
+            AugAssignTypeNode::Modulo => OperatorTypeNode::Modulo,
+            AugAssignTypeNode::NullCoerce => OperatorTypeNode::NullCoerce,
+            AugAssignTypeNode::BoolAnd => OperatorTypeNode::BoolAnd,
+            AugAssignTypeNode::BoolOr => OperatorTypeNode::BoolOr,
+            AugAssignTypeNode::BoolXor => OperatorTypeNode::BoolXor,
+        }
+    }
 }
 
 impl AugmentedAssignmentNode {
@@ -96,6 +120,18 @@ impl AugmentedAssignmentNode {
             name,
             value,
         }
+    }
+
+    pub fn get_operator(&self) -> AugAssignTypeNode {
+        self.operator
+    }
+
+    pub fn get_name(&self) -> &NameNode {
+        &self.name
+    }
+
+    pub fn get_value(&self) -> &TestNode {
+        &self.value
     }
 
     pub fn parse(tokens: &mut TokenList) -> ParseResult<AugmentedAssignmentNode> {

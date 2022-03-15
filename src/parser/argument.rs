@@ -46,6 +46,22 @@ impl ArgumentNode {
         self.argument
     }
 
+    pub fn get_variable(&self) -> &VariableNode {
+        &self.variable
+    }
+
+    pub fn get_argument(&self) -> &TestNode {
+        &self.argument
+    }
+
+    pub fn get_vararg(&self) -> &str {
+        &self.vararg
+    }
+
+    pub fn is_vararg(&self) -> bool {
+        !self.vararg.is_empty()
+    }
+
     pub fn parse_list(tokens: &mut TokenList) -> ParseResult<Vec<ArgumentNode>> {
         if !tokens.token_equals("(")? {
             return Err(tokens.error("Function call must start with open-paren"));
@@ -107,4 +123,10 @@ impl ArgumentNode {
 fn after_var_is_eq(tokens: &mut TokenList, offset: usize) -> ParseResult<bool> {
     let var_size = tokens.size_of_variable_at(offset)?;
     Ok(tokens.get_token(var_size)?.equals("="))
+}
+
+impl Lined for ArgumentNode {
+    fn line_info(&self) -> &LineInfo {
+        &self.line_info
+    }
 }

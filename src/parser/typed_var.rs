@@ -4,10 +4,8 @@ use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::macros::parse_if_matches;
 use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
-use crate::parser::type_node::TypeLikeNode;
+use crate::parser::type_node::{TypeLikeNode, TypeNode};
 use crate::parser::variable::VariableNode;
-
-use crate::parser::type_node::TypeNode;
 
 #[derive(Debug)]
 pub struct TypedVariableNode {
@@ -23,6 +21,18 @@ impl TypedVariableNode {
             type_node,
             var,
         }
+    }
+
+    pub fn get_type(&self) -> &TypeLikeNode {
+        &self.type_node
+    }
+
+    pub fn get_variable(&self) -> &VariableNode {
+        &self.var
+    }
+
+    pub fn get_name(&self) -> &str {
+        self.var.get_name()
     }
 
     pub fn parse(tokens: &mut TokenList, ignore_newlines: bool) -> ParseResult<TypedVariableNode> {

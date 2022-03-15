@@ -21,6 +21,14 @@ impl AssertStatementNode {
         }
     }
 
+    pub fn get_assertion(&self) -> &TestNode {
+        &self.assertion
+    }
+
+    pub fn get_as(&self) -> &TestNode {
+        &self.as_statement
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<AssertStatementNode> {
         let (info, tok) = tokens.next_token()?.deconstruct();
         assert!(matches!(tok, TokenType::Keyword(Keyword::Assert)));

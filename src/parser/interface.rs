@@ -66,12 +66,28 @@ impl InterfaceDefinitionNode {
         self.descriptors = descriptors;
     }
 
+    pub fn get_descriptors(&self) -> &HashSet<DescriptorNode> {
+        &self.descriptors
+    }
+
     pub fn get_annotations(&self) -> &Vec<NameNode> {
         &self.annotations
     }
 
     pub fn add_annotations(&mut self, annotations: Vec<NameNode>) {
         self.annotations = annotations;
+    }
+
+    pub fn get_name(&self) -> &TypeNode {
+        &self.name
+    }
+
+    pub fn get_superclasses(&self) -> &[TypeNode] {
+        &self.superclasses
+    }
+
+    pub fn get_body(&self) -> &InterfaceBodyNode {
+        &self.body
     }
 
     pub fn parse(tokens: &mut TokenList) -> ParseResult<InterfaceDefinitionNode> {
@@ -214,5 +230,26 @@ impl From<InterfaceStatementNode> for IndependentNode {
             InterfaceStatementNode::ClassStmt(c) => c.into(),
             InterfaceStatementNode::Generic(_) => todo!(),
         }
+    }
+}
+
+impl<'a> TryFrom<&'a IndependentNode> for &'a InterfaceDefinitionNode {
+    type Error = ();
+
+    fn try_from(value: &'a IndependentNode) -> Result<Self, Self::Error> {
+        match value {
+            IndependentNode::Interface(i) => Ok(i),
+            _ => Err(()),
+        }
+    }
+}
+
+impl<'a> IntoIterator for &'a InterfaceBodyNode {
+    type Item = &'a InterfaceStatementNode;
+
+    type IntoIter = <&'a [InterfaceStatementNode] as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.values.iter()
     }
 }

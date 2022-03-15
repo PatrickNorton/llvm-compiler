@@ -117,6 +117,18 @@ impl AssignmentNode {
         }
     }
 
+    pub fn is_colon(&self) -> bool {
+        self.is_colon
+    }
+
+    pub fn get_names(&self) -> &[AssignableNode] {
+        &self.name
+    }
+
+    pub fn get_values(&self) -> &TestListNode {
+        &self.value
+    }
+
     pub fn valid_descriptors(&self) -> &'static HashSet<DescriptorNode> {
         todo!()
     }

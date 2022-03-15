@@ -33,6 +33,22 @@ impl WhileStatementNode {
         }
     }
 
+    pub fn get_cond(&self) -> &TestNode {
+        &self.cond
+    }
+
+    pub fn get_as(&self) -> &VariableNode {
+        &self.as_stmt
+    }
+
+    pub fn get_body(&self) -> &StatementBodyNode {
+        &self.body
+    }
+
+    pub fn get_nobreak(&self) -> &StatementBodyNode {
+        &self.nobreak
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<WhileStatementNode> {
         let (info, tok) = tokens.next_token()?.deconstruct();
         assert!(matches!(tok, TokenType::Keyword(Keyword::While)));

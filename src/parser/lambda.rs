@@ -36,6 +36,22 @@ impl LambdaNode {
         }
     }
 
+    pub fn get_args(&self) -> &TypedArgumentListNode {
+        &self.args
+    }
+
+    pub fn get_returns(&self) -> &[TypeNode] {
+        &self.returns
+    }
+
+    pub fn is_arrow(&self) -> bool {
+        self.is_arrow
+    }
+
+    pub fn get_body(&self) -> &StatementBodyNode {
+        &self.body
+    }
+
     pub fn parse(tokens: &mut TokenList, ignore_newlines: bool) -> ParseResult<LambdaNode> {
         let (line_info, token_type) = tokens.next_tok(ignore_newlines)?.deconstruct();
         assert!(matches!(token_type, TokenType::Keyword(Keyword::Lambda)));

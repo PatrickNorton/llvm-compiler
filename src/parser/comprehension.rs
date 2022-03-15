@@ -53,6 +53,30 @@ impl ComprehensionNode {
         }
     }
 
+    pub fn get_brace(&self) -> char {
+        self.brace
+    }
+
+    pub fn get_looped(&self) -> &TestListNode {
+        &self.looped
+    }
+
+    pub fn get_variables(&self) -> &[VarLikeNode] {
+        &self.variables
+    }
+
+    pub fn get_condition(&self) -> &TestNode {
+        &self.condition
+    }
+
+    pub fn get_builder(&self) -> &[ArgumentNode] {
+        &self.builder
+    }
+
+    pub fn get_while_cond(&self) -> &TestNode {
+        &self.while_cond
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<ComprehensionNode> {
         let (line_info, token) = tokens.next_tok(true)?.deconstruct();
         let brace = match token {
@@ -114,6 +138,26 @@ impl DictComprehensionNode {
             condition,
             while_cond,
         }
+    }
+
+    pub fn get_variables(&self) -> &[VarLikeNode] {
+        &self.variables
+    }
+
+    pub fn get_key(&self) -> &TestNode {
+        &self.key
+    }
+
+    pub fn get_builder(&self) -> &TestNode {
+        &self.builder
+    }
+
+    pub fn get_looped(&self) -> &TestListNode {
+        &self.looped
+    }
+
+    pub fn get_condition(&self) -> &TestNode {
+        &self.condition
     }
 
     pub fn parse(tokens: &mut TokenList) -> ParseResult<DictComprehensionNode> {

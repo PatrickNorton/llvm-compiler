@@ -30,6 +30,14 @@ impl DeclarationNode {
         }
     }
 
+    pub fn get_type(&self) -> &TypeLikeNode {
+        &self.type_node
+    }
+
+    pub fn get_name(&self) -> &VariableNode {
+        &self.name
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<DeclarationNode> {
         let type_node = TypeLikeNode::parse(tokens, false)?;
         let name = VariableNode::parse(tokens)?;
@@ -42,6 +50,10 @@ impl DeclarationNode {
 
     pub fn add_descriptors(&mut self, descriptors: HashSet<DescriptorNode>) {
         self.descriptors = descriptors;
+    }
+
+    pub fn get_descriptors(&self) -> &HashSet<DescriptorNode> {
+        &self.descriptors
     }
 
     pub fn get_annotations(&self) -> &Vec<NameNode> {

@@ -40,6 +40,13 @@ impl NameNode {
         Self::parse_post(tokens, name, ignore_newlines)
     }
 
+    pub fn str_name(&self) -> &str {
+        match self {
+            Self::Variable(var) => var.get_name(),
+            _ => panic!("Unexpected non-variable"),
+        }
+    }
+
     fn parse_post(
         tokens: &mut TokenList,
         name: NameNode,
@@ -72,6 +79,17 @@ impl Lined for NameNode {
             NameNode::Index(i) => i.line_info(),
             NameNode::SpecialOp(s) => s.line_info(),
             NameNode::Variable(v) => v.line_info(),
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a TestNode> for &'a NameNode {
+    type Error = ();
+
+    fn try_from(value: &'a TestNode) -> Result<Self, Self::Error> {
+        match value {
+            TestNode::Name(name) => Ok(name),
+            _ => Err(()),
         }
     }
 }

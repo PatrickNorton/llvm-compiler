@@ -1,3 +1,5 @@
+use std::ops::Index;
+
 use crate::parser::base::IndependentNode;
 use crate::parser::error::ParseResult;
 use crate::parser::keyword::Keyword;
@@ -13,11 +15,11 @@ pub struct StatementBodyNode {
 }
 
 impl StatementBodyNode {
-    pub fn empty() -> Self {
+    pub const fn empty() -> Self {
         Self::new(LineInfo::empty(), Vec::new())
     }
 
-    pub fn new(line_info: LineInfo, statements: Vec<IndependentNode>) -> Self {
+    pub const fn new(line_info: LineInfo, statements: Vec<IndependentNode>) -> Self {
         Self {
             line_info,
             statements,
@@ -84,5 +86,23 @@ impl Default for StatementBodyNode {
 impl Lined for StatementBodyNode {
     fn line_info(&self) -> &LineInfo {
         &self.line_info
+    }
+}
+
+impl<'a> IntoIterator for &'a StatementBodyNode {
+    type Item = &'a IndependentNode;
+
+    type IntoIter = <&'a [IndependentNode] as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.statements.iter()
+    }
+}
+
+impl Index<usize> for StatementBodyNode {
+    type Output = IndependentNode;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.statements[index]
     }
 }

@@ -18,6 +18,18 @@ impl TernaryNode {
             if_false,
         }
     }
+
+    pub fn get_if_true(&self) -> &TestNode {
+        &self.if_true
+    }
+
+    pub fn get_statement(&self) -> &TestNode {
+        &self.statement
+    }
+
+    pub fn get_if_false(&self) -> &TestNode {
+        &self.if_false
+    }
 }
 
 impl Lined for TernaryNode {

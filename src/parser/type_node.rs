@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 use crate::parser::descriptor::DescriptorNode;
 use crate::parser::dotted::DottedVariableNode;
 use crate::parser::error::ParseResult;
@@ -7,6 +9,7 @@ use crate::parser::macros::parse_if_matches;
 use crate::parser::operator::OperatorTypeNode;
 use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
+use crate::parser::variable::VariableNode;
 
 #[derive(Debug)]
 pub struct TypeNode {
@@ -49,6 +52,50 @@ impl TypeNode {
             is_vararg,
             optional,
             mutability: Option::None,
+        }
+    }
+
+    pub fn get_name(&self) -> &DottedVariableNode {
+        &self.name
+    }
+
+    pub fn get_subtypes(&self) -> &[TypeNode] {
+        &self.sub_types
+    }
+
+    pub fn is_optional(&self) -> bool {
+        self.optional
+    }
+
+    pub fn get_mutability(&self) -> Option<DescriptorNode> {
+        self.mutability
+    }
+
+    pub fn is_vararg(&self) -> bool {
+        self.is_vararg
+    }
+
+    // FIXME? Should these be the same?
+    pub fn str_name(&self) -> &str {
+        <&VariableNode>::try_from(self.name.get_pre_dot())
+            .unwrap()
+            .get_name()
+    }
+
+    // FIXME: This is hideous and should be redone--types should get a special type for their names
+    pub fn str_names(&self) -> String {
+        let post_dots = self.name.get_post_dots();
+        if post_dots.is_empty() {
+            self.str_name().to_owned()
+        } else {
+            format!(
+                "{}.{}",
+                self.str_name(),
+                post_dots
+                    .iter()
+                    .map(|x| x.get_post_dot().str_name())
+                    .format(".")
+            )
         }
     }
 
@@ -202,6 +249,13 @@ impl TypeLikeNode {
                 }
             }
             _ => Self::parse_no_mut(tokens, ignore_newlines),
+        }
+    }
+
+    pub fn as_type(&self) -> &TypeNode {
+        match self {
+            TypeLikeNode::Type(x) => x,
+            TypeLikeNode::Var(_) => panic!("Expected a known type"),
         }
     }
 

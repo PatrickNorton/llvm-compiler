@@ -19,7 +19,6 @@ use crate::parser::import::ImportExportNode;
 use crate::parser::interface::InterfaceDefinitionNode;
 use crate::parser::lambda::LambdaNode;
 use crate::parser::method::MethodDefinitionNode;
-use crate::parser::operator_fn::OpFuncTypeNode;
 use crate::parser::property::PropertyDefinitionNode;
 use crate::parser::raise_stmt::RaiseStatementNode;
 use crate::parser::return_stmt::ReturnStatementNode;

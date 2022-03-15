@@ -16,6 +16,10 @@ impl ContinueStatementNode {
         Self { line_info, cond }
     }
 
+    pub fn get_cond(&self) -> &TestNode {
+        &self.cond
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<ContinueStatementNode> {
         let (info, tok) = tokens.next_token()?.deconstruct();
         assert!(matches!(tok, TokenType::Keyword(Keyword::Continue)));

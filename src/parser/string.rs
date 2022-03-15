@@ -23,6 +23,14 @@ impl StringNode {
         }
     }
 
+    pub fn get_prefixes(&self) -> &HashSet<StringPrefix> {
+        &self.prefixes
+    }
+
+    pub fn get_contents(&self) -> &str {
+        &self.contents
+    }
+
     pub fn parse(text: String, info: LineInfo) -> ParseResult<StringNode> {
         let prefixes = StringLikeNode::get_prefixes(&text)?;
         let contents = StringLikeNode::get_contents(&text);

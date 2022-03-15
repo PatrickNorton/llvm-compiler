@@ -26,6 +26,14 @@ impl IncDecNode {
         }
     }
 
+    pub fn get_variable(&self) -> &NameNode {
+        &self.variable
+    }
+
+    pub fn get_sign(&self) -> IncDecType {
+        self.sign
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<IncDecNode> {
         let variable = NameNode::parse(tokens)?;
         let increment = match *tokens.next_token()?.token_type() {

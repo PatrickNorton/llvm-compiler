@@ -30,6 +30,18 @@ impl RaiseStatementNode {
         }
     }
 
+    pub fn get_raised(&self) -> &TestNode {
+        &self.raised
+    }
+
+    pub fn get_cond(&self) -> &TestNode {
+        &self.condition
+    }
+
+    pub fn get_from(&self) -> &TestNode {
+        &self.from
+    }
+
     pub fn parse(tokens: &mut TokenList, ignore_newlines: bool) -> ParseResult<RaiseStatementNode> {
         let (line_info, token_type) = tokens.next_tok(ignore_newlines)?.deconstruct();
         assert!(matches!(token_type, TokenType::Keyword(Keyword::Raise)));

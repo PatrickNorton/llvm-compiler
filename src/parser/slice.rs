@@ -23,6 +23,18 @@ impl SliceNode {
         }
     }
 
+    pub fn get_start(&self) -> &TestNode {
+        &self.start
+    }
+
+    pub fn get_stop(&self) -> &TestNode {
+        &self.stop
+    }
+
+    pub fn get_step(&self) -> &TestNode {
+        &self.step
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<SliceNode> {
         assert!(tokens.token_equals("[")?);
         let line_info = tokens.next_tok(true)?.deconstruct().0;

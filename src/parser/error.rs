@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::fmt::{Display, Write};
 
 use backtrace::Backtrace;
@@ -106,6 +107,12 @@ impl InvalidToken {
         }
     }
 }
+
+impl Error for ParserError {}
+
+impl Error for ParserException {}
+
+impl Error for ParserInternalError {}
 
 impl Display for ParserError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

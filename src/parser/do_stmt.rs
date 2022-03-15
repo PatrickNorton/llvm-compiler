@@ -23,6 +23,14 @@ impl DoStatementNode {
         }
     }
 
+    pub fn get_body(&self) -> &StatementBodyNode {
+        &self.body
+    }
+
+    pub fn get_cond(&self) -> &TestNode {
+        &self.conditional
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<DoStatementNode> {
         let (info, tok) = tokens.next_token()?.deconstruct();
         assert!(matches!(tok, TokenType::Keyword(Keyword::Do)));

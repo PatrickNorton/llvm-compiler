@@ -59,6 +59,22 @@ impl OperatorDefinitionNode {
         }
     }
 
+    pub fn get_op_code(&self) -> &SpecialOpNameNode {
+        &self.op_code
+    }
+
+    pub fn get_args(&self) -> &TypedArgumentListNode {
+        &self.args
+    }
+
+    pub fn get_ret_types(&self) -> &[TypeNode] {
+        &self.ret_type
+    }
+
+    pub fn get_body(&self) -> &StatementBodyNode {
+        &self.body
+    }
+
     pub fn valid_descriptors(&self) -> &'static HashSet<DescriptorNode> {
         &DEFINITION_VALID
     }
@@ -69,6 +85,10 @@ impl OperatorDefinitionNode {
 
     pub fn get_annotations(&self) -> &Vec<NameNode> {
         &self.annotations
+    }
+
+    pub fn get_descriptors(&self) -> &HashSet<DescriptorNode> {
+        &self.descriptors
     }
 
     pub fn add_annotations(&mut self, annotations: Vec<NameNode>) {
@@ -141,6 +161,10 @@ impl SpecialOpAssignmentNode {
 
     pub fn add_descriptors(&mut self, descriptors: HashSet<DescriptorNode>) {
         self.descriptors = descriptors;
+    }
+
+    pub fn get_descriptors(&self) -> &HashSet<DescriptorNode> {
+        &self.descriptors
     }
 
     pub fn parse(tokens: &mut TokenList) -> ParseResult<SpecialOpAssignmentNode> {

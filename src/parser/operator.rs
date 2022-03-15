@@ -237,6 +237,14 @@ impl OperatorNode {
             arguments: ArgumentNode::from_test_nodes(arguments),
         }
     }
+
+    pub fn get_operands(&self) -> &[ArgumentNode] {
+        &self.arguments
+    }
+
+    pub fn get_operator(&self) -> OperatorTypeNode {
+        self.operator
+    }
 }
 
 fn sort_str_len<const N: usize>(mut value: [OperatorTypeNode; N]) -> [OperatorTypeNode; N] {
@@ -264,6 +272,17 @@ impl TryFrom<TestNode> for OperatorNode {
         match value {
             TestNode::Operator(o) => Ok(o),
             value => Err(value),
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a TestNode> for &'a OperatorNode {
+    type Error = ();
+
+    fn try_from(value: &'a TestNode) -> Result<Self, Self::Error> {
+        match value {
+            TestNode::Operator(o) => Ok(o),
+            _ => Err(()),
         }
     }
 }

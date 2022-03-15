@@ -29,6 +29,18 @@ impl DotimesStatementNode {
         }
     }
 
+    pub fn get_iterations(&self) -> &TestNode {
+        &self.iterations
+    }
+
+    pub fn get_body(&self) -> &StatementBodyNode {
+        &self.body
+    }
+
+    pub fn get_nobreak(&self) -> &StatementBodyNode {
+        &self.nobreak
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<DotimesStatementNode> {
         let (info, tok) = tokens.next_token()?.deconstruct();
         assert!(matches!(tok, TokenType::Keyword(Keyword::Do)));

@@ -74,12 +74,32 @@ impl ClassDefinitionNode {
         self.descriptors = descriptors;
     }
 
+    pub fn get_descriptors(&self) -> &HashSet<DescriptorNode> {
+        &self.descriptors
+    }
+
     pub fn get_annotations(&self) -> &Vec<NameNode> {
         &self.annotations
     }
 
+    pub fn get_superclasses(&self) -> &[TypeNode] {
+        &self.superclasses
+    }
+
     pub fn add_annotations(&mut self, annotations: Vec<NameNode>) {
         self.annotations = annotations;
+    }
+
+    pub fn get_name(&self) -> &TypeNode {
+        &self.name
+    }
+
+    pub fn get_body(&self) -> &ClassBodyNode {
+        &self.body
+    }
+
+    pub fn str_name(&self) -> &str {
+        self.name.str_name()
     }
 
     pub fn parse(tokens: &mut TokenList) -> ParseResult<ClassDefinitionNode> {
@@ -256,5 +276,15 @@ impl From<ClassStatementNode> for IndependentNode {
             ClassStatementNode::SpecialOp(s) => IndependentNode::OpAssign(s),
             ClassStatementNode::StaticBlock(_) => todo!(),
         }
+    }
+}
+
+impl<'a> IntoIterator for &'a ClassBodyNode {
+    type Item = &'a ClassStatementNode;
+
+    type IntoIter = <&'a [ClassStatementNode] as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.statements.iter()
     }
 }

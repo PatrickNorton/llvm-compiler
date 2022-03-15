@@ -53,12 +53,20 @@ impl ContextDefinitionNode {
         }
     }
 
+    pub fn get_name(&self) -> &VariableNode {
+        &self.name
+    }
+
     pub fn valid_descriptors(&self) -> &'static HashSet<DescriptorNode> {
         &CONTEXT_VALID
     }
 
     pub fn add_descriptors(&mut self, descriptors: HashSet<DescriptorNode>) {
         self.descriptors = descriptors;
+    }
+
+    pub fn get_descriptors(&self) -> &HashSet<DescriptorNode> {
+        &self.descriptors
     }
 
     pub fn get_annotations(&self) -> &Vec<NameNode> {

@@ -11,7 +11,6 @@ use std::collections::VecDeque;
 pub struct TokenList {
     buffer: VecDeque<Token>,
     tokenizer: Tokenizer,
-    next: Option<Token>,
 }
 
 impl TokenList {
@@ -19,7 +18,6 @@ impl TokenList {
         TokenList {
             buffer: VecDeque::new(),
             tokenizer,
-            next: Option::None,
         }
     }
 

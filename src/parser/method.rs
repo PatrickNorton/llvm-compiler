@@ -47,6 +47,22 @@ impl MethodDefinitionNode {
         }
     }
 
+    pub fn get_name(&self) -> &VariableNode {
+        &self.name
+    }
+
+    pub fn get_args(&self) -> &TypedArgumentListNode {
+        &self.args
+    }
+
+    pub fn get_retval(&self) -> &[TypeNode] {
+        &self.ret_val
+    }
+
+    pub fn get_body(&self) -> &StatementBodyNode {
+        &self.body
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<MethodDefinitionNode> {
         let (info, tok) = tokens.next_token()?.deconstruct();
         assert!(matches!(tok, TokenType::Keyword(Keyword::Method)));
@@ -65,12 +81,20 @@ impl MethodDefinitionNode {
         self.descriptors = descriptors;
     }
 
+    pub fn get_descriptors(&self) -> &HashSet<DescriptorNode> {
+        &self.descriptors
+    }
+
     pub fn get_annotations(&self) -> &Vec<NameNode> {
         &self.annotations
     }
 
     pub fn add_annotations(&mut self, annotations: Vec<NameNode>) {
         self.annotations = annotations;
+    }
+
+    pub fn get_generics(&self) -> &[TypeNode] {
+        &self.generics
     }
 
     pub fn add_generics(&mut self, generics: Vec<TypeNode>) {

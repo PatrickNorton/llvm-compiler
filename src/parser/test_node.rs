@@ -29,6 +29,9 @@ use std::collections::VecDeque;
 use std::convert::TryFrom;
 use std::mem::replace;
 
+use super::base::IndependentNode;
+use super::variant::VariantCreationNode;
+
 #[derive(Debug)]
 pub enum TestNode {
     Comprehension(ComprehensionNode),
@@ -49,6 +52,7 @@ pub enum TestNode {
     String(StringNode),
     Switch(SwitchStatementNode),
     Ternary(Box<TernaryNode>),
+    Variant(Box<VariantCreationNode>),
 }
 
 #[derive(Debug)]
@@ -65,6 +69,10 @@ impl TestNode {
         TestNode::Empty(EmptyTestNode {
             line_info: LineInfo::empty(),
         })
+    }
+
+    pub fn is_empty(&self) -> bool {
+        matches!(self, TestNode::Empty(_))
     }
 
     fn parse_no_ternary(tokens: &mut TokenList, ignore_newlines: bool) -> ParseResult<TestNode> {
@@ -443,14 +451,13 @@ fn convert_queue_to_node(queue: VecDeque<StackValue>) -> ParseResult<TestNode> {
             StackValue::Op(t) => {
                 let info = t.line_info;
                 let op = t.op;
-                let nodes;
-                if op.is_unary() {
-                    nodes = vec![temp.pop_front().unwrap()];
+                let nodes = if op.is_unary() {
+                    vec![temp.pop_front().unwrap()]
                 } else {
                     let mut t = vec![temp.pop_front().unwrap(), temp.pop_front().unwrap()];
                     t.reverse();
-                    nodes = t;
-                }
+                    t
+                };
                 temp.push_front(TestNode::Operator(OperatorNode::from_nodes(
                     info, op, nodes,
                 )))
@@ -487,6 +494,7 @@ impl Lined for TestNode {
             TestNode::String(s) => s.line_info(),
             TestNode::Switch(s) => s.line_info(),
             TestNode::Ternary(t) => t.line_info(),
+            TestNode::Variant(v) => v.line_info(),
         }
     }
 }
@@ -500,5 +508,16 @@ impl Default for TestNode {
 impl Lined for EmptyTestNode {
     fn line_info(&self) -> &LineInfo {
         &self.line_info
+    }
+}
+
+impl<'a> TryFrom<&'a IndependentNode> for &'a TestNode {
+    type Error = ();
+
+    fn try_from(value: &'a IndependentNode) -> Result<Self, Self::Error> {
+        match value {
+            IndependentNode::Test(t) => Ok(t),
+            _ => Err(()),
+        }
     }
 }

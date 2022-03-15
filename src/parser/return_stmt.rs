@@ -22,6 +22,14 @@ impl ReturnStatementNode {
         }
     }
 
+    pub fn get_returned(&self) -> &TestListNode {
+        &self.returned
+    }
+
+    pub fn get_cond(&self) -> &TestNode {
+        &self.cond
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<ReturnStatementNode> {
         let (info, tok) = tokens.next_token()?.deconstruct();
         assert!(matches!(tok, TokenType::Keyword(Keyword::Return)));

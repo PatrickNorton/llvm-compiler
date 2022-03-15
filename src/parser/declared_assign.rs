@@ -37,6 +37,26 @@ impl DeclaredAssignmentNode {
         }
     }
 
+    pub fn get_types(&self) -> &[TypedVariableNode] {
+        &self.assigned
+    }
+
+    pub fn is_colon(&self) -> bool {
+        self.is_colon
+    }
+
+    pub fn get_descriptors(&self) -> &HashSet<DescriptorNode> {
+        &self.descriptors
+    }
+
+    pub fn get_values(&self) -> &TestListNode {
+        &self.value
+    }
+
+    pub fn get_mutability(&self) -> Option<DescriptorNode> {
+        self.descriptors.iter().find(|x| x.is_mut_node()).cloned()
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<DeclaredAssignmentNode> {
         let info = tokens.line_info()?.clone();
         let assigned = TypedVariableNode::parse_list(tokens)?;

@@ -49,6 +49,13 @@ impl GenericDefinitionNode {
             GenericDefinitionNode::Operator(o) => o.add_descriptor(descriptors),
         }
     }
+
+    pub fn get_descriptors(&self) -> &HashSet<DescriptorNode> {
+        match self {
+            GenericDefinitionNode::Function(f) => f.get_descriptors(),
+            GenericDefinitionNode::Operator(o) => o.get_descriptors(),
+        }
+    }
 }
 
 impl GenericFunctionNode {
@@ -67,8 +74,24 @@ impl GenericFunctionNode {
         }
     }
 
+    pub fn get_name(&self) -> &VariableNode {
+        &self.name
+    }
+
+    pub fn get_args(&self) -> &TypedArgumentListNode {
+        &self.args
+    }
+
+    pub fn get_retvals(&self) -> &[TypeNode] {
+        &self.retvals
+    }
+
     pub fn add_descriptor(&mut self, descriptors: HashSet<DescriptorNode>) {
         self.descriptors = descriptors;
+    }
+
+    pub fn get_descriptors(&self) -> &HashSet<DescriptorNode> {
+        &self.descriptors
     }
 
     pub fn into_def(self, body: StatementBodyNode) -> MethodDefinitionNode {
@@ -101,8 +124,24 @@ impl GenericOperatorNode {
         }
     }
 
+    pub fn get_op_code(&self) -> &SpecialOpNameNode {
+        &self.op_code
+    }
+
+    pub fn get_args(&self) -> &TypedArgumentListNode {
+        &self.args
+    }
+
+    pub fn get_ret_types(&self) -> &[TypeNode] {
+        &self.retvals
+    }
+
     pub fn add_descriptor(&mut self, descriptors: HashSet<DescriptorNode>) {
         self.descriptors = descriptors;
+    }
+
+    pub fn get_descriptors(&self) -> &HashSet<DescriptorNode> {
+        &self.descriptors
     }
 
     pub fn into_def(self, body: StatementBodyNode, is_eq_stmt: bool) -> OperatorDefinitionNode {

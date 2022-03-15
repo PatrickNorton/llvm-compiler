@@ -47,12 +47,36 @@ impl PropertyDefinitionNode {
         }
     }
 
+    pub fn get_name(&self) -> &VariableNode {
+        &self.name
+    }
+
+    pub fn get_type(&self) -> &TypeLikeNode {
+        &self.type_node
+    }
+
+    pub fn get_get(&self) -> &StatementBodyNode {
+        &self.getter
+    }
+
+    pub fn get_set_args(&self) -> &TypedArgumentListNode {
+        &self.set_args
+    }
+
+    pub fn get_set(&self) -> &StatementBodyNode {
+        &self.setter
+    }
+
     pub fn valid_descriptors(&self) -> &'static HashSet<DescriptorNode> {
         &DECLARATION_VALID
     }
 
     pub fn add_descriptors(&mut self, descriptors: HashSet<DescriptorNode>) {
         self.descriptors = descriptors;
+    }
+
+    pub fn get_descriptors(&self) -> &HashSet<DescriptorNode> {
+        &self.descriptors
     }
 
     pub fn get_annotations(&self) -> &Vec<NameNode> {

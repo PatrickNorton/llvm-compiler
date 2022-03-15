@@ -59,12 +59,32 @@ impl EnumDefinitionNode {
         self.descriptors = descriptors;
     }
 
+    pub fn get_descriptors(&self) -> &HashSet<DescriptorNode> {
+        &self.descriptors
+    }
+
     pub fn get_annotations(&self) -> &Vec<NameNode> {
         &self.annotations
     }
 
     pub fn add_annotations(&mut self, annotations: Vec<NameNode>) {
         self.annotations = annotations;
+    }
+
+    pub fn get_name(&self) -> &TypeNode {
+        &self.name
+    }
+
+    pub fn get_names(&self) -> &[EnumKeywordNode] {
+        &self.names
+    }
+
+    pub fn get_superclasses(&self) -> &[TypeNode] {
+        &self.superclasses
+    }
+
+    pub fn get_body(&self) -> &ClassBodyNode {
+        &self.body
     }
 
     pub fn parse(tokens: &mut TokenList) -> ParseResult<EnumDefinitionNode> {
@@ -93,6 +113,13 @@ impl EnumDefinitionNode {
 }
 
 impl EnumKeywordNode {
+    pub fn get_variable(&self) -> &VariableNode {
+        match self {
+            EnumKeywordNode::Function(f) => f.get_variable().unwrap(),
+            EnumKeywordNode::Variable(v) => v,
+        }
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<EnumKeywordNode> {
         if !matches!(tokens.token_type()?, TokenType::Name(_)) {
             return Err(tokens.error("Enum keyword must start with a variable name"));

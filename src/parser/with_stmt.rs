@@ -30,6 +30,18 @@ impl WithStatementNode {
         }
     }
 
+    pub fn get_managed(&self) -> &TestListNode {
+        &self.managed
+    }
+
+    pub fn get_vars(&self) -> &[TypedVariableNode] {
+        &self.vars
+    }
+
+    pub fn get_body(&self) -> &StatementBodyNode {
+        &self.body
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<WithStatementNode> {
         let (info, tok) = tokens.next_token()?.deconstruct();
         assert!(matches!(tok, TokenType::Keyword(Keyword::Try)));

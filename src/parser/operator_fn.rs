@@ -4,6 +4,10 @@ use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
 use once_cell::sync::Lazy;
 
+use super::name::NameNode;
+use super::operator::OperatorTypeNode;
+use super::test_node::TestNode;
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum OpFuncTypeNode {
     Add,
@@ -127,6 +131,10 @@ impl EscapedOperatorNode {
         }
     }
 
+    pub fn get_operator(&self) -> OpFuncTypeNode {
+        self.operator
+    }
+
     pub fn parse(
         tokens: &mut TokenList,
         ignore_newlines: bool,
@@ -144,6 +152,41 @@ impl EscapedOperatorNode {
     }
 }
 
+impl OpFuncTypeNode {
+    pub fn get_operator(&self) -> OperatorTypeNode {
+        match self {
+            OpFuncTypeNode::Add => OperatorTypeNode::Add,
+            OpFuncTypeNode::Subtract => OperatorTypeNode::Subtract,
+            OpFuncTypeNode::USubtract => OperatorTypeNode::USubtract,
+            OpFuncTypeNode::Multiply => OperatorTypeNode::Multiply,
+            OpFuncTypeNode::Divide => OperatorTypeNode::Divide,
+            OpFuncTypeNode::FloorDiv => OperatorTypeNode::FloorDiv,
+            OpFuncTypeNode::Power => OperatorTypeNode::Power,
+            OpFuncTypeNode::Equals => OperatorTypeNode::Equals,
+            OpFuncTypeNode::NotEquals => OperatorTypeNode::NotEquals,
+            OpFuncTypeNode::GreaterThan => OperatorTypeNode::GreaterThan,
+            OpFuncTypeNode::LessThan => OperatorTypeNode::LessThan,
+            OpFuncTypeNode::GreaterEqual => OperatorTypeNode::GreaterEqual,
+            OpFuncTypeNode::LessEqual => OperatorTypeNode::LessEqual,
+            OpFuncTypeNode::LeftBitshift => OperatorTypeNode::LeftBitshift,
+            OpFuncTypeNode::RightBitshift => OperatorTypeNode::RightBitshift,
+            OpFuncTypeNode::BitwiseAnd => OperatorTypeNode::BitwiseAnd,
+            OpFuncTypeNode::BitwiseOr => OperatorTypeNode::BitwiseOr,
+            OpFuncTypeNode::BitwiseXor => OperatorTypeNode::BitwiseXor,
+            OpFuncTypeNode::BitwiseNot => OperatorTypeNode::BitwiseNot,
+            OpFuncTypeNode::Modulo => OperatorTypeNode::Modulo,
+            OpFuncTypeNode::BoolAnd => OperatorTypeNode::BoolAnd,
+            OpFuncTypeNode::BoolOr => OperatorTypeNode::BoolOr,
+            OpFuncTypeNode::BoolNot => OperatorTypeNode::BoolNot,
+            OpFuncTypeNode::BoolXor => OperatorTypeNode::BoolXor,
+            OpFuncTypeNode::In => OperatorTypeNode::In,
+            OpFuncTypeNode::Is => OperatorTypeNode::Is,
+            OpFuncTypeNode::NullCoerce => OperatorTypeNode::NullCoerce,
+            OpFuncTypeNode::Compare => OperatorTypeNode::Compare,
+        }
+    }
+}
+
 impl Lined for EscapedOperatorNode {
     fn line_info(&self) -> &LineInfo {
         &self.line_info
@@ -154,4 +197,15 @@ fn sort_str_len<const N: usize>(mut value: [OpFuncTypeNode; N]) -> [OpFuncTypeNo
     value.sort_unstable_by_key(|k| k.sequence().len());
     value.reverse();
     value
+}
+
+impl<'a> TryFrom<&'a TestNode> for &'a EscapedOperatorNode {
+    type Error = ();
+
+    fn try_from(value: &'a TestNode) -> Result<Self, Self::Error> {
+        match value {
+            TestNode::Name(NameNode::EscapedOp(x)) => Ok(x),
+            _ => Err(()),
+        }
+    }
 }
