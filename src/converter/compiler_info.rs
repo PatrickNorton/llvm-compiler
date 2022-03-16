@@ -74,7 +74,7 @@ impl<'a> CompilerInfo<'a> {
             global_info,
             path,
             Either::Right(builtins),
-            PermissionLevel::Stdlib,
+            PermissionLevel::Builtin,
         )
     }
 

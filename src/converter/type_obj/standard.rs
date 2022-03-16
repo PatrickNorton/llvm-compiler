@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use once_cell::race::OnceBool;
 use once_cell::sync::Lazy;
 
 use crate::converter::class::{AttributeInfo, MethodInfo};
@@ -31,7 +32,7 @@ struct TypeObjInner {
 #[derive(Debug)]
 struct StdInfo {
     info: UserInfo<MethodInfo, AttributeInfo>,
-    is_const_class: bool,
+    is_const_class: OnceBool,
     is_final: bool,
 }
 
@@ -46,7 +47,7 @@ impl StdTypeObject {
             value: Arc::new(TypeObjInner {
                 info: Arc::new(StdInfo {
                     info: UserInfo::new(name, supers, info),
-                    is_const_class: false,
+                    is_const_class: OnceBool::new(),
                     is_final,
                 }),
                 typedef_name: None,
@@ -90,12 +91,16 @@ impl StdTypeObject {
             &self.value.generics,
             self.value.is_const,
             &self.value.typedef_name,
-            self.value.info.is_const_class,
+            self.value.info.is_const_class.get().unwrap(),
         )
     }
 
     pub fn is_const_class(&self) {
-        todo!()
+        self.value
+            .info
+            .is_const_class
+            .set(true)
+            .expect("Can only set value once");
     }
 
     pub fn set_supers(&self, supers: Vec<TypeObject>) {
@@ -136,7 +141,7 @@ impl UserTypeLike for StdTypeObject {
     }
 
     fn const_semantics(&self) -> bool {
-        self.value.info.is_const_class
+        self.value.info.is_const_class.get().unwrap()
     }
 
     fn make_const(&self) -> Self {
