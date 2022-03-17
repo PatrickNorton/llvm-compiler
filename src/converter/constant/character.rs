@@ -62,3 +62,58 @@ impl Display for CharConstant {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::converter::constant::{CharConstant, ConstantBytes};
+
+    #[test]
+    fn char_bytes() {
+        const CHAR_BYTE: u8 = ConstantBytes::Char as u8;
+        assert_eq!(
+            CharConstant::new('\0').to_bytes(),
+            vec![CHAR_BYTE, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            CharConstant::new('a').to_bytes(),
+            vec![CHAR_BYTE, 0, 0, 0, 0x61]
+        );
+        assert_eq!(
+            CharConstant::new('\u{1000}').to_bytes(),
+            vec![CHAR_BYTE, 0, 0, 0x10, 0]
+        );
+        assert_eq!(
+            CharConstant::new('\u{10000}').to_bytes(),
+            vec![CHAR_BYTE, 0, 0x1, 0, 0]
+        );
+        assert_eq!(
+            CharConstant::new('\u{12345}').to_bytes(),
+            vec![CHAR_BYTE, 0, 0x1, 0x23, 0x45]
+        );
+        assert_eq!(
+            CharConstant::new('\u{102345}').to_bytes(),
+            vec![CHAR_BYTE, 0, 0x10, 0x23, 0x45]
+        );
+    }
+
+    #[test]
+    fn char_display() {
+        assert_eq!(format!("{}", CharConstant::new('\'')), r#"c"'""#);
+        assert_eq!(format!("{}", CharConstant::new('"')), r#"c'"'"#);
+        assert_eq!(format!("{}", CharConstant::new('\0')), r"c'\0'");
+        assert_eq!(format!("{}", CharConstant::new('a')), r"c'a'");
+        assert_eq!(format!("{}", CharConstant::new('\u{80}')), r"c'\x80'");
+        assert_eq!(format!("{}", CharConstant::new('\u{e000}')), r"c'\uE000'");
+        assert_eq!(
+            format!("{}", CharConstant::new('\u{f0000}')),
+            r"c'\U000F0000'"
+        );
+    }
+
+    #[test]
+    fn char_name_equal() {
+        for x in '\0'..char::MAX {
+            assert_eq!(CharConstant::name(x), format!("{}", CharConstant::new(x)));
+        }
+    }
+}

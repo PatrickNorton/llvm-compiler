@@ -23,7 +23,7 @@ impl StringConstant {
 
     pub fn str_bytes(text: &str) -> Vec<u8> {
         let mut result = Vec::with_capacity(text.len() + 4);
-        result.extend(&usize_to_bytes(result.len()));
+        result.extend(&usize_to_bytes(text.len()));
         result.extend(text.as_bytes());
         result
     }
@@ -86,5 +86,42 @@ impl From<&str> for LangConstant {
 impl From<StringConstant> for LangConstant {
     fn from(x: StringConstant) -> Self {
         Self::String(x)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::converter::constant::{ConstantBytes, StringConstant};
+
+    const ASCII_BYTE: u8 = ConstantBytes::Ascii as u8;
+    const STRING_BYTE: u8 = ConstantBytes::Str as u8;
+
+    #[test]
+    fn str_bytes() {
+        assert_eq!(StringConstant::str_bytes(""), vec![0, 0, 0, 0]);
+        assert_eq!(
+            StringConstant::str_bytes("abcdefg"),
+            vec![0, 0, 0, 7, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67]
+        );
+        assert_eq!(
+            StringConstant::str_bytes("abc\u{1000}"),
+            vec![0, 0, 0, 6, 0x61, 0x62, 0x63, 0xe1, 0x80, 0x80]
+        );
+    }
+
+    #[test]
+    fn to_bytes() {
+        assert_eq!(
+            StringConstant::new(String::new()).to_bytes(),
+            vec![ASCII_BYTE, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            StringConstant::new("abcdefg".to_string()).to_bytes(),
+            vec![ASCII_BYTE, 0, 0, 0, 7, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67]
+        );
+        assert_eq!(
+            StringConstant::new("abc\u{1000}".to_string()).to_bytes(),
+            vec![STRING_BYTE, 0, 0, 0, 6, 0x61, 0x62, 0x63, 0xe1, 0x80, 0x80]
+        );
     }
 }

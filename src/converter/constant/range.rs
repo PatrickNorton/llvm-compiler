@@ -1,6 +1,7 @@
 use std::fmt::Display;
 use std::sync::Arc;
 
+use derive_new::new;
 use num::{BigInt, One, ToPrimitive};
 
 use crate::converter::constant::BigintConstant;
@@ -12,7 +13,7 @@ pub struct RangeConstant {
     value: Arc<Range>,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, new)]
 pub struct Range {
     start: Option<BigInt>,
     stop: Option<BigInt>,
@@ -65,24 +66,22 @@ fn add_to_bytes(bytes: &mut Vec<u8>, value: &Option<BigInt>) {
 
 impl Display for RangeConstant {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.value.step {
-            Option::None => write!(
-                f,
-                "[{}:{}]",
-                RangeFmt(&self.value.start),
-                RangeFmt(&self.value.stop)
-            ),
-            Option::Some(x) if x.is_one() => write!(
-                f,
-                "[{}:{}]",
-                RangeFmt(&self.value.start),
-                RangeFmt(&self.value.stop)
-            ),
+        self.value.fmt(f)
+    }
+}
+
+impl Display for Range {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.step {
+            Option::None => write!(f, "[{}:{}]", RangeFmt(&self.start), RangeFmt(&self.stop)),
+            Option::Some(x) if x.is_one() => {
+                write!(f, "[{}:{}]", RangeFmt(&self.start), RangeFmt(&self.stop))
+            }
             Option::Some(step) => write!(
                 f,
                 "[{}:{}:{}]",
-                RangeFmt(&self.value.start),
-                RangeFmt(&self.value.stop),
+                RangeFmt(&self.start),
+                RangeFmt(&self.stop),
                 step
             ),
         }
@@ -104,5 +103,140 @@ impl Display for RangeFmt<'_> {
         } else {
             Ok(())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use num::{BigInt, One, Zero};
+
+    use crate::converter::constant::{ConstantBytes, Range, RangeConstant};
+
+    const RANGE_BYTE: u8 = ConstantBytes::Range as u8;
+
+    #[test]
+    fn range_display_zero() {
+        assert_eq!(format!("{}", Range::new(None, None, None)), "[:]");
+        assert_eq!(
+            format!("{}", Range::new(Some(BigInt::zero()), None, None)),
+            "[0:]"
+        );
+        assert_eq!(
+            format!("{}", Range::new(None, Some(BigInt::zero()), None)),
+            "[:0]"
+        );
+        assert_eq!(
+            format!("{}", Range::new(None, None, Some(BigInt::zero()))),
+            "[::0]"
+        );
+        assert_eq!(
+            format!(
+                "{}",
+                Range::new(Some(BigInt::zero()), Some(BigInt::zero()), None)
+            ),
+            "[0:0]"
+        );
+        assert_eq!(
+            format!(
+                "{}",
+                Range::new(Some(BigInt::zero()), None, Some(BigInt::zero()))
+            ),
+            "[0::0]"
+        );
+        assert_eq!(
+            format!(
+                "{}",
+                Range::new(None, Some(BigInt::zero()), Some(BigInt::zero()))
+            ),
+            "[:0:0]"
+        );
+        assert_eq!(
+            format!(
+                "{}",
+                Range::new(
+                    Some(BigInt::zero()),
+                    Some(BigInt::zero()),
+                    Some(BigInt::zero())
+                )
+            ),
+            "[0:0:0]"
+        );
+    }
+
+    #[test]
+    fn range_display_complex() {
+        assert_eq!(
+            format!(
+                "{}",
+                Range::new(
+                    Some(BigInt::one()),
+                    Some((-123_456).into()),
+                    Some(100_000_000_000_000u64.into())
+                )
+            ),
+            "[1:-123456:100000000000000]"
+        );
+    }
+
+    #[test]
+    fn range_bytes() {
+        assert_eq!(
+            RangeConstant::new(None, None, None).to_bytes(),
+            vec![RANGE_BYTE, 0, 0, 0]
+        );
+        assert_eq!(
+            RangeConstant::new(Some(BigInt::zero()), None, None).to_bytes(),
+            vec![RANGE_BYTE, 1, 0, 0, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            RangeConstant::new(None, Some(BigInt::zero()), None).to_bytes(),
+            vec![RANGE_BYTE, 0, 1, 0, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            RangeConstant::new(None, None, Some(BigInt::zero())).to_bytes(),
+            vec![RANGE_BYTE, 0, 0, 1, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            RangeConstant::new(Some(BigInt::zero()), Some(BigInt::zero()), None).to_bytes(),
+            vec![RANGE_BYTE, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            RangeConstant::new(Some(BigInt::zero()), None, Some(BigInt::zero())).to_bytes(),
+            vec![RANGE_BYTE, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            RangeConstant::new(None, Some(BigInt::zero()), Some(BigInt::zero())).to_bytes(),
+            vec![RANGE_BYTE, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            RangeConstant::new(
+                Some(BigInt::zero()),
+                Some(BigInt::zero()),
+                Some(BigInt::zero())
+            )
+            .to_bytes(),
+            vec![RANGE_BYTE, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0]
+        );
+    }
+
+    #[test]
+    fn complex_range_bytes() {
+        #[rustfmt::skip]
+        let complex_bytes = vec![
+            RANGE_BYTE,
+            1, 0, 0, 0, 1,
+            1, 0x12, 0x34, 0x56, 0x78,
+            2, 0, 0, 0, 2,
+            0x12, 0x34, 0x56, 0x78, 0x90, 0xAB, 0xCD, 0xEF,
+        ];
+        assert_eq!(
+            RangeConstant::new(
+                Some(BigInt::one()),
+                Some(0x1234_5678.into()),
+                Some(0x1234_5678_90AB_CDEFu64.into())
+            )
+            .to_bytes(),
+            complex_bytes
+        );
     }
 }

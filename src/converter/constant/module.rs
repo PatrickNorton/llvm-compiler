@@ -63,3 +63,45 @@ impl Hash for ModuleConstant {
         ptr::hash(Arc::as_ptr(&self.value), state)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use crate::converter::constant::{ConstantBytes, ModuleConstant};
+    use crate::converter::file_writer::ConstantSet;
+    use crate::macros::hash_map;
+
+    const MODULE_BYTE: u8 = ConstantBytes::Module as u8;
+
+    #[test]
+    fn empty_bytes() {
+        let constants = ConstantSet::default();
+        assert_eq!(
+            ModuleConstant::new(String::new(), HashMap::new()).to_bytes(&constants),
+            vec![MODULE_BYTE, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            ModuleConstant::new("test".to_string(), HashMap::new()).to_bytes(&constants),
+            vec![MODULE_BYTE, 0, 0, 0, 0]
+        );
+    }
+
+    #[test]
+    fn module_bytes() {
+        let constants = ConstantSet::new(vec![true.into(), false.into()].into_iter().collect());
+        #[rustfmt::skip]
+        let result = vec![
+            MODULE_BYTE,
+            0, 0, 0, 1,
+            0, 0, 0, 4,
+            0x74, 0x72, 0x75, 0x65,
+            0, 0, 0, 0
+        ];
+        assert_eq!(
+            ModuleConstant::new(String::new(), hash_map!("true".into() => true.into()))
+                .to_bytes(&constants),
+            result
+        );
+    }
+}

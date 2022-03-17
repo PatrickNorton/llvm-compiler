@@ -46,3 +46,32 @@ impl From<bool> for BoolConstant {
         Self::new(x)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::converter::constant::{BoolConstant, ConstantBytes};
+
+    #[test]
+    fn bool_bytes() {
+        assert_eq!(
+            BoolConstant::new(false).to_bytes(),
+            vec![ConstantBytes::Bool as u8, 0]
+        );
+        assert_eq!(
+            BoolConstant::new(true).to_bytes(),
+            vec![ConstantBytes::Bool as u8, 1]
+        );
+    }
+
+    #[test]
+    fn display() {
+        assert_eq!(format!("{}", BoolConstant::new(false)), "false");
+        assert_eq!(format!("{}", BoolConstant::new(true)), "true");
+    }
+
+    #[test]
+    fn from_bool() {
+        assert_eq!(BoolConstant::new(false), false.into());
+        assert_eq!(BoolConstant::new(true), true.into());
+    }
+}

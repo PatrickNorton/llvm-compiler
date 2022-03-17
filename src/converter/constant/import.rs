@@ -38,3 +38,21 @@ impl From<ImportConstant> for LangConstant {
         LangConstant::Import(x)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::converter::constant::{ConstantBytes, ImportConstant};
+
+    #[test]
+    fn import_bytes() {
+        const IMPORT_BYTE: u8 = ConstantBytes::Import as u8;
+        assert_eq!(
+            ImportConstant::new(0, String::new()).to_bytes(),
+            vec![IMPORT_BYTE, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            ImportConstant::new(1000, String::new()).to_bytes(),
+            vec![IMPORT_BYTE, 0, 0, 0x3, 0xe8]
+        );
+    }
+}

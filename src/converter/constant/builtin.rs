@@ -39,3 +39,17 @@ impl From<BuiltinConstant> for LangConstant {
         LangConstant::Builtin(x)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::converter::constant::{BuiltinConstant, ConstantBytes};
+
+    #[test]
+    fn builtin_bytes() {
+        const BUILTIN_BYTE: u8 = ConstantBytes::Builtin as u8;
+        assert_eq!(
+            BuiltinConstant::new(3).to_bytes(),
+            vec![BUILTIN_BYTE, 0, 0, 0, 3]
+        );
+    }
+}

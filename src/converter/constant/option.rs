@@ -78,3 +78,38 @@ impl From<OptionTypeConstant> for LangConstant {
         LangConstant::OptionType(x)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::converter::builtins::OBJECT;
+    use crate::converter::constant::{
+        BuiltinConstant, ConstantBytes, OptionConstant, OptionTypeConstant,
+    };
+    use crate::converter::file_writer::ConstantSet;
+
+    const OPTION_BYTE: u8 = ConstantBytes::Option as u8;
+    const OPTION_TYPE_BYTE: u8 = ConstantBytes::OptionType as u8;
+
+    #[test]
+    fn option_bytes() {
+        let constants = ConstantSet::new(vec![true.into(), false.into()].into_iter().collect());
+        assert_eq!(
+            OptionConstant::new(true.into()).to_bytes(&constants),
+            vec![OPTION_BYTE, 0, 0]
+        );
+        assert_eq!(
+            OptionConstant::new(false.into()).to_bytes(&constants),
+            vec![OPTION_BYTE, 0, 1]
+        );
+    }
+
+    #[test]
+    fn option_type_bytes() {
+        let object_builtin = BuiltinConstant::new(21);
+        let constants = ConstantSet::new(vec![object_builtin.clone().into()].into_iter().collect());
+        assert_eq!(
+            OptionTypeConstant::new(object_builtin.into(), OBJECT.into()).to_bytes(&constants),
+            vec![OPTION_TYPE_BYTE, 0, 0, 0, 0]
+        )
+    }
+}

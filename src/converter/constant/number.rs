@@ -64,8 +64,14 @@ impl BigintConstant {
     }
 
     fn bigint_bytes(value: &BigInt) -> Vec<u8> {
+        // FIXME: Negative BigInts don't work
         let interior_bytes = value.to_bytes_be().1;
-        let added_bytes = U32_BYTES - interior_bytes.len() % U32_BYTES;
+        let overflow = interior_bytes.len() % U32_BYTES;
+        let added_bytes = if overflow == 0 {
+            0
+        } else {
+            U32_BYTES - overflow
+        };
         let mut bytes = Vec::with_capacity(interior_bytes.len() + added_bytes);
         bytes.extend(repeat(0).take(added_bytes));
         bytes.extend(interior_bytes);
@@ -176,3 +182,104 @@ macro_rules! from_int {
 }
 
 from_ints!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, usize, isize);
+
+#[cfg(test)]
+mod tests {
+    use num::BigInt;
+
+    use crate::converter::constant::{BigintConstant, ConstantBytes, IntConstant, NumberConstant};
+
+    const BIGINT_BYTE: u8 = ConstantBytes::Bigint as u8;
+    const INT_BYTE: u8 = ConstantBytes::Int as u8;
+
+    #[test]
+    fn big_value() {
+        assert_eq!(
+            *NumberConstant::Int(IntConstant::new(5)).big_value(),
+            BigInt::from(5)
+        );
+        assert_eq!(
+            *NumberConstant::Bigint(BigintConstant::new(BigInt::from(1_000_000))).big_value(),
+            BigInt::from(1_000_000)
+        );
+    }
+
+    #[test]
+    fn big_bytes() {
+        assert_eq!(
+            BigintConstant::new(0.into()).to_bytes(),
+            vec![BIGINT_BYTE, 0, 0, 0, 1, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            BigintConstant::new(1.into()).to_bytes(),
+            vec![BIGINT_BYTE, 0, 0, 0, 1, 0, 0, 0, 1]
+        );
+        #[rustfmt::skip]
+        let result_u64 = vec![
+            BIGINT_BYTE,
+            0, 0, 0, 2,
+            0x12, 0x34, 0x56, 0x78,
+            0x90, 0xAB, 0xCD, 0xEF,
+        ];
+        assert_eq!(
+            BigintConstant::new(0x1234_5678_90AB_CDEFu64.into()).to_bytes(),
+            result_u64
+        );
+        #[rustfmt::skip]
+        let result_u64_padded = vec![
+            BIGINT_BYTE,
+            0, 0, 0, 2,
+            0x00, 0x00, 0x12, 0x34,
+            0x56, 0x78, 0x90, 0xAB,
+        ];
+        assert_eq!(
+            BigintConstant::new(0x1234_5678_90ABu64.into()).to_bytes(),
+            result_u64_padded
+        );
+    }
+
+    #[test]
+    fn convert_bigint() {
+        assert_eq!(
+            BigintConstant::convert_bigint(&0.into()),
+            vec![0, 0, 0, 1, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            BigintConstant::convert_bigint(&1.into()),
+            vec![0, 0, 0, 1, 0, 0, 0, 1]
+        );
+        #[rustfmt::skip]
+        let result_u64 = vec![
+            0, 0, 0, 2,
+            0x12, 0x34, 0x56, 0x78,
+            0x90, 0xAB, 0xCD, 0xEF,
+        ];
+        assert_eq!(
+            BigintConstant::convert_bigint(&0x1234_5678_90AB_CDEFu64.into()),
+            result_u64
+        );
+        #[rustfmt::skip]
+        let result_u64_padded = vec![
+            0, 0, 0, 2,
+            0x00, 0x00, 0x12, 0x34,
+            0x56, 0x78, 0x90, 0xAB,
+        ];
+        assert_eq!(
+            BigintConstant::convert_bigint(&0x1234_5678_90ABu64.into()),
+            result_u64_padded
+        );
+    }
+
+    #[test]
+    fn small_bytes() {
+        assert_eq!(IntConstant::new(0).to_bytes(), vec![INT_BYTE, 0, 0, 0, 0]);
+        assert_eq!(
+            IntConstant::new(0x0ABADE66).to_bytes(),
+            vec![INT_BYTE, 0x0A, 0xBA, 0xDE, 0x66]
+        );
+        assert_eq!(
+            IntConstant::new(-1).to_bytes(),
+            vec![INT_BYTE, 0xFF, 0xFF, 0xFF, 0xFF]
+        );
+    }
+}

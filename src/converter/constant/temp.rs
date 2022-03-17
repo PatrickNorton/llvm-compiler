@@ -77,3 +77,26 @@ impl Hash for TempConstant {
         ptr::hash(Arc::as_ptr(&self.value), state)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::converter::builtins::OBJECT;
+
+    use super::TempConstant;
+
+    #[test]
+    fn get_inner() {
+        let constant = TempConstant::new(OBJECT.into());
+        assert_eq!(constant.get_inner(), None);
+        constant.set_reserved(true.into());
+        assert_eq!(constant.get_inner(), Some(&true.into()));
+    }
+
+    #[test]
+    #[should_panic]
+    fn double_set_inner() {
+        let constant = TempConstant::new(OBJECT.into());
+        constant.set_reserved(true.into());
+        constant.set_reserved(false.into());
+    }
+}

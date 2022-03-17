@@ -45,8 +45,41 @@ impl Display for BytesConstant {
             r#"b"{}""#,
             self.value
                 .iter()
-                .map(|&x| string_escape::escaped(x as char))
+                .map(|&x| if x < 0x80 {
+                    string_escape::escaped(x as char)
+                } else {
+                    format!(r"\x{:02x}", x).into()
+                })
                 .format("")
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::converter::constant::{BytesConstant, ConstantBytes};
+
+    #[test]
+    fn to_bytes() {
+        const BYTES_BYTE: u8 = ConstantBytes::Bytes as u8;
+        assert_eq!(
+            BytesConstant::new(vec![]).to_bytes(),
+            vec![BYTES_BYTE, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            BytesConstant::new(vec![0, 1, 2, 3]).to_bytes(),
+            vec![BYTES_BYTE, 0, 0, 0, 4, 0, 1, 2, 3]
+        );
+    }
+
+    #[test]
+    fn display() {
+        assert_eq!(format!("{}", BytesConstant::new(vec![])), r#"b"""#);
+        assert_eq!(format!("{}", BytesConstant::new(vec![0x61])), r#"b"a""#);
+        assert_eq!(format!("{}", BytesConstant::new(vec![0x5c])), r#"b"\\""#);
+        assert_eq!(
+            format!("{}", BytesConstant::new(vec![0xe5, 0x80, 0x80])),
+            r#"b"\xe5\x80\x80""#
+        );
     }
 }

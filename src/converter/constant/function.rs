@@ -39,3 +39,21 @@ impl From<FunctionConstant> for LangConstant {
         LangConstant::Func(x)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::converter::constant::{ConstantBytes, FunctionConstant};
+
+    #[test]
+    fn function_bytes() {
+        const FUNCTION_BYTE: u8 = ConstantBytes::Function as u8;
+        assert_eq!(
+            FunctionConstant::new("".into(), 0).to_bytes(),
+            vec![FUNCTION_BYTE, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            FunctionConstant::new("".into(), 1000).to_bytes(),
+            vec![FUNCTION_BYTE, 0, 0, 0x3, 0xe8]
+        );
+    }
+}

@@ -41,10 +41,11 @@ pub fn escaped(value: char) -> Cow<'static, str> {
                 escaped.into()
             } else {
                 match x as u32 {
-                    x @ 0..=0xFF => unreachable!(
-                        "ASCII characters should already be filtered out (got {:?})",
+                    x @ 0..=0x7F => unreachable!(
+                        "ASCII characters should already be filtered out (got {:#x})",
                         x
                     ),
+                    x @ 0x80..=0xFF => format!(r"\x{:02X}", x).into(),
                     x @ 0x100..=0xFFFF => format!(r"\u{:04X}", x).into(),
                     x => format!(r"\U{:08X}", x).into(),
                 }
@@ -99,6 +100,7 @@ mod tests {
 
     #[test]
     fn unicode() {
+        assert_eq!(escaped('\u{80}'), r"\x80");
         assert_eq!(escaped('\u{E000}'), r"\uE000");
         assert_eq!(escaped('\u{F0000}'), r"\U000F0000");
     }

@@ -64,3 +64,38 @@ impl TryFrom<LangConstant> for TupleConstant {
         }
     }
 }
+
+impl Default for TupleConstant {
+    fn default() -> Self {
+        Self::new(Vec::new())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::converter::constant::{ConstantBytes, TupleConstant};
+    use crate::converter::file_writer::ConstantSet;
+
+    const TUPLE_BYTE: u8 = ConstantBytes::Tuple as u8;
+
+    #[test]
+    fn tuple_bytes() {
+        let constants = ConstantSet::new(
+            vec![0.into(), 1.into(), 2.into(), true.into(), 3.into()]
+                .into_iter()
+                .collect(),
+        );
+        assert_eq!(
+            TupleConstant::default().to_bytes(&constants),
+            vec![TUPLE_BYTE, 0, 0, 0, 0]
+        );
+        assert_eq!(
+            TupleConstant::new(vec![1.into()]).to_bytes(&constants),
+            vec![TUPLE_BYTE, 0, 0, 0, 1, 0, 1]
+        );
+        assert_eq!(
+            TupleConstant::new(vec![1.into(), true.into(), 3.into()]).to_bytes(&constants),
+            vec![TUPLE_BYTE, 0, 0, 0, 3, 0, 1, 0, 3, 0, 4]
+        );
+    }
+}

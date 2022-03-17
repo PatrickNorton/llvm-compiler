@@ -27,7 +27,7 @@ use super::global_info::GlobalCompilerInfo;
 /// It might make sense to rework the [`PartialEq`], [`Eq`], and [`Hash`]
 /// implementations on [`LangConstant`] to work around temporaries, but that may
 /// be unfeasable.
-#[derive(Debug, new)]
+#[derive(Debug, Default, new)]
 pub struct ConstantSet {
     value: IndexSet<LangConstant>,
 }
