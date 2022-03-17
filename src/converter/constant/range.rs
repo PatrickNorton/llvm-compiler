@@ -1,7 +1,6 @@
 use std::fmt::Display;
 use std::sync::Arc;
 
-use derive_new::new;
 use num::{BigInt, One, ToPrimitive};
 
 use crate::converter::constant::BigintConstant;
@@ -13,7 +12,7 @@ pub struct RangeConstant {
     value: Arc<Range>,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, new)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Range {
     start: Option<BigInt>,
     stop: Option<BigInt>,
@@ -39,12 +38,26 @@ impl RangeConstant {
         &self.value.step
     }
 
+    pub fn str_value(&self) -> String {
+        self.value.to_string()
+    }
+
+    pub fn repr_value(&self) -> String {
+        self.value.to_string()
+    }
+
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = vec![ConstantBytes::Range as u8];
         add_to_bytes(&mut bytes, &self.value.start);
         add_to_bytes(&mut bytes, &self.value.stop);
         add_to_bytes(&mut bytes, &self.value.step);
         bytes
+    }
+}
+
+impl Range {
+    pub const fn new(start: Option<BigInt>, stop: Option<BigInt>, step: Option<BigInt>) -> Self {
+        Self { start, stop, step }
     }
 }
 
@@ -94,6 +107,14 @@ impl From<RangeConstant> for LangConstant {
     }
 }
 
+impl From<Range> for RangeConstant {
+    fn from(range: Range) -> Self {
+        Self {
+            value: Arc::new(range),
+        }
+    }
+}
+
 struct RangeFmt<'a>(&'a Option<BigInt>);
 
 impl Display for RangeFmt<'_> {
@@ -109,73 +130,54 @@ impl Display for RangeFmt<'_> {
 #[cfg(test)]
 mod tests {
     use num::{BigInt, One, Zero};
+    use once_cell::sync::Lazy;
 
     use crate::converter::constant::{ConstantBytes, Range, RangeConstant};
 
     const RANGE_BYTE: u8 = ConstantBytes::Range as u8;
 
-    #[test]
-    fn range_display_zero() {
-        assert_eq!(format!("{}", Range::new(None, None, None)), "[:]");
-        assert_eq!(
-            format!("{}", Range::new(Some(BigInt::zero()), None, None)),
-            "[0:]"
-        );
-        assert_eq!(
-            format!("{}", Range::new(None, Some(BigInt::zero()), None)),
-            "[:0]"
-        );
-        assert_eq!(
-            format!("{}", Range::new(None, None, Some(BigInt::zero()))),
-            "[::0]"
-        );
-        assert_eq!(
-            format!(
-                "{}",
-                Range::new(Some(BigInt::zero()), Some(BigInt::zero()), None)
+    static RANGE_STRS: Lazy<Vec<(Range, &str)>> = Lazy::new(|| {
+        vec![
+            (Range::new(None, None, None), "[:]"),
+            (Range::new(Some(BigInt::zero()), None, None), "[0:]"),
+            (Range::new(None, Some(BigInt::zero()), None), "[:0]"),
+            (Range::new(None, None, Some(BigInt::zero())), "[::0]"),
+            (
+                Range::new(Some(BigInt::zero()), Some(BigInt::zero()), None),
+                "[0:0]",
             ),
-            "[0:0]"
-        );
-        assert_eq!(
-            format!(
-                "{}",
-                Range::new(Some(BigInt::zero()), None, Some(BigInt::zero()))
+            (
+                Range::new(Some(BigInt::zero()), None, Some(BigInt::zero())),
+                "[0::0]",
             ),
-            "[0::0]"
-        );
-        assert_eq!(
-            format!(
-                "{}",
-                Range::new(None, Some(BigInt::zero()), Some(BigInt::zero()))
+            (
+                Range::new(None, Some(BigInt::zero()), Some(BigInt::zero())),
+                "[:0:0]",
             ),
-            "[:0:0]"
-        );
-        assert_eq!(
-            format!(
-                "{}",
+            (
                 Range::new(
                     Some(BigInt::zero()),
                     Some(BigInt::zero()),
-                    Some(BigInt::zero())
-                )
+                    Some(BigInt::zero()),
+                ),
+                "[0:0:0]",
             ),
-            "[0:0:0]"
-        );
-    }
-
-    #[test]
-    fn range_display_complex() {
-        assert_eq!(
-            format!(
-                "{}",
+            (
                 Range::new(
                     Some(BigInt::one()),
                     Some((-123_456).into()),
-                    Some(100_000_000_000_000u64.into())
-                )
+                    Some(100_000_000_000_000u64.into()),
+                ),
+                "[1:-123456:100000000000000]",
             ),
-            "[1:-123456:100000000000000]"
-        );
+        ]
+    });
+
+    #[test]
+    fn range_display_zero() {
+        for (range, text) in &*RANGE_STRS {
+            assert_eq!(format!("{}", range), *text);
+        }
     }
 
     #[test]
@@ -238,5 +240,19 @@ mod tests {
             .to_bytes(),
             complex_bytes
         );
+    }
+
+    #[test]
+    fn range_str() {
+        for (range, text) in &*RANGE_STRS {
+            assert_eq!(RangeConstant::from(range.clone()).str_value(), *text);
+        }
+    }
+
+    #[test]
+    fn range_repr() {
+        for (range, text) in &*RANGE_STRS {
+            assert_eq!(RangeConstant::from(range.clone()).repr_value(), *text);
+        }
     }
 }

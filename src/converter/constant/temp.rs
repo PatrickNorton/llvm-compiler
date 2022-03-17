@@ -42,6 +42,14 @@ impl TempConstant {
             .expect("Cannot set TempConstant more than once")
     }
 
+    pub fn str_value(&self) -> Option<String> {
+        self.value.value.get().and_then(|x| x.str_value())
+    }
+
+    pub fn repr_value(&self) -> Option<String> {
+        self.value.value.get().and_then(|x| x.str_value())
+    }
+
     pub fn fmt_name(
         &self,
         builtins: &Builtins,
@@ -98,5 +106,21 @@ mod tests {
         let constant = TempConstant::new(OBJECT.into());
         constant.set_reserved(true.into());
         constant.set_reserved(false.into());
+    }
+
+    #[test]
+    fn temp_str() {
+        let constant = TempConstant::new(OBJECT.into());
+        assert_eq!(constant.str_value(), None);
+        constant.set_reserved(true.into());
+        assert_eq!(constant.str_value().as_deref(), Some("true"));
+    }
+
+    #[test]
+    fn temp_repr() {
+        let constant = TempConstant::new(OBJECT.into());
+        assert_eq!(constant.repr_value(), None);
+        constant.set_reserved(true.into());
+        assert_eq!(constant.repr_value().as_deref(), Some("true"));
     }
 }

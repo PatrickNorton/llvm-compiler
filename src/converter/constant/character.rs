@@ -19,6 +19,14 @@ impl CharConstant {
         self.value
     }
 
+    pub fn str_value(&self) -> String {
+        self.value.into()
+    }
+
+    pub fn repr_value(&self) -> String {
+        Self::name(self.value).into()
+    }
+
     pub fn name(c: char) -> Cow<'static, str> {
         match c {
             '\'' => r#"c"'""#.into(),
@@ -94,6 +102,23 @@ mod tests {
             CharConstant::new('\u{102345}').to_bytes(),
             vec![CHAR_BYTE, 0, 0x10, 0x23, 0x45]
         );
+    }
+
+    #[test]
+    fn char_str() {
+        for x in '\0'..char::MAX {
+            assert_eq!(CharConstant::new(x).str_value(), x.to_string());
+        }
+    }
+
+    #[test]
+    fn char_repr() {
+        for x in '\0'..char::MAX {
+            assert_eq!(
+                CharConstant::new(x).repr_value(),
+                format!("{}", CharConstant::new(x))
+            );
+        }
     }
 
     #[test]

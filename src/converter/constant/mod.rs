@@ -117,11 +117,51 @@ impl LangConstant {
     }
 
     pub fn str_value(&self) -> Option<String> {
-        todo!()
+        match self {
+            LangConstant::Bigint(b) => Some(b.str_value()),
+            LangConstant::Bool(b) => Some(b.str_value()),
+            LangConstant::Builtin(_) => None, // TODO
+            LangConstant::Bytes(_) => None,
+            LangConstant::Char(c) => Some(c.str_value()),
+            LangConstant::Class(c) => Some(c.str_value()),
+            LangConstant::Decimal(_) => None, // TODO
+            LangConstant::Fmt(_) => None,
+            LangConstant::Func(_) => None,
+            LangConstant::Import(_) => None,
+            LangConstant::Int(i) => Some(i.str_value()),
+            LangConstant::Module(_) => None,
+            LangConstant::Null(n) => Some(n.str_value()),
+            LangConstant::Option(_) => None,
+            LangConstant::OptionType(o) => Some(o.str_value()),
+            LangConstant::Range(r) => Some(r.str_value()),
+            LangConstant::String(s) => Some(s.str_value()),
+            LangConstant::Temp(t) => t.str_value(),
+            LangConstant::Tuple(_) => None,
+        }
     }
 
     pub fn repr_value(&self) -> Option<String> {
-        todo!()
+        match self {
+            LangConstant::Bigint(b) => Some(b.repr_value()),
+            LangConstant::Bool(b) => Some(b.repr_value()),
+            LangConstant::Builtin(_) => None, // TODO
+            LangConstant::Bytes(b) => Some(b.repr_value()),
+            LangConstant::Char(c) => Some(c.repr_value()),
+            LangConstant::Class(c) => Some(c.repr_value()),
+            LangConstant::Decimal(_) => None, // TODO
+            LangConstant::Fmt(_) => None,
+            LangConstant::Func(_) => None,
+            LangConstant::Import(_) => None,
+            LangConstant::Int(i) => Some(i.repr_value()),
+            LangConstant::Module(_) => None,
+            LangConstant::Null(n) => Some(n.repr_value()),
+            LangConstant::Option(_) => None,
+            LangConstant::OptionType(o) => Some(o.repr_value()),
+            LangConstant::Range(r) => Some(r.repr_value()),
+            LangConstant::String(s) => Some(s.repr_value()),
+            LangConstant::Temp(t) => t.repr_value(),
+            LangConstant::Tuple(_) => None,
+        }
     }
 
     pub fn is_string(&self) -> bool {

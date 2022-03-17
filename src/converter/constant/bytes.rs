@@ -23,6 +23,19 @@ impl BytesConstant {
         &self.value
     }
 
+    pub fn repr_value(&self) -> String {
+        self.value
+            .iter()
+            .map(|&x| {
+                if x < 0x80 {
+                    string_escape::escaped(x as char)
+                } else {
+                    format!(r"\x{:02x}", x).into()
+                }
+            })
+            .join("")
+    }
+
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(1 + U32_BYTES + self.value.len());
         bytes.push(ConstantBytes::Bytes as u8);

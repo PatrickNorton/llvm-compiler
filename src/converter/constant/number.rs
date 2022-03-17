@@ -46,6 +46,14 @@ impl BigintConstant {
         &self.value
     }
 
+    pub fn str_value(&self) -> String {
+        self.value.to_string()
+    }
+
+    pub fn repr_value(&self) -> String {
+        self.value.to_string()
+    }
+
     pub fn to_bytes(&self) -> Vec<u8> {
         let bi_bytes = Self::bigint_bytes(&self.value);
         let mut bytes = Vec::with_capacity(1 + U32_BYTES + bi_bytes.len());
@@ -86,6 +94,14 @@ impl IntConstant {
 
     pub fn get_value(&self) -> i32 {
         self.value
+    }
+
+    pub fn str_value(&self) -> String {
+        self.value.to_string()
+    }
+
+    pub fn repr_value(&self) -> String {
+        self.value.to_string()
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -281,5 +297,39 @@ mod tests {
             IntConstant::new(-1).to_bytes(),
             vec![INT_BYTE, 0xFF, 0xFF, 0xFF, 0xFF]
         );
+    }
+
+    #[test]
+    fn big_str() {
+        assert_eq!(BigintConstant::new(0.into()).str_value(), "0");
+        assert_eq!(BigintConstant::new(1000.into()).str_value(), "1000");
+        assert_eq!(
+            BigintConstant::new(BigInt::from(10).pow(10)).str_value(),
+            "10000000000"
+        );
+    }
+
+    #[test]
+    fn big_repr() {
+        assert_eq!(BigintConstant::new(0.into()).repr_value(), "0");
+        assert_eq!(BigintConstant::new(1000.into()).repr_value(), "1000");
+        assert_eq!(
+            BigintConstant::new(BigInt::from(10).pow(10)).repr_value(),
+            "10000000000"
+        );
+    }
+
+    #[test]
+    fn small_str() {
+        assert_eq!(IntConstant::new(0).str_value(), "0");
+        assert_eq!(IntConstant::new(1000).str_value(), "1000");
+        assert_eq!(IntConstant::new(1_000_000_000).str_value(), "1000000000");
+    }
+
+    #[test]
+    fn small_repr() {
+        assert_eq!(IntConstant::new(0).repr_value(), "0");
+        assert_eq!(IntConstant::new(1000).repr_value(), "1000");
+        assert_eq!(IntConstant::new(1_000_000_000).repr_value(), "1000000000");
     }
 }

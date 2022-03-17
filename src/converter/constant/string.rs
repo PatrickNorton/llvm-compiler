@@ -21,6 +21,14 @@ impl StringConstant {
         &self.value
     }
 
+    pub fn str_value(&self) -> String {
+        self.value.to_string()
+    }
+
+    pub fn repr_value(&self) -> String {
+        self.to_string()
+    }
+
     pub fn str_bytes(text: &str) -> Vec<u8> {
         let mut result = Vec::with_capacity(text.len() + 4);
         result.extend(&usize_to_bytes(text.len()));
@@ -122,6 +130,27 @@ mod tests {
         assert_eq!(
             StringConstant::new("abc\u{1000}".to_string()).to_bytes(),
             vec![STRING_BYTE, 0, 0, 0, 6, 0x61, 0x62, 0x63, 0xe1, 0x80, 0x80]
+        );
+    }
+
+    #[test]
+    fn str_str() {
+        let strings = &["", "a", "abcdefg", "abc\n\\\u{80}\u{e000}"];
+        for string in strings {
+            assert_eq!(StringConstant::new(string.to_string()).str_value(), *string);
+        }
+    }
+
+    #[test]
+    fn str_repr() {
+        assert_eq!(StringConstant::new(String::new()).repr_value(), r#""""#);
+        assert_eq!(
+            StringConstant::new("abcdefg".to_string()).repr_value(),
+            r#""abcdefg""#
+        );
+        assert_eq!(
+            StringConstant::new("abc\n\\\u{80}\u{e000}".to_string()).repr_value(),
+            r#""abc\n\\\x80\uE000""#
         );
     }
 }

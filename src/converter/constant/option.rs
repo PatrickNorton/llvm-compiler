@@ -52,6 +52,14 @@ impl OptionTypeConstant {
         }
     }
 
+    pub fn str_value(&self) -> String {
+        format!("{}?", self.value.ty.name())
+    }
+
+    pub fn repr_value(&self) -> String {
+        format!("{}?", self.value.ty.name())
+    }
+
     pub fn to_bytes(&self, constants: &ConstantSet) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(U16_BYTES + 1);
         bytes.push(ConstantBytes::OptionType as u8);
@@ -111,5 +119,23 @@ mod tests {
             OptionTypeConstant::new(object_builtin.into(), OBJECT.into()).to_bytes(&constants),
             vec![OPTION_TYPE_BYTE, 0, 0, 0, 0]
         )
+    }
+
+    #[test]
+    fn option_type_str() {
+        let object_builtin = BuiltinConstant::new(21);
+        assert_eq!(
+            OptionTypeConstant::new(object_builtin.into(), OBJECT.into()).str_value(),
+            "object?"
+        );
+    }
+
+    #[test]
+    fn option_type_repr() {
+        let object_builtin = BuiltinConstant::new(21);
+        assert_eq!(
+            OptionTypeConstant::new(object_builtin.into(), OBJECT.into()).repr_value(),
+            "object?"
+        );
     }
 }

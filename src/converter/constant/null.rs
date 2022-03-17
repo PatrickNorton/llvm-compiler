@@ -13,6 +13,14 @@ impl NullConstant {
     pub fn to_bytes(self) -> Vec<u8> {
         vec![ConstantBytes::Null as u8]
     }
+
+    pub fn str_value(&self) -> String {
+        "null".to_string()
+    }
+
+    pub fn repr_value(&self) -> String {
+        "null".to_string()
+    }
 }
 
 impl Display for NullConstant {
@@ -37,5 +45,15 @@ mod tests {
             NullConstant::new().to_bytes(),
             vec![ConstantBytes::Null as u8]
         )
+    }
+
+    #[test]
+    fn null_str() {
+        assert_eq!(NullConstant::new().str_value(), "null");
+    }
+
+    #[test]
+    fn null_repr() {
+        assert_eq!(NullConstant::new().repr_value(), "null");
     }
 }

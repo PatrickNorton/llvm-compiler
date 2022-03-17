@@ -18,6 +18,14 @@ impl BoolConstant {
         self.value
     }
 
+    pub fn str_value(&self) -> String {
+        self.value.to_string()
+    }
+
+    pub fn repr_value(&self) -> String {
+        self.value.to_string()
+    }
+
     pub fn to_bytes(&self) -> Vec<u8> {
         vec![ConstantBytes::Bool as u8, self.value.into()]
     }
@@ -61,6 +69,18 @@ mod tests {
             BoolConstant::new(true).to_bytes(),
             vec![ConstantBytes::Bool as u8, 1]
         );
+    }
+
+    #[test]
+    fn bool_str() {
+        assert_eq!(BoolConstant::new(false).str_value(), "false");
+        assert_eq!(BoolConstant::new(true).str_value(), "true");
+    }
+
+    #[test]
+    fn bool_repr() {
+        assert_eq!(BoolConstant::new(false).repr_value(), "false");
+        assert_eq!(BoolConstant::new(true).repr_value(), "true");
     }
 
     #[test]

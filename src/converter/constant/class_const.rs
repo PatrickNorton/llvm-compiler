@@ -30,6 +30,14 @@ impl ClassConstant {
         }
     }
 
+    pub fn str_value(&self) -> String {
+        self.value.name.clone()
+    }
+
+    pub fn repr_value(&self) -> String {
+        self.value.name.clone()
+    }
+
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(1 + U32_BYTES);
         bytes.push(ConstantBytes::Class as u8);
