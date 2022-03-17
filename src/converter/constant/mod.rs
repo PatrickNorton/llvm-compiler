@@ -8,6 +8,7 @@ mod format;
 mod function;
 mod import;
 mod module;
+mod null;
 mod number;
 mod option;
 mod range;
@@ -25,6 +26,7 @@ pub use self::format::FormatConstant;
 pub use self::function::FunctionConstant;
 pub use self::import::ImportConstant;
 pub use self::module::ModuleConstant;
+pub use self::null::NullConstant;
 pub use self::number::{BigintConstant, IntConstant, NumberConstant};
 pub use self::option::{OptionConstant, OptionTypeConstant};
 pub use self::range::{Range, RangeConstant};
@@ -56,7 +58,7 @@ pub enum LangConstant {
     Import(ImportConstant),
     Int(IntConstant),
     Module(ModuleConstant),
-    // TODO: NullConstant
+    Null(NullConstant),
     Option(OptionConstant),
     OptionType(OptionTypeConstant),
     Range(RangeConstant),
@@ -104,6 +106,7 @@ impl LangConstant {
             LangConstant::Import(_) => None,
             LangConstant::Int(i) => Some(i.value != 0),
             LangConstant::Module(_) => None,
+            LangConstant::Null(_) => Some(false),
             LangConstant::Option(_) => None,
             LangConstant::OptionType(_) => None,
             LangConstant::Range(_) => None,
@@ -143,6 +146,7 @@ impl LangConstant {
             LangConstant::Import(i) => i.to_bytes(),
             LangConstant::Int(i) => i.to_bytes(),
             LangConstant::Module(m) => m.to_bytes(constants),
+            LangConstant::Null(n) => n.to_bytes(),
             LangConstant::Option(o) => o.to_bytes(constants),
             LangConstant::OptionType(o) => o.to_bytes(constants),
             LangConstant::Range(r) => r.to_bytes(),
@@ -170,6 +174,7 @@ impl LangConstant {
             LangConstant::Import(i) => Display::fmt(i, f),
             LangConstant::Int(i) => Display::fmt(i, f),
             LangConstant::Module(m) => Display::fmt(m, f),
+            LangConstant::Null(n) => Display::fmt(n, f),
             LangConstant::Option(o) => o.fmt_name(builtins, f),
             LangConstant::OptionType(o) => Display::fmt(o, f),
             LangConstant::Range(r) => Display::fmt(r, f),
