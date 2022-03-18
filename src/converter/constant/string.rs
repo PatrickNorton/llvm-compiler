@@ -1,6 +1,8 @@
 use std::fmt::Display;
 use std::sync::Arc;
 
+use crate::converter::builtins::Builtins;
+use crate::converter::type_obj::TypeObject;
 use crate::util::{string_escape, usize_to_bytes, U32_BYTES};
 
 use super::{ConstantBytes, LangConstant};
@@ -27,6 +29,10 @@ impl StringConstant {
 
     pub fn repr_value(&self) -> String {
         self.to_string()
+    }
+
+    pub fn get_type<'a>(&self, builtins: &'a Builtins) -> &'a TypeObject {
+        builtins.str_type()
     }
 
     pub fn str_bytes(text: &str) -> Vec<u8> {

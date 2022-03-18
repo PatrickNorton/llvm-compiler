@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fmt::Display;
 use std::sync::Arc;
 
@@ -32,6 +33,10 @@ impl OptionConstant {
         }
     }
 
+    pub fn get_type(&self, builtins: &Builtins) -> TypeObject {
+        TypeObject::optional(Cow::into_owned(self.value.get_type(builtins)))
+    }
+
     pub fn fmt_name(&self, builtins: &Builtins, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "Option[{}]", self.value.display(builtins))
     }
@@ -58,6 +63,10 @@ impl OptionTypeConstant {
 
     pub fn repr_value(&self) -> String {
         format!("{}?", self.value.ty.name())
+    }
+
+    pub fn get_type(&self) -> TypeObject {
+        TypeObject::optional(self.value.ty.clone()).get_type()
     }
 
     pub fn to_bytes(&self, constants: &ConstantSet) -> Vec<u8> {

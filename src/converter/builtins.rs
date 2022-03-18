@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use itertools::Itertools;
+use num::ToPrimitive;
 use once_cell::sync::{Lazy, OnceCell};
 
 use crate::parser::line_info::LineInfo;
@@ -359,11 +360,16 @@ impl InnerBuiltins {
         }
         None
     }
+
+    pub fn constant_no(&self, index: u16) -> Option<&LangObject> {
+        self.true_builtins.get(index.to_usize()?)
+    }
 }
 
 impl ParsedBuiltins {
     pub fn new() -> Self {
         Self {
+            // FIXME: Populate these maps
             true_builtins: Vec::new(),
             all_builtins: HashMap::new(),
             hidden_builtins: HashMap::new(),
@@ -463,7 +469,7 @@ impl Default for ParsedBuiltins {
 
 #[inline]
 fn get_type_obj(name: &str, values: &HashMap<String, LangObject>) -> TypeObject {
-    values[name].get_type().clone()
+    values[name].as_type().clone()
 }
 
 #[inline]

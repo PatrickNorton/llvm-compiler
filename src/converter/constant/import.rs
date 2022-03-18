@@ -1,6 +1,7 @@
 use std::fmt::Display;
 use std::sync::Arc;
 
+use crate::converter::type_obj::TypeObject;
 use crate::util::U32_BYTES;
 
 use super::{ConstantBytes, LangConstant};
@@ -17,6 +18,10 @@ impl ImportConstant {
             index,
             name: name.into(),
         }
+    }
+
+    pub fn get_type(&self) -> &TypeObject {
+        todo!("Cannot figure out type of this yet")
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {

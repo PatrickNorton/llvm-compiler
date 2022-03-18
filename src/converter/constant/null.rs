@@ -2,7 +2,9 @@ use std::fmt::Display;
 
 use derive_new::new;
 
+use crate::converter::builtins::Builtins;
 use crate::converter::constant::ConstantBytes;
+use crate::converter::type_obj::TypeObject;
 
 use super::LangConstant;
 
@@ -20,6 +22,10 @@ impl NullConstant {
 
     pub fn repr_value(&self) -> String {
         "null".to_string()
+    }
+
+    pub fn get_type<'a>(&self, builtins: &'a Builtins) -> &'a TypeObject {
+        builtins.null_type()
     }
 }
 

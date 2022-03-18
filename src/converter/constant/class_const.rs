@@ -3,6 +3,7 @@ use std::hash::Hash;
 use std::ptr;
 use std::sync::Arc;
 
+use crate::converter::type_obj::{TypeObject, TypeTypeObject};
 use crate::util::U32_BYTES;
 
 use super::{ConstantBytes, LangConstant, UserType};
@@ -36,6 +37,10 @@ impl ClassConstant {
 
     pub fn repr_value(&self) -> String {
         self.value.name.clone()
+    }
+
+    pub fn get_type(&self) -> TypeObject {
+        TypeTypeObject::new(self.value.type_val.clone().into()).into()
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {

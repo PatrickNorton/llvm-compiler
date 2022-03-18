@@ -5,6 +5,7 @@ use std::ptr;
 use std::sync::Arc;
 
 use crate::converter::file_writer::ConstantSet;
+use crate::converter::type_obj::TypeObject;
 use crate::util::usize_to_bytes;
 
 use super::{ConstantBytes, LangConstant, StringConstant};
@@ -25,6 +26,10 @@ impl ModuleConstant {
         Self {
             value: Arc::new(ModuleInner { name, values }),
         }
+    }
+
+    pub fn get_type(&self) -> &TypeObject {
+        todo!("Get type for ModuleConstant")
     }
 
     pub fn to_bytes(&self, constants: &ConstantSet) -> Vec<u8> {

@@ -50,6 +50,10 @@ impl TempConstant {
         self.value.value.get().and_then(|x| x.str_value())
     }
 
+    pub fn get_type(&self) -> &TypeObject {
+        &self.value.ty
+    }
+
     pub fn fmt_name(
         &self,
         builtins: &Builtins,

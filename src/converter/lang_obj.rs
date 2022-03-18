@@ -1,7 +1,9 @@
+use std::borrow::Cow;
 use std::hash::{Hash, Hasher};
 use std::ptr;
 use std::sync::Arc;
 
+use super::builtins::Builtins;
 use super::constant::LangConstant;
 use super::type_obj::TypeObject;
 
@@ -32,11 +34,18 @@ impl LangInstance {
 }
 
 impl LangObject {
-    pub fn get_type(&self) -> &TypeObject {
+    pub fn get_type<'a>(&'a self, builtins: &'a Builtins) -> Cow<'a, TypeObject> {
         match self {
-            LangObject::Constant(c) => c.get_type(),
-            LangObject::Instance(i) => &i.value.cls,
-            LangObject::Type(t) => t,
+            LangObject::Constant(c) => c.get_type(builtins),
+            LangObject::Instance(i) => Cow::Borrowed(&i.value.cls),
+            LangObject::Type(t) => Cow::Borrowed(t),
+        }
+    }
+
+    pub fn as_type(&self) -> &TypeObject {
+        match self {
+            LangObject::Type(x) => x,
+            _ => panic!("Expected a type here"),
         }
     }
 }

@@ -1,6 +1,8 @@
 use std::fmt::Display;
 
+use crate::converter::builtins::Builtins;
 use crate::converter::constant::ConstantBytes;
+use crate::converter::type_obj::TypeObject;
 
 use super::LangConstant;
 
@@ -24,6 +26,10 @@ impl BoolConstant {
 
     pub fn repr_value(&self) -> String {
         self.value.to_string()
+    }
+
+    pub fn get_type<'a>(&self, builtins: &'a Builtins) -> &'a TypeObject {
+        builtins.bool_type()
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {

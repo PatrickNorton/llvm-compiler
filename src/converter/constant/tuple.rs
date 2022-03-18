@@ -1,9 +1,11 @@
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use itertools::Itertools;
 
 use crate::converter::builtins::Builtins;
 use crate::converter::file_writer::ConstantSet;
+use crate::converter::type_obj::{TupleType, TypeObject};
 use crate::util::{usize_to_bytes, usize_to_short_bytes, U16_BYTES, U32_BYTES};
 
 use super::{ConstantBytes, LangConstant};
@@ -22,6 +24,16 @@ impl TupleConstant {
 
     pub fn get_values(&self) -> &[LangConstant] {
         &self.value
+    }
+
+    pub fn get_type(&self, builtins: &Builtins) -> TypeObject {
+        TupleType::new(
+            self.value
+                .iter()
+                .map(|x| Cow::into_owned(x.get_type(builtins)))
+                .collect(),
+        )
+        .into()
     }
 
     pub fn fmt_name(

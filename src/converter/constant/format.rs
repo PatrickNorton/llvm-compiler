@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
 use crate::converter::constant::ConstantBytes;
+use crate::converter::type_obj::TypeObject;
 use crate::parser::formatted_string::FormatInfo;
 use crate::util::usize_to_bytes;
 
@@ -14,6 +15,10 @@ pub struct FormatConstant {
 impl FormatConstant {
     pub fn new(value: FormatInfo) -> Self {
         Self { value }
+    }
+
+    pub fn get_type(&self) -> &TypeObject {
+        panic!("Cannot get type of FormatConstant")
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {

@@ -1,6 +1,8 @@
 use std::fmt::Display;
 use std::sync::Arc;
 
+use crate::converter::builtins::Builtins;
+use crate::converter::type_obj::TypeObject;
 use crate::util::decimal::BigDecimal;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -17,6 +19,10 @@ impl DecimalConstant {
 
     pub fn get_value(&self) -> &BigDecimal {
         &self.value
+    }
+
+    pub fn get_type<'a>(&self, builtins: &'a Builtins) -> &'a TypeObject {
+        builtins.dec_type()
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {

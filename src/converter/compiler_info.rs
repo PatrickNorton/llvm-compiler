@@ -290,13 +290,14 @@ impl<'a> CompilerInfo<'a> {
 
     pub fn get_type(&mut self, variable: &str) -> Option<Cow<'_, TypeObject>> {
         let info = self.var_holder.var_info(variable);
-        // FIXME? Remove partially-unnecessary clone
+        // FIXME? Remove partially-unnecessary into_owned
         info.map(VariableInfo::get_type)
             .map(Cow::Borrowed)
             .or_else(|| {
-                self.builtins()
+                let builtins = self.builtins();
+                builtins
                     .constant_of(variable)
-                    .map(|x| Cow::Owned(x.get_type().clone()))
+                    .map(|x| Cow::Owned(Cow::into_owned(x.get_type(builtins))))
             })
     }
 

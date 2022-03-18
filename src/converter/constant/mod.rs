@@ -34,6 +34,7 @@ pub use self::string::StringConstant;
 pub use self::temp::TempConstant;
 pub use self::tuple::TupleConstant;
 
+use std::borrow::Cow;
 use std::fmt::Display;
 use std::hash::Hash;
 
@@ -168,8 +169,28 @@ impl LangConstant {
         matches!(self, LangConstant::String(_))
     }
 
-    pub fn get_type(&self) -> &TypeObject {
-        todo!()
+    pub fn get_type<'a>(&'a self, builtins: &'a Builtins) -> Cow<'a, TypeObject> {
+        match self {
+            LangConstant::Bigint(b) => Cow::Borrowed(b.get_type(builtins)),
+            LangConstant::Bool(b) => Cow::Borrowed(b.get_type(builtins)),
+            LangConstant::Builtin(b) => b.get_type(builtins),
+            LangConstant::Bytes(b) => Cow::Borrowed(b.get_type(builtins)),
+            LangConstant::Char(c) => Cow::Borrowed(c.get_type(builtins)),
+            LangConstant::Class(c) => Cow::Owned(c.get_type()),
+            LangConstant::Decimal(d) => Cow::Borrowed(d.get_type(builtins)),
+            LangConstant::Fmt(f) => Cow::Borrowed(f.get_type()),
+            LangConstant::Func(f) => Cow::Borrowed(f.get_type(builtins)),
+            LangConstant::Import(i) => Cow::Borrowed(i.get_type()),
+            LangConstant::Int(i) => Cow::Borrowed(i.get_type(builtins)),
+            LangConstant::Module(m) => Cow::Borrowed(m.get_type()),
+            LangConstant::Null(n) => Cow::Borrowed(n.get_type(builtins)),
+            LangConstant::Option(o) => Cow::Owned(o.get_type(builtins)),
+            LangConstant::OptionType(o) => Cow::Owned(o.get_type()),
+            LangConstant::Range(r) => Cow::Borrowed(r.get_type(builtins)),
+            LangConstant::String(s) => Cow::Borrowed(s.get_type(builtins)),
+            LangConstant::Temp(t) => Cow::Borrowed(t.get_type()),
+            LangConstant::Tuple(t) => Cow::Owned(t.get_type(builtins)),
+        }
     }
 
     pub fn to_bytes(&self, constants: &ConstantSet) -> Vec<u8> {

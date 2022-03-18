@@ -3,7 +3,9 @@ use std::sync::Arc;
 
 use num::{BigInt, One, ToPrimitive};
 
+use crate::converter::builtins::Builtins;
 use crate::converter::constant::BigintConstant;
+use crate::converter::type_obj::TypeObject;
 
 use super::{ConstantBytes, LangConstant};
 
@@ -44,6 +46,10 @@ impl RangeConstant {
 
     pub fn repr_value(&self) -> String {
         self.value.to_string()
+    }
+
+    pub fn get_type<'a>(&self, builtins: &'a Builtins) -> &'a TypeObject {
+        builtins.range_type()
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {

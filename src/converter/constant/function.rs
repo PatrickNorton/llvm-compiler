@@ -1,6 +1,8 @@
 use std::fmt::Display;
 use std::sync::Arc;
 
+use crate::converter::builtins::Builtins;
+use crate::converter::type_obj::TypeObject;
 use crate::util::U32_BYTES;
 
 use super::{ConstantBytes, LangConstant};
@@ -18,6 +20,10 @@ impl FunctionConstant {
 
     pub fn get_name(&self) -> &str {
         &self.name
+    }
+
+    pub fn get_type<'a>(&self, builtins: &'a Builtins) -> &'a TypeObject {
+        builtins.callable()
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {

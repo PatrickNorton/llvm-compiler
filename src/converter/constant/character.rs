@@ -1,6 +1,8 @@
 use std::borrow::Cow;
 use std::fmt::Display;
 
+use crate::converter::builtins::Builtins;
+use crate::converter::type_obj::TypeObject;
 use crate::util::{string_escape, U32_BYTES};
 
 use super::{ConstantBytes, LangConstant};
@@ -25,6 +27,10 @@ impl CharConstant {
 
     pub fn repr_value(&self) -> String {
         Self::name(self.value).into()
+    }
+
+    pub fn get_type<'a>(&self, builtins: &'a Builtins) -> &'a TypeObject {
+        builtins.char_type()
     }
 
     pub fn name(c: char) -> Cow<'static, str> {

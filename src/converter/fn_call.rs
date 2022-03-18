@@ -481,7 +481,8 @@ impl<'a> FunctionCallConverter<'a> {
             if params.len() != 1 {
                 // No operator needs more than self
                 let args = get_args(info, params)?;
-                let builtin = info.builtins().get_name(str_name).unwrap().get_type();
+                let builtins = info.builtins();
+                let builtin = builtins.get_name(str_name).unwrap().get_type(builtins);
                 let fn_info = builtin.operator_info(OpSpTypeNode::Call, info)?.unwrap();
                 return Err(
                     arg_error(self.node, &builtin.name(), &args, pos_args(&fn_info)).into(),

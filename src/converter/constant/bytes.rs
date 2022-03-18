@@ -3,6 +3,8 @@ use std::sync::Arc;
 
 use itertools::Itertools;
 
+use crate::converter::builtins::Builtins;
+use crate::converter::type_obj::TypeObject;
 use crate::util::{string_escape, usize_to_bytes, U32_BYTES};
 
 use super::{ConstantBytes, LangConstant};
@@ -34,6 +36,10 @@ impl BytesConstant {
                 }
             })
             .join("")
+    }
+
+    pub fn get_type<'a>(&self, builtins: &'a Builtins) -> &'a TypeObject {
+        builtins.bytes_type()
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {

@@ -1,6 +1,8 @@
+use std::borrow::Cow;
 use std::fmt::Display;
 
 use crate::converter::builtins::Builtins;
+use crate::converter::type_obj::TypeObject;
 use crate::util::U32_BYTES;
 
 use super::{ConstantBytes, LangConstant};
@@ -24,6 +26,10 @@ impl BuiltinConstant {
             .builtin_name(self.value)
             .expect("Must be a valid builtin")
             .fmt(f)
+    }
+
+    pub fn get_type<'a>(&self, builtins: &'a Builtins) -> Cow<'a, TypeObject> {
+        builtins.constant_no(self.value).unwrap().get_type(builtins)
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
