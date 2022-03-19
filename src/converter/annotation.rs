@@ -1,5 +1,8 @@
 use std::collections::HashSet;
 
+use derive_new::new;
+use num::ToPrimitive;
+
 use crate::parser::annotation::AnnotatableRef;
 use crate::parser::argument::ArgumentNode;
 use crate::parser::definition::BaseClassRef;
@@ -56,9 +59,7 @@ macro_rules! impl_annotatable {
     };
 }
 
-use derive_new::new;
 pub(super) use impl_annotatable;
-use num::ToPrimitive;
 
 // TODO? Make more of these statically-dispatched
 
@@ -450,96 +451,30 @@ fn change_warnings(
                 .into())
             }
         };
-        match arg_name {
-            "all" => {
-                if annotation.get_parameters().len() > 1 {
-                    return Err(CompilerException::of(
-                        format!(
-                            "'all' used in conjunction with other parameters in '{}' statement",
-                            name
-                        ),
-                        annotation,
-                    )
-                    .into());
-                }
-                warn_all(name, warning_holder, annotation)?;
-                return Ok(());
-            }
-            "deprecated" => add_warning(
-                WarningType::Deprecated,
-                &mut allowed_types,
-                annotation,
-                warning_holder,
-            )?,
-            "unused" => add_warning(
-                WarningType::Unused,
-                &mut allowed_types,
-                annotation,
-                warning_holder,
-            )?,
-            "trivial" => add_warning(
-                WarningType::TrivialValue,
-                &mut allowed_types,
-                annotation,
-                warning_holder,
-            )?,
-            "unreachable" => add_warning(
-                WarningType::Unreachable,
-                &mut allowed_types,
-                annotation,
-                warning_holder,
-            )?,
-            "infinite" => add_warning(
-                WarningType::InfiniteLoop,
-                &mut allowed_types,
-                annotation,
-                warning_holder,
-            )?,
-            "zero" => add_warning(
-                WarningType::InfiniteLoop,
-                &mut allowed_types,
-                annotation,
-                warning_holder,
-            )?,
-            name => {
+        if arg_name == "all" {
+            if annotation.get_parameters().len() > 1 {
                 return Err(CompilerException::of(
-                    format!("Unknown warning type {}", name),
+                    format!(
+                        "'all' used in conjunction with other parameters in '{}' statement",
+                        name
+                    ),
                     annotation,
                 )
-                .into())
+                .into());
             }
-        }
-    }
-    match name {
-        "allow" => {
-            for &allowed in &allowed_types {
-                if warning_holder.is_forbidden(allowed) {
-                    return Err(CompilerException::of(
-                        format!(
-                            "Cannot allow forbidden warning {}",
-                            allowed.annotation_name().unwrap()
-                        ),
-                        annotation,
-                    )
-                    .into());
-                }
-            }
-            warning_holder.allow(allowed_types)
-        }
-        "deny" => warning_holder.deny(allowed_types),
-        "forbid" => warning_holder.forbid(allowed_types),
-        _ => {
-            return Err(CompilerInternalError::of(
-                format!(
-                    "Expected 'allow', 'deny', or 'forbid' for name, got {}",
-                    name
-                ),
+            warn_all(name, warning_holder, annotation)?;
+            return Ok(());
+        } else if let Result::Ok(warning) = arg_name.parse() {
+            add_warning(warning, &mut allowed_types, annotation, warning_holder)?
+        } else {
+            return Err(CompilerException::of(
+                format!("Unknown warning type {}", arg_name),
                 annotation,
             )
-            .into())
+            .into());
         }
     }
-    Ok(())
+    warn_some(name, allowed_types, warning_holder, annotation)
 }
 
 fn warn_all(
@@ -565,6 +500,44 @@ fn warn_all(
         }
         "deny" => warning_holder.deny_all(),
         "forbid" => warning_holder.forbid_all(),
+        _ => {
+            return Err(CompilerInternalError::of(
+                format!(
+                    "Expected 'allow', 'deny', or 'forbid' for name, got {}",
+                    name
+                ),
+                annotation,
+            )
+            .into())
+        }
+    }
+    Ok(())
+}
+
+fn warn_some(
+    name: &str,
+    allowed_types: HashSet<WarningType>,
+    warning_holder: &mut WarningHolder,
+    annotation: impl Lined,
+) -> CompileResult<()> {
+    match name {
+        "allow" => {
+            for &allowed in &allowed_types {
+                if warning_holder.is_forbidden(allowed) {
+                    return Err(CompilerException::of(
+                        format!(
+                            "Cannot allow forbidden warning {}",
+                            allowed.annotation_name().unwrap()
+                        ),
+                        annotation,
+                    )
+                    .into());
+                }
+            }
+            warning_holder.allow(allowed_types)
+        }
+        "deny" => warning_holder.deny(allowed_types),
+        "forbid" => warning_holder.forbid(allowed_types),
         _ => {
             return Err(CompilerInternalError::of(
                 format!(

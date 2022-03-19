@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::fmt::Display;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::parser::line_info::Lined;
@@ -187,6 +188,22 @@ impl WarningType {
             WarningType::InfiniteLoop => Some("infinite"),
             WarningType::ZeroDivision => Some("zero"),
             WarningType::Todo => Some("todo"),
+        }
+    }
+}
+
+impl FromStr for WarningType {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "deprecated" => Ok(WarningType::Deprecated),
+            "unused" => Ok(WarningType::Unused),
+            "trivial" => Ok(WarningType::TrivialValue),
+            "unreachable" => Ok(WarningType::Unreachable),
+            "infinite" => Ok(WarningType::InfiniteLoop),
+            "zero" => Ok(WarningType::ZeroDivision),
+            _ => Err(()),
         }
     }
 }
