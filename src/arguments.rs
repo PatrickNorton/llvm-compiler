@@ -2,11 +2,13 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt::Display;
+use std::num::ParseIntError;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use crate::util::version::CURRENT_VERSION;
 
+// TODO? Rewrite using clap
 #[derive(Debug)]
 pub struct CLArgs {
     target: PathBuf,
@@ -34,12 +36,16 @@ pub enum Optimization {
 
 #[derive(Debug, Clone)]
 pub enum CLArgError {
+    NotEnoughArgs,
     MultipleDebug,
     MultipleBytecode,
     MultipleStdlib,
     UnknownOptimization(String),
     OptimizationRedef(Optimization),
     OptLevelRedef,
+    MissingValue,
+    InvalidOptLevel(ParseIntError),
+    RedefinedCfg(String),
     Illegal(String),
 }
 
@@ -105,9 +111,10 @@ impl CLArgs {
         &self.stdlib_path
     }
 
-    pub fn parse(mut args: impl Iterator<Item = String>) -> Result<CLArgs, CLArgError> {
-        let _this = args.next().unwrap();
-        let file = PathBuf::from(args.next().unwrap());
+    pub fn parse(args: impl IntoIterator<Item = String>) -> Result<CLArgs, CLArgError> {
+        let mut args = args.into_iter();
+        let _this = args.next().ok_or(CLArgError::NotEnoughArgs)?;
+        let file = PathBuf::from(args.next().ok_or(CLArgError::NotEnoughArgs)?);
         let mut test = false;
         let mut debug = None;
         let mut opt_level = None;
@@ -150,8 +157,12 @@ impl CLArgs {
                     opt_level = Some(3);
                 }
                 "--cfg" => {
-                    let cfg_val = args.next().unwrap();
-                    cfg_options.insert(cfg_val);
+                    let cfg_val = args.next().ok_or(CLArgError::MissingValue)?;
+                    if cfg_options.contains(&cfg_val) {
+                        return Err(CLArgError::RedefinedCfg(cfg_val));
+                    } else {
+                        cfg_options.insert(cfg_val);
+                    }
                 }
                 "-V" | "--version" => {
                     println!("Version: {}", CURRENT_VERSION)
@@ -163,14 +174,16 @@ impl CLArgs {
                     if bytecode_path.is_some() {
                         return Err(CLArgError::MultipleBytecode);
                     } else {
-                        bytecode_path = Some(PathBuf::from(args.next().unwrap()))
+                        bytecode_path =
+                            Some(PathBuf::from(args.next().ok_or(CLArgError::MissingValue)?))
                     }
                 }
-                "-stdlib" => {
+                "--stdlib" => {
                     if stdlib_path.is_some() {
                         return Err(CLArgError::MultipleStdlib);
                     } else {
-                        stdlib_path = Some(PathBuf::from(args.next().unwrap()));
+                        stdlib_path =
+                            Some(PathBuf::from(args.next().ok_or(CLArgError::MissingValue)?));
                     }
                 }
                 _ => {
@@ -179,7 +192,7 @@ impl CLArgs {
                     } else if let Option::Some(rest) = arg.strip_prefix("-F") {
                         update_optimizations(rest, &mut optimizations, false)?;
                     } else if let Option::Some(rest) = arg.strip_prefix("-O") {
-                        let level = rest.parse().unwrap();
+                        let level = rest.parse().map_err(CLArgError::InvalidOptLevel)?;
                         check_opt_level(&opt_level)?;
                         if level > 3 {
                             println!("Warning: -O{} is equivalent to -O3", level);
@@ -270,6 +283,7 @@ impl Error for CLArgError {}
 impl Display for CLArgError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            CLArgError::NotEnoughArgs => f.write_str("Not enough arguments passed"),
             CLArgError::MultipleDebug => f.write_str("Debug defined multiple times"),
             CLArgError::MultipleBytecode => f.write_str("Redefinition of bytecode path"),
             CLArgError::MultipleStdlib => f.write_str("Redefinition of stdlib path"),
@@ -278,7 +292,186 @@ impl Display for CLArgError {
                 write!(f, "Redefinition of optimization option {}", o.name())
             }
             CLArgError::OptLevelRedef => f.write_str("Optimization level defined multiple times"),
+            CLArgError::MissingValue => f.write_str("Argument expected value but didn't get one"),
+            CLArgError::InvalidOptLevel(e) => write!(f, "Invalid optimization level: {}", e),
+            CLArgError::RedefinedCfg(c) => write!(f, "Redefined 'cfg' option {}", c),
             CLArgError::Illegal(arg) => write!(f, "Illegal argument {}", arg),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+    use std::iter::{empty, once};
+    use std::path::Path;
+
+    use itertools::Itertools;
+
+    use crate::arguments::CLArgError;
+    use crate::macros::hash_set;
+
+    use super::CLArgs;
+
+    #[test]
+    fn simple_args() {
+        let args = [String::new(), "test".to_string()];
+        let result = CLArgs::parse(args).expect("Argument parsing failed");
+        assert_eq!(result.target(), AsRef::<Path>::as_ref("test"));
+        assert!(!result.is_debug());
+        assert!(!result.is_test());
+        assert_eq!(result.cfg_options(), &HashSet::new());
+        assert!(!result.should_print_bytecode());
+        assert_eq!(result.get_bytecode_path(), &None);
+        assert_eq!(result.stdlib_path(), &None);
+    }
+
+    #[test]
+    fn no_args() {
+        // TODO: feature(assert_matches) (#82775)
+        assert!(matches!(
+            CLArgs::parse(empty()),
+            Err(CLArgError::NotEnoughArgs)
+        ));
+        assert!(matches!(
+            CLArgs::parse(once("Foo".to_string())),
+            Err(CLArgError::NotEnoughArgs)
+        ));
+    }
+
+    #[test]
+    fn debug_arg() {
+        let ndebug = CLArgs::parse([String::new(), String::new(), "--ndebug".to_string()]).unwrap();
+        assert!(!ndebug.is_debug());
+        let debug = CLArgs::parse([String::new(), String::new(), "--debug".to_string()]).unwrap();
+        assert!(debug.is_debug());
+        assert!(matches!(
+            CLArgs::parse([
+                String::new(),
+                String::new(),
+                "--debug".to_string(),
+                "--ndebug".to_string()
+            ]),
+            Err(CLArgError::MultipleDebug)
+        ));
+    }
+
+    #[test]
+    fn multiple_opt() {
+        for args in ["-O0", "-O1", "-O2", "-O3"].into_iter().permutations(2) {
+            let args = [
+                String::new(),
+                String::new(),
+                args[0].to_string(),
+                args[1].to_string(),
+            ];
+            assert!(matches!(
+                CLArgs::parse(args),
+                Err(CLArgError::OptLevelRedef)
+            ))
+        }
+    }
+
+    #[test]
+    fn invalid_opt() {
+        let args = [String::new(), String::new(), "-Otest".to_string()];
+        assert!(matches!(
+            CLArgs::parse(args),
+            Err(CLArgError::InvalidOptLevel(_))
+        ));
+        let args = [String::new(), String::new(), "-O0x10".to_string()];
+        assert!(matches!(
+            CLArgs::parse(args),
+            Err(CLArgError::InvalidOptLevel(_))
+        ));
+        let args = [String::new(), String::new(), "-O2_2".to_string()];
+        assert!(matches!(
+            CLArgs::parse(args),
+            Err(CLArgError::InvalidOptLevel(_))
+        ));
+    }
+
+    #[test]
+    fn print_bytecode() {
+        let args = [String::new(), String::new(), "--print-bytecode".to_string()];
+        assert!(CLArgs::parse(args).unwrap().should_print_bytecode());
+    }
+
+    #[test]
+    fn cfg_options() {
+        let args = [
+            String::new(),
+            String::new(),
+            "--cfg".to_string(),
+            "test".to_string(),
+        ];
+        assert_eq!(
+            CLArgs::parse(args).unwrap().cfg_options(),
+            &hash_set!("test".into())
+        );
+        let double_distinct = [
+            String::new(),
+            String::new(),
+            "--cfg".to_string(),
+            "test".to_string(),
+            "--cfg".to_string(),
+            "test-2".to_string(),
+        ];
+        assert_eq!(
+            CLArgs::parse(double_distinct).unwrap().cfg_options(),
+            &hash_set!("test".into(), "test-2".into())
+        );
+    }
+
+    #[test]
+    fn cfg_failures() {
+        let double_cfg = [
+            String::new(),
+            String::new(),
+            "--cfg".to_string(),
+            "test".to_string(),
+            "--cfg".to_string(),
+            "test".to_string(),
+        ];
+        assert!(matches!(
+            CLArgs::parse(double_cfg),
+            Err(CLArgError::RedefinedCfg(_))
+        ));
+        let missing_path = [String::new(), String::new(), "--cfg".to_string()];
+        assert!(matches!(
+            CLArgs::parse(missing_path),
+            Err(CLArgError::MissingValue)
+        ));
+    }
+
+    #[test]
+    fn bytecode_path() {
+        let args = [
+            String::new(),
+            String::new(),
+            "-S".to_string(),
+            "test".to_string(),
+        ];
+        assert_eq!(
+            CLArgs::parse(args).unwrap().get_bytecode_path(),
+            &Some("test".into())
+        );
+        let double_path = [
+            String::new(),
+            String::new(),
+            "-S".to_string(),
+            "test".to_string(),
+            "-S".to_string(),
+            "test/2".to_string(),
+        ];
+        assert!(matches!(
+            CLArgs::parse(double_path),
+            Err(CLArgError::MultipleBytecode)
+        ));
+        let missing_path = [String::new(), String::new(), "-S".to_string()];
+        assert!(matches!(
+            CLArgs::parse(missing_path),
+            Err(CLArgError::MissingValue)
+        ));
     }
 }
