@@ -69,3 +69,30 @@ impl From<FormatInfo> for LangConstant {
         Self::Fmt(x.into())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::converter::constant::{ConstantBytes, FormatConstant};
+    use crate::parser::formatted_string::FormatInfo;
+
+    const FMT_BYTE: u8 = ConstantBytes::Format as u8;
+
+    #[test]
+    fn empty_fmt_bytes() {
+        #[rustfmt::skip]
+        let fmt_bytes = &[
+            FMT_BYTE,
+            0, 0, 0, 0,
+            0x3c, // '<'
+            0x2d, // '-'
+            0,
+            0, 0, 0, 0,
+            0, 0, 0, 0,
+            0x73, // 'c'
+        ];
+        assert_eq!(
+            FormatConstant::new(FormatInfo::empty()).to_bytes(),
+            fmt_bytes
+        );
+    }
+}
