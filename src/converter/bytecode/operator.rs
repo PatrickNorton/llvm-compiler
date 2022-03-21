@@ -1,0 +1,40 @@
+use indexmap::IndexSet;
+
+use crate::converter::constant::LangConstant;
+use crate::converter::function::Function;
+use crate::parser::operator_sp::OpSpTypeNode;
+
+use super::BytecodeType;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct OperatorBytecode {
+    value: OpSpTypeNode,
+}
+
+impl OperatorBytecode {
+    pub const fn new(value: OpSpTypeNode) -> Self {
+        Self { value }
+    }
+}
+
+impl BytecodeType for OperatorBytecode {
+    const SIZE: usize = 2;
+
+    fn write_str(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+        _functions: &[&Function],
+    ) -> std::fmt::Result {
+        write!(f, "{} ({})", self.value as u16, self.value)
+    }
+
+    fn assemble(&self, buffer: &mut Vec<u8>, _constants: &IndexSet<LangConstant>) {
+        buffer.extend(&(self.value as u16).to_be_bytes())
+    }
+}
+
+impl From<OpSpTypeNode> for OperatorBytecode {
+    fn from(x: OpSpTypeNode) -> Self {
+        OperatorBytecode::new(x)
+    }
+}

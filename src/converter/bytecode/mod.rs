@@ -1,17 +1,32 @@
+mod argc;
+mod constant;
+mod fn_no;
+mod location;
+mod operator;
+mod stack_pos;
+mod syscall;
+mod table_no;
+mod variable;
+mod variant;
+
 use std::fmt::Display;
-use std::hash::Hash;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
 
 use derive_new::new;
 use indexmap::IndexSet;
 
-use crate::parser::operator_sp::OpSpTypeNode;
-use crate::util::usize_to_bytes;
+pub use self::argc::ArgcBytecode;
+pub use self::constant::ConstantBytecode;
+pub use self::fn_no::FunctionNoBytecode;
+pub use self::location::{Label, LocationBytecode};
+pub use self::operator::OperatorBytecode;
+pub use self::stack_pos::StackPosBytecode;
+pub use self::syscall::SyscallBytecode;
+pub use self::table_no::TableNoBytecode;
+pub use self::variable::VariableBytecode;
+pub use self::variant::VariantBytecode;
 
 use super::constant::LangConstant;
 use super::function::Function;
-use super::syscalls::syscall_name;
 
 #[derive(Debug, Clone)]
 pub enum Bytecode {
@@ -131,61 +146,6 @@ pub enum Bytecode {
     SwapDyn(),
 }
 
-#[derive(Debug, Clone)]
-pub struct Label {
-    position: Arc<AtomicUsize>,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ArgcBytecode {
-    value: u16,
-}
-
-#[derive(Debug, Clone)]
-pub struct ConstantBytecode {
-    value: LangConstant,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct FunctionNoBytecode {
-    value: u16,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct LocationBytecode {
-    value: Label,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub struct OperatorBytecode {
-    value: OpSpTypeNode,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct StackPosBytecode {
-    position: u16,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct SyscallBytecode {
-    syscall: u16,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct TableNoBytecode {
-    table: u16,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct VariableBytecode {
-    variable: u16,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct VariantBytecode {
-    variant: u16,
-}
-
 trait BytecodeType {
     const SIZE: usize;
 
@@ -218,331 +178,6 @@ impl Bytecode {
 
     pub fn get_constant(&self) -> Option<LangConstant> {
         todo!()
-    }
-}
-
-impl Label {
-    pub fn new() -> Self {
-        Self {
-            position: Arc::new(AtomicUsize::new(usize::MAX)),
-        }
-    }
-
-    pub fn get_value(&self) -> usize {
-        self.position.load(Ordering::Relaxed)
-    }
-
-    pub fn set_value(&self, pos: usize) {
-        self.position.store(pos, Ordering::Relaxed)
-    }
-}
-
-impl Default for Label {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ArgcBytecode {
-    pub const fn new(value: u16) -> Self {
-        Self { value }
-    }
-}
-
-impl BytecodeType for ArgcBytecode {
-    const SIZE: usize = 2;
-
-    fn write_str(
-        &self,
-        f: &mut std::fmt::Formatter<'_>,
-        _functions: &[&Function],
-    ) -> std::fmt::Result {
-        self.value.fmt(f)
-    }
-
-    fn assemble(&self, buffer: &mut Vec<u8>, _constants: &IndexSet<LangConstant>) {
-        buffer.extend(&self.value.to_be_bytes())
-    }
-}
-
-impl ConstantBytecode {
-    pub const fn new(value: LangConstant) -> Self {
-        Self { value }
-    }
-}
-
-impl BytecodeType for ConstantBytecode {
-    const SIZE: usize = 2;
-
-    fn write_str(
-        &self,
-        _f: &mut std::fmt::Formatter<'_>,
-        _functions: &[&Function],
-    ) -> std::fmt::Result {
-        todo!("Needs set of constants")
-    }
-
-    fn assemble(&self, buffer: &mut Vec<u8>, constants: &IndexSet<LangConstant>) {
-        let index = constants.get_index_of(&self.value).unwrap();
-        buffer.extend(&usize_to_bytes(index))
-    }
-}
-
-impl FunctionNoBytecode {
-    pub const fn new(value: u16) -> Self {
-        Self { value }
-    }
-}
-
-impl BytecodeType for FunctionNoBytecode {
-    const SIZE: usize = 2;
-
-    fn write_str(
-        &self,
-        f: &mut std::fmt::Formatter<'_>,
-        functions: &[&Function],
-    ) -> std::fmt::Result {
-        write!(
-            f,
-            "{} ({})",
-            self.value,
-            functions[self.value as usize].get_name()
-        )
-    }
-
-    fn assemble(&self, buffer: &mut Vec<u8>, _constants: &IndexSet<LangConstant>) {
-        buffer.extend(&self.value.to_be_bytes())
-    }
-}
-
-impl LocationBytecode {
-    pub const fn new(value: Label) -> Self {
-        Self { value }
-    }
-}
-
-impl BytecodeType for LocationBytecode {
-    const SIZE: usize = 4;
-
-    fn write_str(
-        &self,
-        f: &mut std::fmt::Formatter<'_>,
-        _functions: &[&Function],
-    ) -> std::fmt::Result {
-        self.value.get_value().fmt(f)
-    }
-
-    fn assemble(&self, buffer: &mut Vec<u8>, _constants: &IndexSet<LangConstant>) {
-        buffer.extend(&self.value.get_value().to_be_bytes())
-    }
-}
-
-impl OperatorBytecode {
-    pub const fn new(value: OpSpTypeNode) -> Self {
-        Self { value }
-    }
-}
-
-impl BytecodeType for OperatorBytecode {
-    const SIZE: usize = 2;
-
-    fn write_str(
-        &self,
-        f: &mut std::fmt::Formatter<'_>,
-        _functions: &[&Function],
-    ) -> std::fmt::Result {
-        write!(f, "{} ({})", self.value as u16, self.value)
-    }
-
-    fn assemble(&self, buffer: &mut Vec<u8>, _constants: &IndexSet<LangConstant>) {
-        buffer.extend(&(self.value as u16).to_be_bytes())
-    }
-}
-
-impl StackPosBytecode {
-    pub const fn new(position: u16) -> Self {
-        Self { position }
-    }
-}
-
-impl BytecodeType for StackPosBytecode {
-    const SIZE: usize = 2;
-
-    fn write_str(
-        &self,
-        f: &mut std::fmt::Formatter<'_>,
-        _functions: &[&Function],
-    ) -> std::fmt::Result {
-        self.position.fmt(f)
-    }
-
-    fn assemble(&self, buffer: &mut Vec<u8>, _constants: &IndexSet<LangConstant>) {
-        buffer.extend(&self.position.to_be_bytes())
-    }
-}
-
-impl SyscallBytecode {
-    pub const fn new(syscall: u16) -> Self {
-        Self { syscall }
-    }
-}
-
-impl BytecodeType for SyscallBytecode {
-    const SIZE: usize = 2;
-
-    fn write_str(
-        &self,
-        f: &mut std::fmt::Formatter<'_>,
-        _functions: &[&Function],
-    ) -> std::fmt::Result {
-        write!(f, "{} ({})", self.syscall, syscall_name(self.syscall))
-    }
-
-    fn assemble(&self, buffer: &mut Vec<u8>, _constants: &IndexSet<LangConstant>) {
-        buffer.extend(&self.syscall.to_be_bytes())
-    }
-}
-
-impl TableNoBytecode {
-    pub const fn new(table: u16) -> Self {
-        Self { table }
-    }
-}
-
-impl BytecodeType for TableNoBytecode {
-    const SIZE: usize = 2;
-
-    fn write_str(
-        &self,
-        f: &mut std::fmt::Formatter<'_>,
-        _functions: &[&Function],
-    ) -> std::fmt::Result {
-        self.table.fmt(f)
-    }
-
-    fn assemble(&self, buffer: &mut Vec<u8>, _constants: &IndexSet<LangConstant>) {
-        buffer.extend(&self.table.to_be_bytes())
-    }
-}
-
-impl VariableBytecode {
-    pub const fn new(variable: u16) -> Self {
-        Self { variable }
-    }
-}
-
-impl BytecodeType for VariableBytecode {
-    const SIZE: usize = 2;
-
-    fn write_str(
-        &self,
-        f: &mut std::fmt::Formatter<'_>,
-        _functions: &[&Function],
-    ) -> std::fmt::Result {
-        self.variable.fmt(f)
-    }
-
-    fn assemble(&self, buffer: &mut Vec<u8>, _constants: &IndexSet<LangConstant>) {
-        buffer.extend(&self.variable.to_be_bytes())
-    }
-}
-
-impl VariantBytecode {
-    pub const fn new(variant: u16) -> Self {
-        Self { variant }
-    }
-}
-
-impl BytecodeType for VariantBytecode {
-    const SIZE: usize = 2;
-
-    fn write_str(
-        &self,
-        f: &mut std::fmt::Formatter<'_>,
-        _functions: &[&Function],
-    ) -> std::fmt::Result {
-        self.variant.fmt(f)
-    }
-
-    fn assemble(&self, buffer: &mut Vec<u8>, _constants: &IndexSet<LangConstant>) {
-        buffer.extend(&self.variant.to_be_bytes())
-    }
-}
-
-impl PartialEq for Label {
-    fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.position, &other.position)
-    }
-}
-
-impl Eq for Label {}
-
-impl Hash for Label {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        Arc::as_ptr(&self.position).hash(state)
-    }
-}
-
-impl From<u16> for ArgcBytecode {
-    fn from(x: u16) -> Self {
-        Self::new(x)
-    }
-}
-
-impl From<u16> for FunctionNoBytecode {
-    fn from(x: u16) -> Self {
-        Self::new(x)
-    }
-}
-
-impl From<Label> for LocationBytecode {
-    fn from(x: Label) -> Self {
-        Self::new(x)
-    }
-}
-
-impl From<u16> for StackPosBytecode {
-    fn from(x: u16) -> Self {
-        Self::new(x)
-    }
-}
-
-impl From<u16> for SyscallBytecode {
-    fn from(x: u16) -> Self {
-        Self::new(x)
-    }
-}
-
-impl From<u16> for TableNoBytecode {
-    fn from(x: u16) -> Self {
-        Self::new(x)
-    }
-}
-
-impl From<u16> for VariantBytecode {
-    fn from(x: u16) -> Self {
-        Self::new(x)
-    }
-}
-
-impl<T> From<T> for ConstantBytecode
-where
-    T: Into<LangConstant>,
-{
-    fn from(x: T) -> Self {
-        Self::new(x.into())
-    }
-}
-
-impl From<OpSpTypeNode> for OperatorBytecode {
-    fn from(x: OpSpTypeNode) -> Self {
-        OperatorBytecode::new(x)
-    }
-}
-
-impl From<u16> for VariableBytecode {
-    fn from(x: u16) -> Self {
-        VariableBytecode::new(x)
     }
 }
 
