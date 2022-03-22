@@ -82,7 +82,7 @@ pub enum OpSpTypeNode {
     Exit,
 }
 
-const VALUES: [OpSpTypeNode; 61] = [
+pub const VALUES: [OpSpTypeNode; 61] = [
     OpSpTypeNode::Add,
     OpSpTypeNode::Radd,
     OpSpTypeNode::Subtract,

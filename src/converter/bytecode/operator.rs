@@ -38,3 +38,23 @@ impl From<OpSpTypeNode> for OperatorBytecode {
         OperatorBytecode::new(x)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use indexmap::IndexSet;
+
+    use crate::converter::bytecode::BytecodeType;
+    use crate::parser::operator_sp;
+
+    use super::OperatorBytecode;
+
+    #[test]
+    fn assemble_op() {
+        for (i, op) in operator_sp::VALUES.into_iter().enumerate() {
+            let mut buf = Vec::new();
+            OperatorBytecode::new(op).assemble(&mut buf, &IndexSet::new());
+            assert_eq!(buf.len(), OperatorBytecode::SIZE);
+            assert_eq!(buf, &(i as u16).to_be_bytes());
+        }
+    }
+}

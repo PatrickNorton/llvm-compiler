@@ -84,3 +84,27 @@ impl From<Label> for LocationBytecode {
         Self::new(x)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use indexmap::IndexSet;
+
+    use crate::converter::bytecode::BytecodeType;
+
+    use super::{Label, LocationBytecode};
+
+    #[test]
+    fn assemble_location() {
+        let values = &[
+            0u32, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 100, 1000, 9999, 10000, 12345, 65535,
+        ];
+        for &value in values {
+            let mut buf = Vec::new();
+            let label = Label::new();
+            label.set_value(value as usize);
+            LocationBytecode::new(label).assemble(&mut buf, &IndexSet::new());
+            assert_eq!(buf.len(), LocationBytecode::SIZE);
+            assert_eq!(buf, &value.to_be_bytes());
+        }
+    }
+}
