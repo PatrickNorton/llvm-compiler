@@ -93,7 +93,7 @@ impl BytecodeList {
         for value in &self.values {
             if let BytecodeValue::Bytecode(by) = value {
                 if let Option::Some(constant) = by.get_constant() {
-                    constants.insert(constant);
+                    constants.insert(constant.clone());
                 }
             }
         }

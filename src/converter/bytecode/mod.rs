@@ -152,7 +152,6 @@ trait BytecodeType {
     fn write_str(
         &self,
         f: &mut std::fmt::Formatter<'_>,
-
         functions: &[&Function],
     ) -> std::fmt::Result;
 
@@ -176,8 +175,14 @@ impl Bytecode {
         todo!()
     }
 
-    pub fn get_constant(&self) -> Option<LangConstant> {
-        todo!()
+    pub fn get_constant(&self) -> Option<&LangConstant> {
+        match self {
+            Bytecode::LoadConst(x) => Some(x.get_value()),
+            Bytecode::LoadDot(x) => Some(x.get_value()),
+            Bytecode::StoreAttr(x) => Some(x.get_value()),
+            Bytecode::CallMethod(x, _) => Some(x.get_value()),
+            _ => None,
+        }
     }
 }
 

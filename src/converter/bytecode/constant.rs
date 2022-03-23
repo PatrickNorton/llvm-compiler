@@ -15,6 +15,10 @@ impl ConstantBytecode {
     pub const fn new(value: LangConstant) -> Self {
         Self { value }
     }
+
+    pub fn get_value(&self) -> &LangConstant {
+        &self.value
+    }
 }
 
 impl BytecodeType for ConstantBytecode {
