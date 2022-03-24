@@ -2,11 +2,15 @@ use std::borrow::Cow;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use itertools::Itertools;
 use once_cell::race::OnceBool;
 use once_cell::sync::Lazy;
 
 use crate::converter::class::{AttributeInfo, MethodInfo};
+use crate::converter::error::CompilerException;
 use crate::converter::generic::GenericInfo;
+use crate::converter::CompileResult;
+use crate::parser::line_info::Lined;
 use crate::parser::operator_sp::OpSpTypeNode;
 
 use super::macros::{
@@ -118,6 +122,49 @@ impl StdTypeObject {
         static EMPTY: Lazy<(HashSet<String>, HashSet<OpSpTypeNode>)> =
             Lazy::new(|| (HashSet::new(), HashSet::new()));
         &EMPTY
+    }
+
+    pub fn generify(
+        &self,
+        line_info: impl Lined,
+        args: Vec<TypeObject>,
+    ) -> CompileResult<TypeObject> {
+        let generic_info = self.get_generic_info();
+        // TODO: Remove clone
+        let true_args = generic_info.generify(args.clone());
+        if let Option::Some(true_args) = true_args {
+            if true_args.len() != generic_info.len() {
+                Err(CompilerException::of(
+                    format!(
+                        "Cannot generify object in this manner: type {} by types [{}]",
+                        self.name(),
+                        args.iter().map(|x| x.name()).format(", "),
+                    ),
+                    line_info,
+                )
+                .into())
+            } else {
+                Ok(StdTypeObject {
+                    value: Arc::new(TypeObjInner {
+                        info: self.value.info.clone(),
+                        typedef_name: self.typedef_name().clone(),
+                        generics: true_args,
+                        is_const: self.is_const(),
+                    }),
+                }
+                .into())
+            }
+        } else {
+            Err(CompilerException::of(
+                format!(
+                    "Cannot generify object in this manner: type {} by types [{}]",
+                    self.name(),
+                    args.iter().map(|x| x.name()).format(", "),
+                ),
+                line_info,
+            )
+            .into())
+        }
     }
 
     pub fn typedef_as(&self, name: String) -> Self {

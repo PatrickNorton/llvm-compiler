@@ -7,8 +7,11 @@ use itertools::Itertools;
 use once_cell::sync::OnceCell;
 
 use crate::converter::class::{AttributeInfo, MethodInfo};
+use crate::converter::error::CompilerException;
 use crate::converter::generic::GenericInfo;
 use crate::converter::type_obj::UserType;
+use crate::converter::CompileResult;
+use crate::parser::line_info::Lined;
 use crate::parser::operator_sp::OpSpTypeNode;
 
 use super::macros::{
@@ -110,6 +113,35 @@ impl InterfaceType {
 
     pub(super) fn get_info(&self) -> &UserInfo<InterfaceFnInfo, InterfaceAttrInfo> {
         &self.value.info.info
+    }
+
+    pub fn generify(
+        &self,
+        line_info: impl Lined,
+        args: Vec<TypeObject>,
+    ) -> CompileResult<TypeObject> {
+        let generic_info = self.get_generic_info();
+        let true_args = generic_info.generify(args);
+        if let Option::Some(true_args) = true_args {
+            if true_args.len() != generic_info.len() {
+                Err(
+                    CompilerException::of("Cannot generify object in this manner", line_info)
+                        .into(),
+                )
+            } else {
+                Ok(InterfaceType {
+                    value: Arc::new(InterfaceTypeInner {
+                        info: self.value.info.clone(),
+                        typedef_name: self.typedef_name().clone(),
+                        generics: true_args,
+                        is_const: self.is_const(),
+                    }),
+                }
+                .into())
+            }
+        } else {
+            Err(CompilerException::of("Cannot generify object in this manner", line_info).into())
+        }
     }
 
     pub fn contract(&self) -> &(HashSet<String>, HashSet<OpSpTypeNode>) {

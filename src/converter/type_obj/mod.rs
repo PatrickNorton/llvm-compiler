@@ -277,11 +277,11 @@ impl TypeObject {
     ) -> CompileResult<TypeObject> {
         match self {
             TypeObject::FnInfo(f) => Ok(f.generify(args)),
-            TypeObject::Interface(_) => todo!(),
-            TypeObject::Std(_) => todo!(),
+            TypeObject::Interface(i) => i.generify(line_info, args),
+            TypeObject::Std(s) => s.generify(line_info, args),
             TypeObject::Tuple(t) => t.generify(line_info, args),
             TypeObject::Type(t) => t.generify(line_info, args),
-            TypeObject::Union(_) => todo!(),
+            TypeObject::Union(u) => u.generify(line_info, args),
             _ => Err(Self::generify_err(line_info).into()),
         }
     }
