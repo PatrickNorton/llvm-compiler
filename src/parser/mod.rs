@@ -11,6 +11,7 @@ mod context;
 pub mod continue_stmt;
 pub mod declaration;
 pub mod declared_assign;
+mod decorator;
 mod defer;
 pub mod definition;
 pub mod delete;

@@ -54,65 +54,71 @@ pub enum BaseClassRef<'a> {
     Union(&'a UnionDefinitionNode),
 }
 
+macro_rules! definition_each {
+    ($self:ident: $name:ident => $value:expr) => {
+        match $self {
+            Self::BaseClass($name) => $value,
+            Self::Context($name) => $value,
+            Self::Function($name) => $value,
+            Self::Method($name) => $value,
+            Self::Operator($name) => $value,
+            Self::Property($name) => $value,
+        }
+    };
+}
+
+macro_rules! base_class_each {
+    ($self:ident: $name:ident => $value:expr) => {
+        match $self {
+            Self::Class($name) => $value,
+            Self::Enum($name) => $value,
+            Self::Interface($name) => $value,
+            Self::Union($name) => $value,
+        }
+    };
+}
+
 impl DefinitionNode {
     pub fn get_annotations(&self) -> &Vec<NameNode> {
-        match self {
-            DefinitionNode::BaseClass(b) => b.get_annotations(),
-            DefinitionNode::Context(c) => c.get_annotations(),
-            DefinitionNode::Function(f) => f.get_annotations(),
-            DefinitionNode::Method(m) => m.get_annotations(),
-            DefinitionNode::Operator(o) => o.get_annotations(),
-            DefinitionNode::Property(p) => p.get_annotations(),
-        }
+        definition_each!(self: x => x.get_annotations())
     }
 
     pub fn add_annotations(&mut self, annotations: Vec<NameNode>) {
-        match self {
-            DefinitionNode::BaseClass(b) => b.add_annotations(annotations),
-            DefinitionNode::Context(c) => c.add_annotations(annotations),
-            DefinitionNode::Function(f) => f.add_annotations(annotations),
-            DefinitionNode::Method(m) => m.add_annotations(annotations),
-            DefinitionNode::Operator(o) => o.add_annotations(annotations),
-            DefinitionNode::Property(p) => p.add_annotations(annotations),
-        }
+        definition_each!(self: x => x.add_annotations(annotations))
+    }
+
+    pub fn get_decorators(&self) -> &Vec<NameNode> {
+        definition_each!(self: x => x.get_decorators())
+    }
+
+    pub fn add_decorators(&mut self, decorators: Vec<NameNode>) {
+        definition_each!(self: x => x.add_decorators(decorators))
     }
 }
 
 impl BaseClassNode {
     pub fn valid_descriptors(&self) -> &'static HashSet<DescriptorNode> {
-        match self {
-            BaseClassNode::Class(c) => c.valid_descriptors(),
-            BaseClassNode::Enum(e) => e.valid_descriptors(),
-            BaseClassNode::Interface(i) => i.valid_descriptors(),
-            BaseClassNode::Union(u) => u.valid_descriptors(),
-        }
+        base_class_each!(self: x => x.valid_descriptors())
     }
 
     pub fn add_descriptors(&mut self, descriptors: HashSet<DescriptorNode>) {
-        match self {
-            BaseClassNode::Class(c) => c.add_descriptors(descriptors),
-            BaseClassNode::Enum(e) => e.add_descriptors(descriptors),
-            BaseClassNode::Interface(i) => i.add_descriptors(descriptors),
-            BaseClassNode::Union(u) => u.add_descriptors(descriptors),
-        }
+        base_class_each!(self: x => x.add_descriptors(descriptors))
     }
 
     pub fn get_annotations(&self) -> &Vec<NameNode> {
-        match self {
-            BaseClassNode::Class(c) => c.get_annotations(),
-            BaseClassNode::Enum(e) => e.get_annotations(),
-            BaseClassNode::Interface(i) => i.get_annotations(),
-            BaseClassNode::Union(u) => u.get_annotations(),
-        }
+        base_class_each!(self: x => x.get_annotations())
     }
 
     pub fn add_annotations(&mut self, annotations: Vec<NameNode>) {
-        match self {
-            BaseClassNode::Class(c) => c.add_annotations(annotations),
-            BaseClassNode::Enum(e) => e.add_annotations(annotations),
-            BaseClassNode::Interface(i) => i.add_annotations(annotations),
-            BaseClassNode::Union(u) => u.add_annotations(annotations),
-        }
+        base_class_each!(self: x => x.add_annotations(annotations))
+    }
+
+    pub fn get_decorators(&self) -> &Vec<NameNode> {
+        base_class_each!(self: x => x.get_decorators())
+    }
+
+    pub fn add_decorators(&mut self, decorators: Vec<NameNode>) {
+        base_class_each!(self: x => x.add_decorators(decorators))
     }
 }
 
@@ -129,91 +135,41 @@ impl<'a> DefinitionRef<'a> {
     }
 
     pub fn get_annotations(&self) -> &Vec<NameNode> {
-        match self {
-            DefinitionRef::BaseClass(b) => b.get_annotations(),
-            DefinitionRef::Context(c) => c.get_annotations(),
-            DefinitionRef::Function(f) => f.get_annotations(),
-            DefinitionRef::Method(m) => m.get_annotations(),
-            DefinitionRef::Operator(o) => o.get_annotations(),
-            DefinitionRef::Property(p) => p.get_annotations(),
-        }
+        definition_each!(self: x => x.get_annotations())
     }
 }
 
 impl<'a> BaseClassRef<'a> {
-    pub fn get_descriptors(self) -> &'a HashSet<DescriptorNode> {
-        match self {
-            BaseClassRef::Class(c) => c.get_descriptors(),
-            BaseClassRef::Enum(e) => e.get_descriptors(),
-            BaseClassRef::Interface(i) => i.get_descriptors(),
-            BaseClassRef::Union(u) => u.get_descriptors(),
-        }
-    }
-
     pub fn get_name(self) -> &'a TypeNode {
-        match self {
-            BaseClassRef::Class(c) => c.get_name(),
-            BaseClassRef::Enum(e) => e.get_name(),
-            BaseClassRef::Interface(i) => i.get_name(),
-            BaseClassRef::Union(u) => u.get_name(),
-        }
+        base_class_each!(self: x => x.get_name())
     }
 
     pub fn get_annotations(&self) -> &Vec<NameNode> {
-        match self {
-            BaseClassRef::Class(c) => c.get_annotations(),
-            BaseClassRef::Enum(e) => e.get_annotations(),
-            BaseClassRef::Interface(i) => i.get_annotations(),
-            BaseClassRef::Union(u) => u.get_annotations(),
-        }
+        base_class_each!(self: x => x.get_annotations())
     }
 }
 
 impl Lined for BaseClassNode {
     fn line_info(&self) -> &LineInfo {
-        match self {
-            BaseClassNode::Class(c) => c.line_info(),
-            BaseClassNode::Enum(e) => e.line_info(),
-            BaseClassNode::Interface(i) => i.line_info(),
-            BaseClassNode::Union(u) => u.line_info(),
-        }
+        base_class_each!(self: x => x.line_info())
     }
 }
 
 impl Lined for DefinitionNode {
     fn line_info(&self) -> &LineInfo {
-        match self {
-            DefinitionNode::BaseClass(b) => b.line_info(),
-            DefinitionNode::Context(c) => c.line_info(),
-            DefinitionNode::Function(f) => f.line_info(),
-            DefinitionNode::Method(m) => m.line_info(),
-            DefinitionNode::Operator(o) => o.line_info(),
-            DefinitionNode::Property(p) => p.line_info(),
-        }
+        definition_each!(self: x => x.line_info())
     }
 }
 
 impl Lined for DefinitionRef<'_> {
     fn line_info(&self) -> &LineInfo {
-        match self {
-            DefinitionRef::BaseClass(b) => b.line_info(),
-            DefinitionRef::Context(c) => c.line_info(),
-            DefinitionRef::Function(f) => f.line_info(),
-            DefinitionRef::Method(m) => m.line_info(),
-            DefinitionRef::Operator(o) => o.line_info(),
-            DefinitionRef::Property(p) => p.line_info(),
-        }
+        definition_each!(self: x => x.line_info())
     }
 }
 
 impl Lined for BaseClassRef<'_> {
     fn line_info(&self) -> &LineInfo {
-        match self {
-            BaseClassRef::Class(c) => c.line_info(),
-            BaseClassRef::Enum(e) => e.line_info(),
-            BaseClassRef::Interface(i) => i.line_info(),
-            BaseClassRef::Union(u) => u.line_info(),
-        }
+        base_class_each!(self: x => x.line_info())
     }
 }
 

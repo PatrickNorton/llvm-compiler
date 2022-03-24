@@ -95,6 +95,14 @@ impl OperatorDefinitionNode {
         self.annotations = annotations;
     }
 
+    pub fn get_decorators(&self) -> &Vec<NameNode> {
+        &self.decorators
+    }
+
+    pub fn add_decorators(&mut self, decorators: Vec<NameNode>) {
+        self.decorators = decorators;
+    }
+
     pub fn add_generics(&mut self, generics: Vec<TypeNode>) {
         self.generics = generics;
     }

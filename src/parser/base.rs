@@ -42,6 +42,7 @@ use crate::parser::while_stmt::WhileStatementNode;
 use crate::parser::with_stmt::WithStatementNode;
 use crate::parser::yield_stmt::YieldStatementNode;
 
+use super::decorator;
 use super::derived_op::DerivedOperatorNode;
 
 #[derive(Debug)]
@@ -107,7 +108,7 @@ impl IndependentNode {
                 .map(NameNode::Variable)
                 .map(TestNode::Name)
                 .map(IndependentNode::Test),
-            TokenType::At => todo!("DecoratableNode::parse_left_decorator(tokens)"),
+            TokenType::At => decorator::parse_left_decorator(tokens).map(|x| x.into()),
             TokenType::Dollar => AnnotatableNode::parse_left_annotation(tokens).map(From::from),
             TokenType::Epsilon => Err(tokens.error("Unexpected EOF")),
             TokenType::Arrow

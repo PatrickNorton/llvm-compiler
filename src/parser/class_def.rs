@@ -90,6 +90,14 @@ impl ClassDefinitionNode {
         self.annotations = annotations;
     }
 
+    pub fn get_decorators(&self) -> &Vec<NameNode> {
+        &self.decorators
+    }
+
+    pub fn add_decorators(&mut self, decorators: Vec<NameNode>) {
+        self.decorators = decorators;
+    }
+
     pub fn get_name(&self) -> &TypeNode {
         &self.name
     }
