@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::iter::zip;
 use std::ops::Index;
 use std::sync::Arc;
 
@@ -48,6 +49,18 @@ impl ListTypeObject {
         "".into()
     }
 
+    pub fn is_superclass(&self, other: &TypeObject) -> bool {
+        if let TypeObject::List(list) = other {
+            if self.get_values().len() != list.get_values().len() {
+                false
+            } else {
+                zip(self.get_values(), list.get_values()).all(|(x, y)| x.is_superclass(y))
+            }
+        } else {
+            panic!("Should not be instancing list types")
+        }
+    }
+
     pub fn typedef_as(&self, name: String) -> Self {
         Self {
             value: Arc::new(ListTypeInner {
@@ -85,6 +98,6 @@ impl Index<usize> for ListTypeObject {
     type Output = TypeObject;
 
     fn index(&self, index: usize) -> &Self::Output {
-        &self.value.values[0]
+        &self.value.values[index]
     }
 }

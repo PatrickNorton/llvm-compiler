@@ -88,6 +88,14 @@ impl FunctionInfoType {
         }
     }
 
+    pub fn same_base_type(&self, other: &TypeObject) -> bool {
+        match other {
+            TypeObject::FnInfo(f) => self.value.info == f.value.info,
+            TypeObject::GenerifiedFn(f) => self.value.info == f.value.info,
+            _ => false,
+        }
+    }
+
     pub fn base_hash<H: Hasher>(&self, state: &mut H) {
         self.value.info.hash(state)
     }
@@ -146,10 +154,19 @@ impl GenerifiedFnInfoType {
         }
     }
 
+    pub fn same_base_type(&self, other: &TypeObject) -> bool {
+        match other {
+            TypeObject::FnInfo(f) => self.value.info == f.value.info,
+            TypeObject::GenerifiedFn(f) => self.value.info == f.value.info,
+            _ => false,
+        }
+    }
+
     pub fn base_hash<H: Hasher>(&self, state: &mut H) {
         self.value.info.hash(state)
     }
 
+    #[must_use = "typedef_as returns a new type and doesn't modify the original"]
     pub fn typedef_as(&self, name: String) -> Self {
         Self {
             value: Arc::new(GenerifiedFnInfoInner {

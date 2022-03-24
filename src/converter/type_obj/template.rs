@@ -169,6 +169,13 @@ impl TemplateParam {
         }
     }
 
+    pub fn same_base_type(&self, other: &TypeObject) -> bool {
+        match other {
+            TypeObject::Template(t) => self == t,
+            _ => false,
+        }
+    }
+
     pub fn base_hash<H: Hasher>(&self, state: &mut H) {
         self.hash(state)
     }

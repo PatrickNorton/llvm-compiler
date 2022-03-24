@@ -82,8 +82,18 @@ impl TupleType {
         (0..self.value.generics.len()).map(|x| x.to_string())
     }
 
+    pub fn same_base_type(&self, other: &TypeObject) -> bool {
+        matches!(other, TypeObject::Tuple(_))
+    }
+
     pub fn base_hash<H: Hasher>(&self, state: &mut H) {
         self.base_name().hash(state)
+    }
+}
+
+impl Default for TupleType {
+    fn default() -> Self {
+        Self::new(Vec::new())
     }
 }
 

@@ -178,7 +178,7 @@ impl InterfaceType {
             .expect("Operators should be set before contract");
         let mut ops = operators
             .iter()
-            .filter(|(_, x)| x.has_impl)
+            .filter(|(_, x)| !x.has_impl)
             .map(|(&x, _)| x)
             .collect::<HashSet<_>>();
         for sup in info.supers.get().unwrap() {

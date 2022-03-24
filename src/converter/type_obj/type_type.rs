@@ -71,6 +71,10 @@ impl TypeTypeObject {
         "type".into()
     }
 
+    pub fn is_superclass(&self, other: &TypeObject) -> bool {
+        matches!(other, TypeObject::Type(_) | TypeObject::Object(_))
+    }
+
     pub fn generify(
         &self,
         line_info: &dyn Lined,
@@ -130,6 +134,10 @@ impl TypeTypeObject {
             .as_ref()
             .and_then(|x| x.static_defined())
             .map(|x| -> Box<dyn Iterator<Item = Cow<'_, str>>> { Box::new(x.map(Cow::Borrowed)) })
+    }
+
+    pub fn same_base_type(&self, other: &TypeObject) -> bool {
+        matches!(other, TypeObject::Tuple(_))
     }
 
     pub fn base_hash<H: Hasher>(&self, state: &mut H) {

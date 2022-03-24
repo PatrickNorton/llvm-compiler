@@ -102,6 +102,10 @@ impl OptionTypeObject {
         }
     }
 
+    pub fn same_base_type(&self, other: &TypeObject) -> bool {
+        matches!(other, TypeObject::Object(_))
+    }
+
     pub fn make_const(&self) -> Self {
         Self::new(self.value.option_val.make_const())
     }

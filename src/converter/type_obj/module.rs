@@ -40,6 +40,10 @@ impl ModuleType {
         self.value.values.keys().map(|x| x.as_str())
     }
 
+    pub fn same_base_type(&self, other: &TypeObject) -> bool {
+        matches!(other, TypeObject::Module(_))
+    }
+
     pub fn base_hash<H: Hasher>(&self, state: &mut H) {
         self.base_name().hash(state)
     }

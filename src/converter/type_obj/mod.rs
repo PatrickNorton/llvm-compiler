@@ -193,11 +193,29 @@ impl TypeObject {
     }
 
     pub fn same_base_type(&self, other: &TypeObject) -> bool {
-        todo!()
+        match self {
+            TypeObject::FnInfo(f) => f.same_base_type(other),
+            TypeObject::GenerifiedFn(g) => g.same_base_type(other),
+            TypeObject::Interface(i) => i.same_base_type(other),
+            TypeObject::List(_) => panic!(),
+            TypeObject::Module(m) => m.same_base_type(other),
+            TypeObject::Object(o) => o.same_base_type(other),
+            TypeObject::Option(o) => o.same_base_type(other),
+            TypeObject::Std(s) => s.same_base_type(other),
+            TypeObject::Template(t) => t.same_base_type(other),
+            TypeObject::Tuple(t) => t.same_base_type(other),
+            TypeObject::Type(t) => t.same_base_type(other),
+            TypeObject::Union(u) => u.same_base_type(other),
+        }
     }
 
     pub fn is_superclass(&self, other: &TypeObject) -> bool {
-        todo!()
+        match self {
+            TypeObject::List(l) => l.is_superclass(other),
+            TypeObject::Object(o) => o.is_superclass(other),
+            TypeObject::Type(t) => t.is_superclass(other),
+            _ => other.is_subclass(self),
+        }
     }
 
     pub fn is_subclass(&self, other: &TypeObject) -> bool {

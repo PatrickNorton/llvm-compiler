@@ -36,6 +36,14 @@ impl ObjectType {
         }
     }
 
+    pub fn is_superclass(&self, _other: &TypeObject) -> bool {
+        true
+    }
+
+    pub fn same_base_type(&self, other: &TypeObject) -> bool {
+        matches!(other, TypeObject::Object(_))
+    }
+
     pub fn typedef_as(&self, name: String) -> Self {
         Self {
             typedef_name: Some(name.into()),
