@@ -10,18 +10,23 @@ use itertools::Itertools;
 use num::ToPrimitive;
 use once_cell::sync::{Lazy, OnceCell};
 
+use crate::macros::hash_map;
 use crate::parser::line_info::LineInfo;
 use crate::parser::operator_sp::OpSpTypeNode;
 use crate::parser::Parser;
 
 use super::access_handler::AccessLevel;
+use super::argument::ArgumentInfo;
+use super::class::MethodInfo;
 use super::compiler_info::CompilerInfo;
 use super::constant::{BoolConstant, BuiltinConstant, LangConstant};
+use super::fn_info::FunctionInfo;
 use super::generic::GenericInfo;
 use super::global_info::GlobalCompilerInfo;
 use super::lang_obj::LangObject;
 use super::type_obj::{
-    ObjectType, StdTypeObject, TupleType, TypeObject, TypeTypeObject, UserTypeLike,
+    InterfaceType, ListTypeObject, ObjectType, StdTypeObject, TemplateParam, TupleType, TypeObject,
+    TypeTypeObject, UserTypeLike,
 };
 use super::CompileResult;
 
@@ -95,6 +100,7 @@ pub struct ParsedBuiltins {
     tuple_type: TypeObject,
     null_type: TypeObject,
     type_type: TypeObject,
+    callable: TypeObject,
 }
 
 #[derive(Debug)]
@@ -134,6 +140,7 @@ pub struct InnerBuiltins {
     tuple_type: TypeObject,
     null_type: TypeObject,
     type_type: TypeObject,
+    callable: TypeObject,
 }
 
 pub const FORBIDDEN_NAMES: &[&str] = &[
@@ -168,6 +175,26 @@ pub static THROWS_TYPE: Lazy<TypeObject> = Lazy::new(|| {
         true,
     )
     .into()
+});
+pub static CALLABLE: Lazy<TypeObject> = Lazy::new(|| {
+    let args = TemplateParam::new_vararg("K".into(), 0);
+    let rets = TemplateParam::new("R".into(), 1, ListTypeObject::default().into());
+    let call_info = MethodInfo::new(
+        LineInfo::empty(),
+        AccessLevel::Public,
+        false,
+        FunctionInfo::with_args(
+            ArgumentInfo::of_types([args.clone().into()]),
+            vec![rets.clone().into()],
+        ),
+    );
+    let callable = InterfaceType::new_operators(
+        "Callable".into(),
+        GenericInfo::new(vec![args, rets], true),
+        hash_map!(OpSpTypeNode::Call => call_info),
+    );
+    callable.set_generic_parent();
+    callable.into()
 });
 
 impl GlobalBuiltins {
@@ -315,16 +342,13 @@ impl InnerBuiltins {
     type_getter!(throwable);
     type_getter!(iterable, iter_type);
     type_getter!(type_type);
+    type_getter!(callable);
 
     pub fn throws_type(&self) -> &TypeObject {
         todo!()
     }
 
     pub fn iterator(&self) -> &TypeObject {
-        todo!()
-    }
-
-    pub fn callable(&self) -> &TypeObject {
         todo!()
     }
 
@@ -376,6 +400,7 @@ impl ParsedBuiltins {
             tuple_type: TupleType::new(Vec::new()).into(),
             null_type: NULL_TYPE.clone(),
             type_type: TypeTypeObject::new_empty().into(),
+            callable: CALLABLE.clone(),
         }
     }
 
@@ -430,6 +455,7 @@ impl From<ParsedBuiltins> for InnerBuiltins {
             tuple_type: value.tuple_type.clone(),
             null_type: value.null_type.clone(),
             type_type: value.type_type.clone(),
+            callable: value.callable.clone(),
 
             iter_constant: builtin_const("iter", &value.all_builtins, &true_builtins),
             range_constant: builtin_const("range", &value.all_builtins, &true_builtins),
