@@ -79,7 +79,6 @@ pub fn write_to_file<P: AsRef<Path>>(
     write_bytes(info, file, &constants)
 }
 
-// TODO? Mutable reference to info
 fn write_bytes(
     info: &mut GlobalCompilerInfo,
     file: &Path,
@@ -112,7 +111,7 @@ fn write_bytes(
     }
     let tables = info.get_tables();
     writer.write_all(&usize_to_bytes(tables.len()))?;
-    for tbl in &*tables {
+    for tbl in tables {
         // Note: All labels should be written to at point of translation
         writer.write_all(&tbl.to_bytes())?;
     }

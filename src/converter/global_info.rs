@@ -25,6 +25,7 @@ use super::switch_table::SwitchTable;
 use super::test_fn::convert_test_start;
 use super::type_obj::{BaseType, UserType};
 
+/// A container for compiler information that is shared across all files.
 #[derive(Debug)]
 pub struct GlobalCompilerInfo {
     dest_file: PathBuf,
@@ -58,7 +59,7 @@ impl GlobalCompilerInfo {
             static_var_numbers: SyncIntAllocator::new(),
             anonymous_nums: SyncIntAllocator::new(),
             default_functions: Mutex::new(Vec::new()),
-            functions: Mutex::new(vec![None]), // TODO: Insert empty value
+            functions: Mutex::new(vec![None]),
             classes: Mutex::new(Vec::new()),
             class_map: DashMap::new(),
             warnings: Arc::new(ErrorCounter::new()),
@@ -155,8 +156,8 @@ impl GlobalCompilerInfo {
         )
     }
 
-    pub fn get_tables(&self) -> MutexGuard<'_, Vec<SwitchTable>> {
-        self.tables.lock()
+    pub fn get_tables(&mut self) -> &[SwitchTable] {
+        self.tables.get_mut()
     }
 
     pub fn class_index(&self, ty: &UserType) -> u16 {
@@ -203,10 +204,9 @@ impl GlobalCompilerInfo {
         self.test_functions.lock().push(func)
     }
 
-    pub fn calculate_constants(&self) -> IndexSet<LangConstant> {
-        // TODO? Make this take &mut self to avoid spurious locking
+    pub fn calculate_constants(&mut self) -> IndexSet<LangConstant> {
         let mut constants = IndexSet::new();
-        for function in &*self.functions.lock() {
+        for function in self.functions.get_mut() {
             function
                 .as_ref()
                 .unwrap()
