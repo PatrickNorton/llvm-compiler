@@ -23,10 +23,16 @@ pub struct TemplateParam {
 struct TemplateInner {
     name: String,
     index: usize,
-    bound: TypeObject,
+    bound: TemplateBound,
     is_vararg: bool,
     typedef_name: Option<String>,
     parent: OnceCell<TypeObject>,
+}
+
+#[derive(Debug, Clone)]
+enum TemplateBound {
+    Known(TypeObject),
+    Redefined(Arc<OnceCell<TypeObject>>),
 }
 
 impl TemplateParam {
@@ -35,7 +41,7 @@ impl TemplateParam {
             value: Arc::new(TemplateInner {
                 name,
                 index,
-                bound,
+                bound: TemplateBound::Known(bound),
                 is_vararg: false,
                 typedef_name: None,
                 parent: OnceCell::new(),
@@ -48,8 +54,21 @@ impl TemplateParam {
             value: Arc::new(TemplateInner {
                 name,
                 index,
-                bound: TypeObject::list([]),
+                bound: TemplateBound::Known(TypeObject::list([])),
                 is_vararg: true,
+                typedef_name: None,
+                parent: OnceCell::new(),
+            }),
+        }
+    }
+
+    pub fn new_unbounded(name: String, index: usize) -> Self {
+        Self {
+            value: Arc::new(TemplateInner {
+                name,
+                index,
+                bound: TemplateBound::Redefined(Arc::new(OnceCell::new())),
+                is_vararg: false,
                 typedef_name: None,
                 parent: OnceCell::new(),
             }),
@@ -77,7 +96,24 @@ impl TemplateParam {
     }
 
     pub fn get_bound(&self) -> &TypeObject {
-        &self.value.bound
+        static OBJECT_TYPE: TypeObject = TypeObject::Object(OBJECT);
+        match &self.value.bound {
+            TemplateBound::Known(bound) => bound,
+            TemplateBound::Redefined(bound) => bound.get().unwrap_or(&OBJECT_TYPE),
+        }
+    }
+
+    pub fn set_bound(&self, bound: TypeObject) {
+        match &self.value.bound {
+            TemplateBound::Known(_) => panic!("Cannot set bound of already-bounded object"),
+            TemplateBound::Redefined(b) => b
+                .set(bound)
+                .expect("Cannot set bound of already-bounded object"),
+        }
+    }
+
+    pub fn is_bounded(&self) -> bool {
+        self.value.bound.is_known()
     }
 
     pub fn get_parent(&self) -> &TypeObject {
@@ -123,7 +159,7 @@ impl TemplateParam {
         value: &str,
         access: AccessLevel,
     ) -> CompileResult<Option<Cow<'_, TypeObject>>> {
-        self.value.bound.attr_type_access(value, access)
+        self.get_bound().attr_type_access(value, access)
     }
 
     pub fn static_attr_type(
@@ -131,7 +167,7 @@ impl TemplateParam {
         value: &str,
         access: AccessLevel,
     ) -> Option<Cow<'_, TypeObject>> {
-        self.value.bound.static_attr_type(value, access)
+        self.get_bound().static_attr_type(value, access)
     }
 
     pub fn generify_with(&self, parent: &TypeObject, values: Vec<TypeObject>) -> TypeObject {
@@ -149,11 +185,11 @@ impl TemplateParam {
     }
 
     pub fn get_defined(&self) -> Option<Box<dyn Iterator<Item = Cow<'_, str>> + '_>> {
-        self.value.bound.get_defined()
+        self.get_bound().get_defined()
     }
 
     pub fn static_defined(&self) -> Option<Box<dyn Iterator<Item = &'_ str> + '_>> {
-        self.value.bound.static_defined()
+        self.get_bound().static_defined()
     }
 
     pub fn typedef_as(&self, name: String) -> Self {
@@ -178,6 +214,12 @@ impl TemplateParam {
 
     pub fn base_hash<H: Hasher>(&self, state: &mut H) {
         self.hash(state)
+    }
+}
+
+impl TemplateBound {
+    pub fn is_known(&self) -> bool {
+        matches!(self, TemplateBound::Known(_))
     }
 }
 

@@ -190,7 +190,7 @@ pub static CALLABLE: Lazy<TypeObject> = Lazy::new(|| {
     );
     let callable = InterfaceType::new_operators(
         "Callable".into(),
-        GenericInfo::new(vec![args, rets], true),
+        GenericInfo::new(vec![args, rets]),
         hash_map!(OpSpTypeNode::Call => call_info),
     );
     callable.set_generic_parent();

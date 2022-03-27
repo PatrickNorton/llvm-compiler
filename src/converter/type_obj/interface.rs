@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use derive_new::new;
@@ -65,6 +65,22 @@ impl InterfaceType {
                 is_const: true,
             }),
         }
+    }
+
+    pub fn new_operators(
+        name: String,
+        generics: GenericInfo,
+        operators: HashMap<OpSpTypeNode, MethodInfo>,
+    ) -> Self {
+        let this = Self::new(name, generics, Some(Vec::new()));
+        this.set_operators(
+            operators
+                .into_iter()
+                .map(|(op, x)| (op, InterfaceFnInfo::new(x, false)))
+                .collect(),
+        );
+        this.seal();
+        this
     }
 
     pub fn new_predefined(name: String, generics: GenericInfo) -> Self {

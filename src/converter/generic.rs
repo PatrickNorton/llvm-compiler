@@ -14,15 +14,11 @@ use super::CompileResult;
 #[derive(Debug, new)]
 pub struct GenericInfo {
     params: Vec<TemplateParam>,
-    is_registered: bool,
 }
 
 impl GenericInfo {
     pub const fn empty() -> Self {
-        Self {
-            params: vec![],
-            is_registered: false,
-        }
+        Self { params: Vec::new() }
     }
 
     pub fn parse(info: &mut CompilerInfo, generics: &[TypeNode]) -> CompileResult<GenericInfo> {
@@ -48,7 +44,7 @@ impl GenericInfo {
             };
             params.push(param)
         }
-        Ok(GenericInfo::new(params, true))
+        Ok(GenericInfo::new(params))
     }
 
     pub fn parse_no_types(generics: &[TypeNode]) -> CompileResult<GenericInfo> {
@@ -65,17 +61,33 @@ impl GenericInfo {
                 let subtype = &generic.get_subtypes()[0];
                 TemplateParam::new(subtype.str_name().to_string(), i, TypeObject::list([]))
             } else if generic.get_subtypes().is_empty() {
-                TemplateParam::new(generic.str_name().to_string(), i, OBJECT.into())
+                TemplateParam::new_unbounded(generic.str_name().to_string(), i)
             } else {
                 todo!("Default interfaces are done before types are registered, so this doesn't work yet")
             };
             params.push(param)
         }
-        Ok(GenericInfo::new(params, false))
+        Ok(GenericInfo::new(params))
     }
 
     pub fn re_parse(&self, info: &mut CompilerInfo, generics: &[TypeNode]) -> CompileResult<()> {
-        todo!("Re-parsing GenericInfo needs interior mutability")
+        let gen_info = Self::parse(info, generics)?;
+        assert_eq!(self.params.len(), gen_info.params.len());
+        for (param, new_param) in zip(&self.params, gen_info.params) {
+            assert_eq!(param.name(), new_param.name());
+            if param.is_bounded() {
+                param.set_bound(new_param.get_bound().clone());
+            } else {
+                assert_eq!(
+                    param.get_bound(),
+                    new_param.get_bound(),
+                    "{} != {}",
+                    param.get_bound().name(),
+                    new_param.get_bound().name()
+                );
+            }
+        }
+        Ok(())
     }
 
     pub fn len(&self) -> usize {
@@ -87,7 +99,10 @@ impl GenericInfo {
     }
 
     pub fn get_param_map(&self) -> HashMap<String, TypeObject> {
-        todo!()
+        self.params
+            .iter()
+            .map(|x| (x.base_name().to_string(), x.clone().into()))
+            .collect()
     }
 
     pub fn set_parent(&self, parent: TypeObject) {
