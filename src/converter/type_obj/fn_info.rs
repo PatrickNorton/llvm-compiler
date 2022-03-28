@@ -189,3 +189,135 @@ arc_eq_hash!(GenerifiedFnInfoType);
 
 type_obj_from!(FunctionInfoType, FnInfo);
 type_obj_from!(GenerifiedFnInfoType, GenerifiedFn);
+
+#[cfg(test)]
+mod tests {
+    use crate::converter::argument::{Argument, ArgumentInfo};
+    use crate::converter::builtins::OBJECT;
+    use crate::converter::fn_info::FunctionInfo;
+    use crate::converter::type_obj::{ObjectType, TupleType, TypeTypeObject};
+
+    use super::FunctionInfoType;
+
+    #[test]
+    fn empty_name() {
+        let ty = FunctionInfoType::new(Default::default());
+        assert_eq!(ty.name(), "func()");
+        assert_eq!(ty.base_name(), "func()");
+    }
+
+    #[test]
+    fn empty_typedef_name() {
+        let ty = FunctionInfoType::new(Default::default()).typedef_as("Test".to_string());
+        assert_eq!(ty.name(), "Test");
+        assert_eq!(ty.base_name(), "func()");
+    }
+
+    fn argument_infos() -> Vec<ArgumentInfo> {
+        vec![
+            ArgumentInfo::new(Vec::new(), Vec::new(), Vec::new()),
+            ArgumentInfo::new(
+                Vec::new(),
+                vec![Argument::new(
+                    "test_normal".to_string(),
+                    ObjectType::new().into(),
+                )],
+                Vec::new(),
+            ),
+            ArgumentInfo::new(
+                vec![Argument::new(
+                    "test_keyword".to_string(),
+                    ObjectType::new().into(),
+                )],
+                Vec::new(),
+                Vec::new(),
+            ),
+            ArgumentInfo::new(
+                Vec::new(),
+                Vec::new(),
+                vec![Argument::new(
+                    "test_position".to_string(),
+                    ObjectType::new().into(),
+                )],
+            ),
+        ]
+    }
+
+    #[test]
+    fn argument_name() {
+        for args in argument_infos() {
+            let args_fmt = format!("func({args})");
+            let fn_info = FunctionInfo::with_args(args, Vec::new());
+            let ty = FunctionInfoType::new(fn_info);
+            assert_eq!(ty.name(), args_fmt);
+            assert_eq!(ty.base_name(), args_fmt);
+        }
+    }
+
+    #[test]
+    fn return_name() {
+        let values = [
+            (vec![OBJECT.into()], "object"),
+            (
+                vec![OBJECT.into(), TupleType::default().into()],
+                "object, tuple",
+            ),
+            (
+                vec![
+                    OBJECT.into(),
+                    TupleType::default().into(),
+                    TypeTypeObject::new(OBJECT.into()).into(),
+                ],
+                "object, tuple, type[object]",
+            ),
+        ];
+        for (ret, ret_str) in values {
+            for args in argument_infos() {
+                let args_fmt = format!("func({args}) -> {ret_str}");
+                let fn_info = FunctionInfo::with_args(args, ret.clone());
+                let ty = FunctionInfoType::new(fn_info);
+                assert_eq!(ty.name(), args_fmt);
+                assert_eq!(ty.base_name(), args_fmt);
+            }
+        }
+    }
+
+    #[test]
+    fn argument_typedef_name() {
+        for args in argument_infos() {
+            let args_fmt = format!("func({args})");
+            let fn_info = FunctionInfo::with_args(args, Vec::new());
+            let ty = FunctionInfoType::new(fn_info).typedef_as("test".into());
+            assert_eq!(ty.name(), "test");
+            assert_eq!(ty.base_name(), args_fmt);
+        }
+    }
+
+    #[test]
+    fn return_typedef_name() {
+        let values = [
+            (vec![OBJECT.into()], "object"),
+            (
+                vec![OBJECT.into(), TupleType::default().into()],
+                "object, tuple",
+            ),
+            (
+                vec![
+                    OBJECT.into(),
+                    TupleType::default().into(),
+                    TypeTypeObject::new(OBJECT.into()).into(),
+                ],
+                "object, tuple, type[object]",
+            ),
+        ];
+        for (ret, ret_str) in values {
+            for args in argument_infos() {
+                let args_fmt = format!("func({args}) -> {ret_str}");
+                let fn_info = FunctionInfo::with_args(args, ret.clone());
+                let ty = FunctionInfoType::new(fn_info).typedef_as("test".into());
+                assert_eq!(ty.name(), "test");
+                assert_eq!(ty.base_name(), args_fmt);
+            }
+        }
+    }
+}

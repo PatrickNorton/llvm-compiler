@@ -145,7 +145,40 @@ impl TypeTypeObject {
     }
 }
 
+impl Default for TypeTypeObject {
+    fn default() -> Self {
+        Self::new_empty()
+    }
+}
+
 arc_eq_hash!(TypeTypeObject);
 
 type_obj_from!(TypeTypeObject, Type);
 try_from_type_obj!(TypeTypeObject, Type);
+
+#[cfg(test)]
+mod tests {
+    use crate::converter::builtins::OBJECT;
+
+    use super::TypeTypeObject;
+
+    #[test]
+    fn type_name() {
+        let ty = TypeTypeObject::new(OBJECT.into());
+        assert_eq!(ty.name(), "type[object]");
+        assert_eq!(ty.base_name(), "type");
+        let typedefed = ty.typedef_as("test".into());
+        assert_eq!(typedefed.name(), "test");
+        assert_eq!(typedefed.base_name(), "type");
+    }
+
+    #[test]
+    fn empty_type_name() {
+        let ty = TypeTypeObject::new_empty();
+        assert_eq!(ty.name(), "type");
+        assert_eq!(ty.base_name(), "type");
+        let typedefed = ty.typedef_as("test".into());
+        assert_eq!(typedefed.name(), "test");
+        assert_eq!(typedefed.base_name(), "type");
+    }
+}

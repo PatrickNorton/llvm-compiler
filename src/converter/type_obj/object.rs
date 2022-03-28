@@ -55,4 +55,46 @@ impl ObjectType {
     }
 }
 
+arc_partial_eq!(ObjectType, Object);
+
 type_obj_from!(ObjectType, Object);
+
+impl Default for ObjectType {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::converter::type_obj::{ObjectType, TupleType};
+
+    #[test]
+    fn const_constructable() {
+        const _: ObjectType = ObjectType::new();
+    }
+
+    #[test]
+    fn object_name() {
+        let obj = ObjectType::new();
+        assert_eq!(obj.name(), "object");
+        assert_eq!(obj.base_name(), "object");
+        let typedefed = obj.typedef_as("test".to_string());
+        assert_eq!(typedefed.name(), "test");
+        assert_eq!(typedefed.base_name(), "object");
+    }
+
+    #[test]
+    fn obj_superclass() {
+        let obj = ObjectType::new();
+        assert!(obj.is_superclass(&ObjectType::new().into()));
+        assert!(obj.is_superclass(&TupleType::default().into()));
+    }
+
+    #[test]
+    fn obj_subclass() {
+        let obj = ObjectType::new();
+        assert!(obj.is_subclass(&ObjectType::new().into()));
+        assert!(!obj.is_subclass(&TupleType::default().into()));
+    }
+}

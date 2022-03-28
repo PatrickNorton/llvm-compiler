@@ -101,3 +101,101 @@ impl Index<usize> for ListTypeObject {
         &self.value.values[index]
     }
 }
+
+impl Default for ListTypeObject {
+    fn default() -> Self {
+        Self::new(Vec::new())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::converter::builtins::OBJECT;
+    use crate::converter::type_obj::{ListTypeObject, TupleType, TypeObject, TypeTypeObject};
+
+    fn list_name_types() -> Vec<(ListTypeObject, &'static str)> {
+        vec![
+            (ListTypeObject::new(Vec::new()), "[]"),
+            (ListTypeObject::new(vec![OBJECT.into()]), "[object]"),
+            (
+                ListTypeObject::new(vec![OBJECT.into(), TupleType::default().into()]),
+                "[object, tuple]",
+            ),
+            (
+                ListTypeObject::new(vec![
+                    OBJECT.into(),
+                    TupleType::default().into(),
+                    TypeTypeObject::new(OBJECT.into()).into(),
+                ]),
+                "[object, tuple, type[object]]",
+            ),
+        ]
+    }
+
+    #[test]
+    fn list_name() {
+        for (ty, name) in list_name_types() {
+            assert_eq!(ty.name(), name);
+        }
+    }
+
+    #[test]
+    fn list_typedef() {
+        for (i, (ty, _)) in list_name_types().into_iter().enumerate() {
+            assert_eq!(
+                ty.typedef_as(format!("test_{}", i)).name(),
+                format!("test_{}", i)
+            )
+        }
+    }
+
+    fn assert_super(x: &ListTypeObject, y: &TypeObject) {
+        assert!(
+            x.is_superclass(y),
+            "{} is not a superclass of {}",
+            x.name(),
+            y.name(),
+        );
+    }
+
+    fn assert_not_super(x: &ListTypeObject, y: &TypeObject) {
+        assert!(
+            !x.is_superclass(y),
+            "{} is a superclass of {}",
+            x.name(),
+            y.name(),
+        );
+    }
+
+    #[test]
+    fn list_super() {
+        assert_super(
+            &ListTypeObject::new(Vec::new()),
+            &ListTypeObject::new(Vec::new()).into(),
+        );
+        assert_super(
+            &ListTypeObject::new(vec![OBJECT.into()]),
+            &ListTypeObject::new(vec![OBJECT.into()]).into(),
+        );
+        assert_super(
+            &ListTypeObject::new(vec![OBJECT.into()]),
+            &ListTypeObject::new(vec![TupleType::default().into()]).into(),
+        );
+    }
+
+    #[test]
+    fn list_not_super() {
+        assert_not_super(
+            &ListTypeObject::new(vec![TupleType::default().into()]),
+            &ListTypeObject::new(vec![OBJECT.into()]).into(),
+        );
+        assert_not_super(
+            &ListTypeObject::new(vec![]),
+            &ListTypeObject::new(vec![OBJECT.into()]).into(),
+        );
+        assert_not_super(
+            &ListTypeObject::new(vec![OBJECT.into()]),
+            &ListTypeObject::new(vec![]).into(),
+        );
+    }
+}

@@ -242,3 +242,100 @@ try_from_user_type!(StdTypeObject, Std);
 
 type_obj_from!(StdTypeObject, Std);
 try_from_type_obj!(StdTypeObject, Std);
+
+#[cfg(test)]
+mod tests {
+    use crate::converter::builtins::OBJECT;
+    use crate::converter::generic::GenericInfo;
+    use crate::converter::type_obj::{
+        StdTypeObject, TemplateParam, TupleType, TypeObject, TypeTypeObject, UserTypeLike,
+    };
+    use crate::parser::line_info::LineInfo;
+
+    #[test]
+    fn simple_name() {
+        let ty = StdTypeObject::new(
+            "test".to_string(),
+            Some(Vec::new()),
+            GenericInfo::empty(),
+            false,
+        );
+        ty.seal();
+        assert_eq!(ty.name(), "test");
+        let typedefed = ty.typedef_as("test2".to_string());
+        assert_eq!(typedefed.name(), "test2");
+    }
+
+    #[test]
+    fn generic_name() {
+        let generic = GenericInfo::new(vec![TemplateParam::new("T".to_string(), 0, OBJECT.into())]);
+        let ty = StdTypeObject::new("test".to_string(), Some(Vec::new()), generic, false);
+        ty.seal();
+        assert_eq!(ty.name(), "test");
+        let typedefed = ty.typedef_as("test2".to_string());
+        assert_eq!(typedefed.name(), "test2");
+        let generified = ty.generify(LineInfo::empty(), vec![OBJECT.into()]).unwrap();
+        assert_eq!(generified.name(), "test[object]");
+        let gen_ty = generified.typedef_as("test3".to_string());
+        assert_eq!(gen_ty.name(), "test3");
+    }
+
+    #[test]
+    fn generify() {
+        let generic = GenericInfo::new(vec![TemplateParam::new(
+            "T".to_string(),
+            0,
+            TypeTypeObject::new_empty().into(),
+        )]);
+        let ty = StdTypeObject::new("test".to_string(), Some(Vec::new()), generic, false);
+        ty.seal();
+        assert!(ty
+            .generify(
+                LineInfo::empty(),
+                vec![TypeTypeObject::new(OBJECT.into()).into()]
+            )
+            .is_ok());
+        assert!(ty.generify(LineInfo::empty(), vec![]).is_err());
+        assert!(ty
+            .generify(LineInfo::empty(), vec![TupleType::new(Vec::new()).into()])
+            .is_err());
+        assert!(ty
+            .generify(
+                LineInfo::empty(),
+                vec![
+                    TypeTypeObject::new(OBJECT.into()).into(),
+                    TypeTypeObject::new(OBJECT.into()).into(),
+                ]
+            )
+            .is_err())
+    }
+
+    #[test]
+    fn generics() {
+        let generics =
+            GenericInfo::new(vec![TemplateParam::new("T".to_string(), 0, OBJECT.into())]);
+        let ty = StdTypeObject::new("test".to_string(), Some(Vec::new()), generics, false);
+        ty.seal();
+        assert_eq!(ty.get_generics(), Vec::<TypeObject>::new());
+        let generified = ty.generify(LineInfo::empty(), vec![OBJECT.into()]).unwrap();
+        assert_eq!(generified.get_generics(), &[OBJECT]);
+    }
+
+    #[test]
+    fn same_base_type() {
+        let generic = GenericInfo::new(vec![TemplateParam::new("T".to_string(), 0, OBJECT.into())]);
+        let ty = StdTypeObject::new("test".to_string(), Some(Vec::new()), generic, false);
+        ty.seal();
+        let ty_obj = ty.clone().into();
+        assert!(ty.same_base_type(&ty_obj));
+        let typedefed = ty.typedef_as("test2".to_string());
+        assert!(typedefed.same_base_type(&ty_obj));
+        assert!(ty.same_base_type(&typedefed.into()));
+        let generified = ty.generify(LineInfo::empty(), vec![OBJECT.into()]).unwrap();
+        assert!(generified.same_base_type(&ty_obj));
+        assert!(ty.same_base_type(&generified));
+        let gen_ty = generified.typedef_as("test3".to_string());
+        assert!(gen_ty.same_base_type(&ty_obj));
+        assert!(ty.same_base_type(&gen_ty));
+    }
+}

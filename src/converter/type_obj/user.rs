@@ -340,6 +340,9 @@ impl UserType {
         typedef_name: &'a Option<String>,
         is_const_class: bool,
     ) -> Cow<'a, str> {
+        if let Option::Some(ty) = typedef_name {
+            return Cow::Borrowed(ty);
+        }
         if generics.is_empty() {
             let name = typedef_name.as_deref().unwrap_or(base_name);
             if is_const || is_const_class {

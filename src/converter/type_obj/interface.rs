@@ -303,3 +303,167 @@ try_from_user_type!(InterfaceType, Interface);
 
 type_obj_from!(InterfaceType, Interface);
 try_from_type_obj!(InterfaceType, Interface);
+
+#[cfg(test)]
+mod tests {
+    use crate::converter::access_handler::AccessLevel;
+    use crate::converter::argument::ArgumentInfo;
+    use crate::converter::builtins::OBJECT;
+    use crate::converter::class::{AttributeInfo, MethodInfo};
+    use crate::converter::fn_info::FunctionInfo;
+    use crate::converter::generic::GenericInfo;
+    use crate::converter::mutable::MutableType;
+    use crate::converter::type_obj::{
+        InterfaceAttrInfo, InterfaceFnInfo, InterfaceType, TemplateParam, TupleType, TypeObject,
+        TypeTypeObject, UserTypeLike,
+    };
+    use crate::macros::{hash_map, hash_set};
+    use crate::parser::line_info::LineInfo;
+    use crate::parser::operator_sp::OpSpTypeNode;
+
+    #[test]
+    fn simple_name() {
+        let ty = InterfaceType::new("test".to_string(), GenericInfo::empty(), Some(Vec::new()));
+        assert_eq!(ty.name(), "test");
+        let typedefed = ty.typedef_as("test2".to_string());
+        assert_eq!(typedefed.name(), "test2");
+    }
+
+    #[test]
+    fn generic_name() {
+        let generic = GenericInfo::new(vec![TemplateParam::new("T".to_string(), 0, OBJECT.into())]);
+        let ty = InterfaceType::new("test".to_string(), generic, Some(Vec::new()));
+        assert_eq!(ty.name(), "test");
+        let typedefed = ty.typedef_as("test2".to_string());
+        assert_eq!(typedefed.name(), "test2");
+        let generified = ty.generify(LineInfo::empty(), vec![OBJECT.into()]).unwrap();
+        assert_eq!(generified.name(), "test[object]");
+        let gen_ty = generified.typedef_as("test3".to_string());
+        assert_eq!(gen_ty.name(), "test3");
+    }
+
+    #[test]
+    fn generify() {
+        let generic = GenericInfo::new(vec![TemplateParam::new(
+            "T".to_string(),
+            0,
+            TypeTypeObject::new_empty().into(),
+        )]);
+        let ty = InterfaceType::new("test".to_string(), generic, Some(Vec::new()));
+        assert!(ty
+            .generify(
+                LineInfo::empty(),
+                vec![TypeTypeObject::new(OBJECT.into()).into()]
+            )
+            .is_ok());
+        assert!(ty.generify(LineInfo::empty(), vec![]).is_err());
+        assert!(ty
+            .generify(LineInfo::empty(), vec![TupleType::new(Vec::new()).into()])
+            .is_err());
+        assert!(ty
+            .generify(
+                LineInfo::empty(),
+                vec![
+                    TypeTypeObject::new(OBJECT.into()).into(),
+                    TypeTypeObject::new(OBJECT.into()).into(),
+                ]
+            )
+            .is_err())
+    }
+
+    #[test]
+    fn generics() {
+        let generics =
+            GenericInfo::new(vec![TemplateParam::new("T".to_string(), 0, OBJECT.into())]);
+        let ty = InterfaceType::new("test".to_string(), generics, Some(Vec::new()));
+        assert_eq!(ty.get_generics(), Vec::<TypeObject>::new());
+        let generified = ty.generify(LineInfo::empty(), vec![OBJECT.into()]).unwrap();
+        assert_eq!(generified.get_generics(), &[OBJECT]);
+    }
+
+    #[test]
+    fn same_base_type() {
+        let generic = GenericInfo::new(vec![TemplateParam::new("T".to_string(), 0, OBJECT.into())]);
+        let ty = InterfaceType::new("test".to_string(), generic, Some(Vec::new()));
+        let ty_obj = ty.clone().into();
+        assert!(ty.same_base_type(&ty_obj));
+        let typedefed = ty.typedef_as("test2".to_string());
+        assert!(typedefed.same_base_type(&ty_obj));
+        assert!(ty.same_base_type(&typedefed.into()));
+        let generified = ty.generify(LineInfo::empty(), vec![OBJECT.into()]).unwrap();
+        assert!(generified.same_base_type(&ty_obj));
+        assert!(ty.same_base_type(&generified));
+        let gen_ty = generified.typedef_as("test3".to_string());
+        assert!(gen_ty.same_base_type(&ty_obj));
+        assert!(ty.same_base_type(&gen_ty));
+    }
+
+    fn sample_attr_info() -> AttributeInfo {
+        AttributeInfo::new(
+            false,
+            AccessLevel::Public,
+            MutableType::Standard,
+            OBJECT.into(),
+            LineInfo::empty(),
+        )
+    }
+
+    fn sample_method_info() -> MethodInfo {
+        MethodInfo::new(
+            LineInfo::empty(),
+            AccessLevel::Public,
+            false,
+            FunctionInfo::new(
+                LineInfo::empty(),
+                "test_method".into(),
+                false,
+                GenericInfo::empty(),
+                ArgumentInfo::empty(),
+                Vec::new(),
+            ),
+        )
+    }
+
+    #[test]
+    fn simple_contract() {
+        let ty = InterfaceType::new("test".to_string(), GenericInfo::empty(), Some(Vec::new()));
+        ty.seal();
+        let (methods, ops) = ty.get_contract();
+        assert!(
+            methods.is_empty(),
+            "methods should be empty, got: {:?}",
+            methods
+        );
+        assert!(ops.is_empty(), "ops should be empty, got: {:?}", ops);
+    }
+
+    #[test]
+    fn empty_contract() {
+        let ty = InterfaceType::new("test".to_string(), GenericInfo::empty(), Some(Vec::new()));
+        let attr_info = InterfaceAttrInfo::new(sample_attr_info(), true);
+        ty.set_attributes(hash_map!("foo".to_string() => attr_info));
+        let op_info = InterfaceFnInfo::new(sample_method_info(), true);
+        ty.set_operators(hash_map!(OpSpTypeNode::New => op_info));
+        ty.seal();
+        let (methods, ops) = ty.get_contract();
+        assert!(
+            methods.is_empty(),
+            "methods should be empty, got: {:?}",
+            methods
+        );
+        assert!(ops.is_empty(), "ops should be empty, got: {:?}", ops);
+    }
+
+    #[test]
+    fn nonempty_contract() {
+        let ty = InterfaceType::new("test".to_string(), GenericInfo::empty(), Some(Vec::new()));
+        let attr_info = InterfaceAttrInfo::new(sample_attr_info(), false);
+        ty.set_attributes(hash_map!("foo".to_string() => attr_info));
+        let op_info = InterfaceFnInfo::new(sample_method_info(), false);
+        ty.set_operators(hash_map!(OpSpTypeNode::New => op_info));
+        ty.seal();
+        let (methods, ops) = ty.get_contract();
+        assert_eq!(methods, hash_set!("foo".to_string()));
+        assert_eq!(ops, hash_set!(OpSpTypeNode::New));
+    }
+}

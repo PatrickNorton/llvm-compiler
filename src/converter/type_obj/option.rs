@@ -205,3 +205,57 @@ arc_eq_hash!(OptionTypeObject);
 
 type_obj_from!(OptionTypeObject, Option);
 try_from_type_obj!(OptionTypeObject, Option);
+
+#[cfg(test)]
+mod tests {
+    use itertools::Itertools;
+
+    use crate::converter::builtins::{NULL_TYPE, OBJECT};
+    use crate::converter::type_obj::{TupleType, TypeObject};
+
+    use super::OptionTypeObject;
+
+    #[test]
+    fn option_name() {
+        let opt = OptionTypeObject::new(OBJECT.into());
+        assert_eq!(opt.name(), "object?");
+        let typedefed = opt.typedef_as("test".to_string());
+        assert_eq!(typedefed.name(), "test");
+    }
+
+    #[test]
+    fn strip_null() {
+        let opt = OptionTypeObject::new(TupleType::default().into());
+        assert_eq!(opt.strip_null(), &TupleType::default());
+        assert_eq!(opt.get_option_val(), &TupleType::default());
+    }
+
+    #[test]
+    fn needs_make_option() {
+        let tup = TypeObject::from(TupleType::default());
+        let opt_object = OptionTypeObject::new(tup.clone()).into();
+        assert!(OptionTypeObject::needs_make_option(&opt_object, &tup));
+        assert!(!OptionTypeObject::needs_make_option(
+            &opt_object,
+            &opt_object,
+        ));
+        assert!(OptionTypeObject::needs_make_option(&opt_object, &NULL_TYPE));
+        assert!(!OptionTypeObject::needs_make_option(&tup, &opt_object))
+    }
+
+    #[test]
+    fn super_with_option() {
+        let tup = TypeObject::from(TupleType::default());
+        let opt_object = OptionTypeObject::new(tup.clone()).into();
+        assert!(OptionTypeObject::super_with_option(&opt_object, &tup));
+        assert!(OptionTypeObject::super_with_option(&opt_object, &NULL_TYPE));
+    }
+
+    #[test]
+    fn super_defined() {
+        let opt = OptionTypeObject::new(OBJECT.into());
+        let mut opt_defined = opt.get_defined().collect_vec();
+        opt_defined.sort_unstable();
+        assert_eq!(opt_defined, &["flat_map", "map"]);
+    }
+}
