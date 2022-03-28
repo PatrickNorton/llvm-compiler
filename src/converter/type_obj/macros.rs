@@ -26,6 +26,15 @@ macro_rules! arc_partial_eq {
                 }
             }
         }
+
+        impl PartialEq<$value> for TypeObject {
+            fn eq(&self, other: &$value) -> bool {
+                match self {
+                    TypeObject::$variant(x) => x == other,
+                    _ => false,
+                }
+            }
+        }
     };
 }
 
