@@ -1,13 +1,16 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
+use std::iter::zip;
 use std::sync::Arc;
 
 use itertools::Itertools;
 
+use crate::converter::builtins::CALLABLE;
 use crate::converter::fn_info::FunctionInfo;
 use crate::parser::operator_sp::OpSpTypeNode;
 
-use super::macros::{arc_eq_hash, type_obj_from};
+use super::macros::{arc_eq_hash, arc_partial_eq, type_obj_from};
 use super::TypeObject;
 
 #[derive(Debug, Clone)]
@@ -76,6 +79,71 @@ impl FunctionInfoType {
         FunctionInfoType::new(self.value.info.generify(parent, values)).into()
     }
 
+    pub fn is_superclass(&self, other: &TypeObject) -> bool {
+        other.is_subclass(&self.clone().into())
+    }
+
+    pub fn is_subclass(&self, other: &TypeObject) -> bool {
+        // if (other.sameBaseType(Builtins.callable())) {
+        //     var generics = other.getGenerics();
+        //     assert generics.size() == 2;
+        //     var args = generics.get(0);
+        //     var rets = generics.get(1);
+        //     assert args instanceof ListTypeObject && rets instanceof ListTypeObject;
+        //     var arguments = ((ListTypeObject) args).getValues();
+        //     var returns = ((ListTypeObject) rets).getValues();
+        //     var thisArgs = info.getArgs();
+        //     if (thisArgs.getKeywordArgs().length > 0
+        //             || thisArgs.size() != arguments.length
+        //             || returns.length > info.getReturns().length) {
+        //         return false;
+        //     }
+        //     for (var pair : Zipper.of(arguments, thisArgs)) {
+        //         var arg = pair.getKey();
+        //         var thisArg = pair.getValue();
+        //         if (!thisArg.getType().isSuperclass(arg)) {
+        //             return false;
+        //         }
+        //     }
+        //     for (var pair : Zipper.of(returns, info.getReturns())) {
+        //         if (!pair.getKey().isSuperclass(pair.getValue())) {
+        //             return false;
+        //         }
+        //     }
+        //     return true;
+        // }
+        // return this.equals(other);
+        if other.same_base_type(&CALLABLE) {
+            let generics = other.get_generics();
+            // NOTE: feature(let_else) (#87335) would make this nicer
+            let (args, rets) = if let [TypeObject::List(args), TypeObject::List(rets)] = generics {
+                (args.get_values(), rets.get_values())
+            } else {
+                panic!()
+            };
+            let this_args = self.value.info.get_args();
+            if !this_args.get_keyword_args().is_empty()
+                || this_args.len() != args.len()
+                || rets.len() > self.value.info.get_returns().len()
+            {
+                return false;
+            }
+            for (arg, this_arg) in zip(args.iter(), this_args.iter()) {
+                if !this_arg.get_type().is_superclass(arg) {
+                    return false;
+                }
+            }
+            for (ret, this_ret) in zip(rets, self.value.info.get_returns()) {
+                if !ret.is_superclass(this_ret) {
+                    return false;
+                }
+            }
+            true
+        } else {
+            self == other
+        }
+    }
+
     pub fn set_generic_parent(&self) {
         self.value.info.set_generic_parent();
     }
@@ -107,6 +175,35 @@ impl FunctionInfoType {
                 typedef_name: Some(name),
             }),
         }
+    }
+
+    pub fn generify_as(
+        &self,
+        parent: &TypeObject,
+        other: &TypeObject,
+    ) -> Option<HashMap<u16, TypeObject>> {
+        if self.is_superclass(other) {
+            return Some(HashMap::new());
+        }
+        let other = match other {
+            TypeObject::FnInfo(f) => f,
+            _ => return None,
+        };
+        let info = &self.value.info;
+        let other_info = &other.value.info;
+        let mut result = HashMap::new();
+        let args = info.get_args();
+        let other_args = other_info.get_args();
+        if args.len() != other_args.len() {
+            return None;
+        }
+        for (arg, other_arg) in zip(args.iter(), other_args.iter()) {
+            result.extend(arg.get_type().generify_as(parent, other_arg.get_type())?);
+        }
+        for (ret, other_ret) in zip(info.get_returns(), other_info.get_returns()) {
+            result.extend(ret.generify_as(parent, other_ret)?);
+        }
+        Some(result)
     }
 }
 
@@ -186,16 +283,24 @@ impl From<FunctionInfo> for TypeObject {
 
 arc_eq_hash!(FunctionInfoType);
 arc_eq_hash!(GenerifiedFnInfoType);
+arc_partial_eq!(FunctionInfoType, FnInfo);
+arc_partial_eq!(GenerifiedFnInfoType, GenerifiedFn);
 
 type_obj_from!(FunctionInfoType, FnInfo);
 type_obj_from!(GenerifiedFnInfoType, GenerifiedFn);
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use crate::converter::argument::{Argument, ArgumentInfo};
     use crate::converter::builtins::OBJECT;
     use crate::converter::fn_info::FunctionInfo;
-    use crate::converter::type_obj::{ObjectType, TupleType, TypeTypeObject};
+    use crate::converter::generic::GenericInfo;
+    use crate::converter::type_obj::{
+        ObjectType, StdTypeObject, TemplateParam, TupleType, TypeTypeObject, UserTypeLike,
+    };
+    use crate::macros::hash_map;
 
     use super::FunctionInfoType;
 
@@ -319,5 +424,93 @@ mod tests {
                 assert_eq!(ty.base_name(), args_fmt);
             }
         }
+    }
+
+    #[test]
+    fn rets_generify_as() {
+        let param = TemplateParam::new("T".into(), 0, OBJECT.into());
+        let generic_info = GenericInfo::new(vec![param.clone()]);
+        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        parent.set_generic_parent();
+        let func = FunctionInfoType::new(FunctionInfo::from_returns(vec![param.into()]));
+        let tup = TupleType::new(Vec::new());
+        let other = FunctionInfoType::new(FunctionInfo::from_returns(vec![tup.clone().into()]));
+        assert_eq!(
+            func.generify_as(&parent.into(), &other.into()),
+            Some(hash_map!(0 => tup.into()))
+        );
+    }
+
+    #[test]
+    fn args_generify_as() {
+        let param = TemplateParam::new("T".into(), 0, OBJECT.into());
+        let generic_info = GenericInfo::new(vec![param.clone()]);
+        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        parent.set_generic_parent();
+        let func = FunctionInfoType::new(FunctionInfo::with_args(
+            ArgumentInfo::of_types([param.into()]),
+            Vec::new(),
+        ));
+        let tup = TupleType::new(Vec::new());
+        let other = FunctionInfoType::new(FunctionInfo::with_args(
+            ArgumentInfo::of_types([tup.clone().into()]),
+            Vec::new(),
+        ));
+        assert_eq!(
+            func.generify_as(&parent.into(), &other.into()),
+            Some(hash_map!(0 => tup.into()))
+        );
+    }
+
+    #[test]
+    fn both_generify_as() {
+        let param = TemplateParam::new("T".into(), 0, OBJECT.into());
+        let generic_info = GenericInfo::new(vec![param.clone()]);
+        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        parent.set_generic_parent();
+        let func = FunctionInfoType::new(FunctionInfo::with_args(
+            ArgumentInfo::of_types([param.clone().into()]),
+            vec![param.into()],
+        ));
+        let tup = TupleType::new(Vec::new());
+        let other = FunctionInfoType::new(FunctionInfo::with_args(
+            ArgumentInfo::of_types([tup.clone().into()]),
+            vec![tup.clone().into()],
+        ));
+        assert_eq!(
+            func.generify_as(&parent.into(), &other.into()),
+            Some(hash_map!(0 => tup.into()))
+        );
+    }
+
+    #[test]
+    fn empty_generify_as() {
+        let param = TemplateParam::new("T".into(), 0, OBJECT.into());
+        let generic_info = GenericInfo::new(vec![param]);
+        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        parent.set_generic_parent();
+        let tup = TupleType::new(Vec::new());
+        let func = FunctionInfoType::new(FunctionInfo::from_returns(vec![tup.clone().into()]));
+        let other = FunctionInfoType::new(FunctionInfo::from_returns(vec![tup.into()]));
+        let parent_ty = parent.into();
+        assert_eq!(
+            func.generify_as(&parent_ty, &other.into()),
+            Some(HashMap::new())
+        );
+    }
+
+    #[test]
+    fn invalid_generify_as() {
+        let param = TemplateParam::new("T".into(), 0, OBJECT.into());
+        let generic_info = GenericInfo::new(vec![param.clone()]);
+        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        parent.set_generic_parent();
+        let tup = TupleType::new(Vec::new());
+        let func = FunctionInfoType::new(FunctionInfo::with_args(
+            ArgumentInfo::of_types([param.into()]),
+            vec![tup.clone().into()],
+        ));
+        let other = FunctionInfoType::new(FunctionInfo::from_returns(vec![tup.into()]));
+        assert_eq!(func.generify_as(&parent.into(), &other.into()), None);
     }
 }

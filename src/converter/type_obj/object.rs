@@ -6,7 +6,7 @@ use crate::converter::access_handler::AccessLevel;
 use crate::converter::fn_info::FunctionInfo;
 use crate::parser::operator_sp::OpSpTypeNode;
 
-use super::macros::type_obj_from;
+use super::macros::{arc_partial_eq, type_obj_from};
 use super::TypeObject;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -38,6 +38,10 @@ impl ObjectType {
 
     pub fn is_superclass(&self, _other: &TypeObject) -> bool {
         true
+    }
+
+    pub fn is_subclass(&self, other: &TypeObject) -> bool {
+        matches!(other, TypeObject::Object(_))
     }
 
     pub fn same_base_type(&self, other: &TypeObject) -> bool {

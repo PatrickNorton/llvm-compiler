@@ -149,6 +149,30 @@ pub trait UserTypeLike: UserTypeInner + PartialEq<TypeObject> {
             .map(|y| self.generify_attr_type(y))
     }
 
+    fn generify_as(
+        &self,
+        parent: &TypeObject,
+        other: &TypeObject,
+    ) -> Option<HashMap<u16, TypeObject>> {
+        if self.is_superclass(other) {
+            Some(HashMap::new())
+        } else if self.same_base_type(other) {
+            make_match(parent, self.generics(), other.get_generics())
+        } else if let Result::Ok(user) = UserType::try_from(other.clone()) {
+            for sup in user.recursive_supers() {
+                if self.same_base_type(sup) {
+                    let sup_generics = self.generics();
+                    let obj_generics = sup.get_generics();
+                    return make_match(parent, sup_generics, obj_generics);
+                }
+            }
+            None
+        } else {
+            // FIXME: Add generification of function types that implement Callable
+            None
+        }
+    }
+
     fn set_generic_parent(&self) {
         self.get_info().info.set_parent(self.clone().into())
     }
@@ -602,6 +626,42 @@ fn user_generics(ty: &TypeObject) -> &[TypeObject] {
         TypeObject::Union(u) => u.generics(),
         _ => panic!("Expected user type here"),
     }
+}
+
+fn make_match(
+    parent: &TypeObject,
+    sup_generics: &[TypeObject],
+    obj_generics: &[TypeObject],
+) -> Option<HashMap<u16, TypeObject>> {
+    if sup_generics.is_empty() && obj_generics.is_empty() {
+        return Some(HashMap::new());
+    } else if sup_generics.is_empty() {
+        return None;
+    } else if obj_generics.is_empty() {
+        return Some(HashMap::new());
+    }
+    assert_eq!(sup_generics.len(), obj_generics.len());
+    let mut result = HashMap::with_capacity(sup_generics.len());
+    for (sup_g, obj_g) in zip(sup_generics, obj_generics) {
+        match (sup_g, obj_g) {
+            (TypeObject::Template(param), _) => {
+                if param.get_parent().same_base_type(parent) {
+                    result.insert(param.get_index().try_into().unwrap(), obj_g.clone());
+                } else {
+                    return None;
+                }
+            }
+            (TypeObject::List(_), TypeObject::List(_)) => {
+                let generics = sup_g.generify_as(parent, obj_g)?;
+                if !TypeObject::add_generics_to_map(generics, &mut result) {
+                    return None;
+                }
+            }
+            _ if sup_g != obj_g => return None,
+            _ => {}
+        }
+    }
+    Some(result)
 }
 
 impl TryFrom<TypeObject> for UserType {

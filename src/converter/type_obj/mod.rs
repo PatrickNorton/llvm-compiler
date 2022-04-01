@@ -220,19 +220,26 @@ impl TypeObject {
 
     pub fn is_subclass(&self, other: &TypeObject) -> bool {
         match self {
-            TypeObject::FnInfo(_) => todo!(),
+            TypeObject::FnInfo(f) => f.is_subclass(other),
             TypeObject::GenerifiedFn(_) => todo!(),
             TypeObject::Interface(i) => i.is_subclass(other),
-            TypeObject::List(_) => todo!(),
+            TypeObject::List(_) => panic!("Should not be instancing list types"),
             TypeObject::Module(_) => todo!(),
-            TypeObject::Object(_) => todo!(),
-            TypeObject::Option(_) => todo!(),
+            TypeObject::Object(o) => o.is_subclass(other),
+            TypeObject::Option(o) => o.is_subclass(other),
             TypeObject::Std(s) => s.is_subclass(other),
-            TypeObject::Template(_) => todo!(),
-            TypeObject::Tuple(_) => todo!(),
+            TypeObject::Template(t) => t.is_subclass(other),
+            TypeObject::Tuple(t) => t.is_subclass(other),
             TypeObject::Type(_) => todo!(),
             TypeObject::Union(u) => u.is_subclass(other),
         }
+    }
+
+    pub fn will_super_recurse(&self) -> bool {
+        !matches!(
+            self,
+            TypeObject::List(_) | TypeObject::Object(_) | TypeObject::Type(_)
+        )
     }
 
     pub fn strip_null(self) -> Self {
@@ -323,12 +330,53 @@ impl TypeObject {
 
     // FIXME? See if this can be done by returning references instead
     // FIXME: Determine whether this should return u16 or usize
+    /// Returns the generics needed to transform one type into another.
+    ///
+    /// The purpose for this is for more complex generic transformations, e.g.
+    /// finding the correct `T` such that `list[int] instanceof Iterable[T]`.
+    /// The `parent` parameter is the parent of all
+    /// [`TemplateParams`](TemplateParam) which are to be included in the
+    /// transformation.
+    ///
+    /// If it is impossible for this class to ever be a subclass of the given
+    /// class (in `other`), or it is impossible while only changing
+    /// [`TemplateParams`](TemplateParam) with the given parent, `None` will be
+    /// returned.
+    ///
+    /// If this type contains enough information to generify the parent
+    /// completely, it will be possible to transform the returned map into a
+    /// list with no empty indices. However, for parents with more complex
+    /// generics, that may not be the case. If all information is given, then it
+    /// will be true that, given
+    /// ```ignore
+    /// let params = transform(self.generify_as(parent, other))
+    /// ```
+    /// where `transform` is a function turning the returned [`HashMap`] into a
+    /// [`Vec`], then
+    /// ```ignore
+    /// self.generify_with(parent, params)
+    ///     .is_superclass(other.generify_with(parent, params))
+    /// ```
+    /// must always be `true`.
     pub fn generify_as(
         &self,
         parent: &TypeObject,
         other: &TypeObject,
     ) -> Option<HashMap<u16, TypeObject>> {
-        todo!()
+        match self {
+            TypeObject::FnInfo(f) => f.generify_as(parent, other),
+            TypeObject::GenerifiedFn(_) => None,
+            TypeObject::Interface(i) => i.generify_as(parent, other),
+            TypeObject::List(l) => l.generify_as(parent, other),
+            TypeObject::Module(_) => None,
+            TypeObject::Object(_) => Some(HashMap::new()),
+            TypeObject::Option(o) => o.generify_as(parent, other),
+            TypeObject::Std(s) => s.generify_as(parent, other),
+            TypeObject::Template(t) => t.generify_as(parent, other),
+            TypeObject::Tuple(t) => t.generify_as(parent, other),
+            TypeObject::Type(_) => None,
+            TypeObject::Union(u) => u.generify_as(parent, other),
+        }
     }
 
     pub fn typedef_as(&self, name: String) -> TypeObject {
@@ -692,7 +740,7 @@ impl TypeObject {
                 Entry::Occupied(mut entry) => {
                     if obj.is_superclass(entry.get()) {
                         entry.insert(obj);
-                    } else {
+                    } else if !entry.get().is_superclass(&obj) {
                         return false;
                     }
                 }

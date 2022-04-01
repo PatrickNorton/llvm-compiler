@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::iter::zip;
 use std::sync::Arc;
@@ -55,6 +56,10 @@ impl TupleType {
         "tuple".into()
     }
 
+    pub fn is_superclass(&self, other: &TypeObject) -> bool {
+        other.is_subclass(&self.clone().into())
+    }
+
     pub fn is_subclass(&self, other: &TypeObject) -> bool {
         if let TypeObject::Tuple(tuple) = other {
             if self == tuple {
@@ -62,7 +67,7 @@ impl TupleType {
             } else if self.get_generics().len() != tuple.get_generics().len() {
                 return false;
             }
-            zip(self.get_generics(), tuple.get_generics()).all(|(x, y)| x.is_superclass(y))
+            zip(self.get_generics(), tuple.get_generics()).all(|(x, y)| x.is_subclass(y))
         // FIXME: Self is hashable
         } else if other.will_super_recurse() {
             false
@@ -76,6 +81,35 @@ impl TupleType {
             Ok(TupleType::new(args).into())
         } else {
             Err(CompilerException::of("Cannot generify object", lined).into())
+        }
+    }
+
+    pub fn generify_as(
+        &self,
+        parent: &TypeObject,
+        other: &TypeObject,
+    ) -> Option<HashMap<u16, TypeObject>> {
+        if self.is_superclass(other) || self == other {
+            Some(HashMap::new())
+        } else if self.same_base_type(other) {
+            let generics = self.get_generics();
+            let other_generics = other.get_generics();
+            if generics.is_empty() {
+                return Some(HashMap::new());
+            } else if generics.len() != other_generics.len() {
+                return None;
+            }
+            let mut result = HashMap::with_capacity(generics.len());
+            for (gen, other_gen) in zip(generics, other_generics) {
+                let map = gen.generify_as(parent, other_gen)?;
+                if !TypeObject::add_generics_to_map(map.clone(), &mut result) {
+                    println!("{:?} <== {:?}", result, map);
+                    return None;
+                }
+            }
+            Some(result)
+        } else {
+            None
         }
     }
 
@@ -120,12 +154,15 @@ type_obj_from!(TupleType, Tuple);
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::fmt::Debug;
 
     use itertools::Itertools;
 
     use crate::converter::builtins::OBJECT;
-    use crate::converter::type_obj::TupleType;
+    use crate::converter::generic::GenericInfo;
+    use crate::converter::type_obj::{StdTypeObject, TemplateParam, TupleType, UserTypeLike};
+    use crate::macros::hash_map;
 
     #[test]
     fn empty_tuple_name() {
@@ -163,5 +200,58 @@ mod tests {
             let mut result = (0..i).map(|x| x.to_string()).collect_vec();
             assert_defined(&ty, &mut result);
         }
+    }
+
+    #[test]
+    fn empty_generify_as() {
+        let param = TemplateParam::new("T".into(), 0, OBJECT.into());
+        let generic_info = GenericInfo::new(vec![param]);
+        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        parent.set_generic_parent();
+        let tup = TupleType::default();
+        let result = TupleType::default();
+        assert_eq!(
+            tup.generify_as(&parent.into(), &result.into()),
+            Some(HashMap::new())
+        );
+    }
+
+    #[test]
+    fn single_generify_as() {
+        let param = TemplateParam::new("T".into(), 0, OBJECT.into());
+        let generic_info = GenericInfo::new(vec![param.clone()]);
+        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        parent.set_generic_parent();
+        let tup = TupleType::new(vec![param.into()]);
+        let result = TupleType::new(vec![OBJECT.into()]);
+        assert_eq!(
+            tup.generify_as(&parent.into(), &result.into()),
+            Some(hash_map!(0 => OBJECT.into()))
+        );
+    }
+
+    #[test]
+    fn double_generify_as() {
+        let param = TemplateParam::new("T".into(), 0, OBJECT.into());
+        let generic_info = GenericInfo::new(vec![param.clone()]);
+        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        parent.set_generic_parent();
+        let tup = TupleType::new(vec![param.clone().into(), param.into()]);
+        let result = TupleType::new(vec![OBJECT.into(), OBJECT.into()]);
+        let parent_ty = parent.into();
+        assert_eq!(
+            tup.generify_as(&parent_ty, &result.into()),
+            Some(hash_map!(0 => OBJECT.into()))
+        );
+        let result = TupleType::new(vec![TupleType::default().into(), OBJECT.into()]);
+        assert_eq!(
+            tup.generify_as(&parent_ty, &result.into()),
+            Some(hash_map!(0 => OBJECT.into()))
+        );
+        let result = TupleType::new(vec![OBJECT.into(), TupleType::default().into()]);
+        assert_eq!(
+            tup.generify_as(&parent_ty, &result.into()),
+            Some(hash_map!(0 => OBJECT.into()))
+        );
     }
 }

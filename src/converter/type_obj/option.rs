@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
@@ -110,6 +111,20 @@ impl OptionTypeObject {
         TypeObject::optional(self.value.option_val.generify_with(parent, args))
     }
 
+    pub fn generify_as(
+        &self,
+        parent: &TypeObject,
+        other: &TypeObject,
+    ) -> Option<HashMap<u16, TypeObject>> {
+        match other {
+            TypeObject::Option(o) => self
+                .get_option_val()
+                .generify_as(parent, o.get_option_val()),
+            TypeObject::Object(o) => Some(HashMap::new()),
+            _ => None,
+        }
+    }
+
     pub fn attr_type(&self, value: &str) -> Option<TypeObject> {
         match value {
             "map" => Some(
@@ -208,10 +223,16 @@ try_from_type_obj!(OptionTypeObject, Option);
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use itertools::Itertools;
 
     use crate::converter::builtins::{NULL_TYPE, OBJECT};
-    use crate::converter::type_obj::{TupleType, TypeObject};
+    use crate::converter::generic::GenericInfo;
+    use crate::converter::type_obj::{
+        StdTypeObject, TemplateParam, TupleType, TypeObject, UserTypeLike,
+    };
+    use crate::macros::hash_map;
 
     use super::OptionTypeObject;
 
@@ -257,5 +278,44 @@ mod tests {
         let mut opt_defined = opt.get_defined().collect_vec();
         opt_defined.sort_unstable();
         assert_eq!(opt_defined, &["flat_map", "map"]);
+    }
+
+    #[test]
+    fn option_generify_as() {
+        let param = TemplateParam::new("T".into(), 0, OBJECT.into());
+        let generic_info = GenericInfo::new(vec![param.clone()]);
+        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        parent.set_generic_parent();
+        let value = OptionTypeObject::new(param.into());
+        let result = OptionTypeObject::new(OBJECT.into());
+        assert_eq!(
+            value.generify_as(&parent.into(), &result.into()),
+            Some(hash_map!(0 => OBJECT.into()))
+        );
+    }
+
+    #[test]
+    fn identity_generify_as() {
+        let param = TemplateParam::new("T".into(), 0, OBJECT.into());
+        let generic_info = GenericInfo::new(vec![param.clone()]);
+        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        parent.set_generic_parent();
+        let value = OptionTypeObject::new(param.clone().into());
+        let result = OptionTypeObject::new(param.into());
+        assert_eq!(
+            value.generify_as(&parent.into(), &result.into()),
+            Some(HashMap::new())
+        );
+    }
+
+    #[test]
+    fn invalid_generify_as() {
+        let param = TemplateParam::new("T".into(), 0, TupleType::default().into());
+        let generic_info = GenericInfo::new(vec![param.clone()]);
+        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        parent.set_generic_parent();
+        let value = OptionTypeObject::new(param.into());
+        let result = OptionTypeObject::new(OBJECT.into());
+        assert_eq!(value.generify_as(&parent.into(), &result.into()), None);
     }
 }

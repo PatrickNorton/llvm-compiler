@@ -9,9 +9,10 @@ use crate::converter::access_handler::AccessLevel;
 use crate::converter::builtins::OBJECT;
 use crate::converter::compiler_info::CompilerInfo;
 use crate::converter::CompileResult;
+use crate::macros::hash_map;
 use crate::parser::type_node::TypeNode;
 
-use super::macros::{arc_eq_hash, try_from_type_obj, type_obj_from};
+use super::macros::{arc_eq_hash, arc_partial_eq, try_from_type_obj, type_obj_from};
 use super::{ListTypeObject, TypeObject};
 
 #[derive(Debug, Clone)]
@@ -93,6 +94,20 @@ impl TemplateParam {
 
     pub fn get_index(&self) -> usize {
         self.value.index
+    }
+
+    pub fn is_superclass(&self, other: &TypeObject) -> bool {
+        other.is_superclass(&self.clone().into())
+    }
+
+    pub fn is_subclass(&self, other: &TypeObject) -> bool {
+        match other {
+            TypeObject::Template(tp) => {
+                tp.get_parent().same_base_type(self.get_parent())
+                    && tp.get_bound().is_superclass(self.get_bound())
+            }
+            _ => other.is_superclass(self.get_bound()),
+        }
     }
 
     pub fn get_bound(&self) -> &TypeObject {
@@ -184,6 +199,26 @@ impl TemplateParam {
         }
     }
 
+    pub fn generify_as(
+        &self,
+        parent: &TypeObject,
+        other: &TypeObject,
+    ) -> Option<HashMap<u16, TypeObject>> {
+        if self == other {
+            Some(HashMap::new())
+        } else if self.get_parent().same_base_type(parent) {
+            if self.get_bound().is_superclass(other) {
+                Some(hash_map!(self.value.index.try_into().unwrap() => other.clone()))
+            } else {
+                None
+            }
+        } else if self.is_superclass(other) {
+            Some(HashMap::new())
+        } else {
+            None
+        }
+    }
+
     pub fn get_defined(&self) -> Option<Box<dyn Iterator<Item = Cow<'_, str>> + '_>> {
         self.get_bound().get_defined()
     }
@@ -224,6 +259,41 @@ impl TemplateBound {
 }
 
 arc_eq_hash!(TemplateParam);
+arc_partial_eq!(TemplateParam, Template);
 
 type_obj_from!(TemplateParam, Template);
 try_from_type_obj!(TemplateParam, Template);
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use crate::converter::builtins::OBJECT;
+    use crate::converter::generic::GenericInfo;
+    use crate::converter::type_obj::{StdTypeObject, TemplateParam, UserTypeLike};
+    use crate::macros::hash_map;
+
+    #[test]
+    fn eq_generify_as() {
+        let param = TemplateParam::new("T".into(), 0, OBJECT.into());
+        let generic_info = GenericInfo::new(vec![param.clone()]);
+        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        parent.set_generic_parent();
+        assert_eq!(
+            param.clone().generify_as(&parent.into(), &param.into()),
+            Some(HashMap::new()),
+        );
+    }
+
+    #[test]
+    fn template_generify_as() {
+        let param = TemplateParam::new("T".into(), 0, OBJECT.into());
+        let generic_info = GenericInfo::new(vec![param.clone()]);
+        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        parent.set_generic_parent();
+        assert_eq!(
+            param.generify_as(&parent.into(), &OBJECT.into()),
+            Some(hash_map!(0 => OBJECT.into())),
+        );
+    }
+}

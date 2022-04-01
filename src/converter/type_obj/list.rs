@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::iter::zip;
 use std::ops::Index;
 use std::sync::Arc;
@@ -87,6 +88,25 @@ impl ListTypeObject {
             .into()
         }
     }
+
+    pub fn generify_as(
+        &self,
+        parent: &TypeObject,
+        other: &TypeObject,
+    ) -> Option<HashMap<u16, TypeObject>> {
+        let other = match other {
+            TypeObject::List(l) => l,
+            _ => return None,
+        };
+        let mut result = HashMap::new();
+        for (val, other_val) in zip(self, other) {
+            let map = val.generify_as(parent, other_val)?;
+            if !TypeObject::add_generics_to_map(map, &mut result) {
+                return None;
+            }
+        }
+        Some(result)
+    }
 }
 
 arc_eq_hash!(ListTypeObject);
@@ -102,6 +122,16 @@ impl Index<usize> for ListTypeObject {
     }
 }
 
+impl<'a> IntoIterator for &'a ListTypeObject {
+    type Item = &'a TypeObject;
+
+    type IntoIter = std::slice::Iter<'a, TypeObject>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.value.values.iter()
+    }
+}
+
 impl Default for ListTypeObject {
     fn default() -> Self {
         Self::new(Vec::new())
@@ -110,8 +140,15 @@ impl Default for ListTypeObject {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use crate::converter::builtins::OBJECT;
-    use crate::converter::type_obj::{ListTypeObject, TupleType, TypeObject, TypeTypeObject};
+    use crate::converter::generic::GenericInfo;
+    use crate::converter::type_obj::{
+        ListTypeObject, StdTypeObject, TemplateParam, TupleType, TypeObject, TypeTypeObject,
+        UserTypeLike,
+    };
+    use crate::macros::hash_map;
 
     fn list_name_types() -> Vec<(ListTypeObject, &'static str)> {
         vec![
@@ -197,5 +234,47 @@ mod tests {
             &ListTypeObject::new(vec![OBJECT.into()]),
             &ListTypeObject::new(vec![]).into(),
         );
+    }
+
+    #[test]
+    fn empty_generify_as() {
+        let list = ListTypeObject::default();
+        let param = TemplateParam::new("T".into(), 0, OBJECT.into());
+        let generic_info = GenericInfo::new(vec![param]);
+        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        parent.set_generic_parent();
+        assert_eq!(
+            list.generify_as(&parent.into(), &list.clone().into()),
+            Some(HashMap::new())
+        );
+        assert_eq!(
+            list.generify_as(&list.clone().into(), &list.clone().into()),
+            Some(HashMap::new())
+        );
+    }
+
+    #[test]
+    fn single_generify_as() {
+        let param = TemplateParam::new("T".into(), 0, OBJECT.into());
+        let generic_info = GenericInfo::new(vec![param.clone()]);
+        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        parent.set_generic_parent();
+        let list = ListTypeObject::new(vec![param.into()]);
+        let result = ListTypeObject::new(vec![OBJECT.into()]);
+        assert_eq!(
+            list.generify_as(&parent.into(), &result.into()),
+            Some(hash_map!(0 => OBJECT.into()))
+        );
+    }
+
+    #[test]
+    fn non_list_generify_as() {
+        let param = TemplateParam::new("T".into(), 0, OBJECT.into());
+        let generic_info = GenericInfo::new(vec![param.clone()]);
+        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        parent.set_generic_parent();
+        let list = ListTypeObject::new(vec![param.into()]);
+        let result = TupleType::new(vec![OBJECT.into()]);
+        assert_eq!(list.generify_as(&parent.into(), &result.into()), None);
     }
 }

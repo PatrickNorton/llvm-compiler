@@ -210,6 +210,11 @@ impl UserTypeLike for StdTypeObject {
     fn get_supers(&self) -> &[TypeObject] {
         self.get_info().supers.get().unwrap()
     }
+
+    fn seal(&self) {
+        self.get_info().seal();
+        self.value.info.is_const_class.get_or_init(|| false);
+    }
 }
 
 impl UserTypeInner for StdTypeObject {
