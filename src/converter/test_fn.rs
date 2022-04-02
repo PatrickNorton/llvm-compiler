@@ -33,7 +33,7 @@ pub fn convert_test_fn(
 }
 
 pub fn convert_test_start(info: &mut GlobalCompilerInfo) -> u16 {
-    let test_constant = info.global_builtins().get_local().test_const().clone();
+    let test_constant = info.global_builtins().unwrap().test_const().clone();
     let test_functions = info.get_test_functions();
     let mut bytes = BytecodeList::new();
     bytes.add(Bytecode::LoadConst(test_constant.into()));

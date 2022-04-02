@@ -7,6 +7,7 @@ use std::sync::Arc;
 use dashmap::DashMap;
 use derive_new::new;
 use indexmap::IndexSet;
+use once_cell::sync::OnceCell;
 use parking_lot::{Mutex, MutexGuard};
 
 use crate::arguments::{CLArgs, Optimization};
@@ -14,7 +15,7 @@ use crate::parser::line_info::LineInfo;
 use crate::util::error_counter::ErrorCounter;
 use crate::util::int_allocator::SyncIntAllocator;
 
-use super::builtins::GlobalBuiltins;
+use super::builtins::{self, Builtins};
 use super::bytecode::Bytecode;
 use super::bytecode_list::BytecodeList;
 use super::class::ClassInfo;
@@ -33,7 +34,7 @@ pub struct GlobalCompilerInfo {
 
     // NOTE: Constants won't be written until end of compilation
     tables: Mutex<Vec<SwitchTable>>,
-    builtins: GlobalBuiltins,
+    builtins: OnceCell<Builtins>,
 
     static_var_numbers: SyncIntAllocator,
     anonymous_nums: SyncIntAllocator,
@@ -55,7 +56,7 @@ impl GlobalCompilerInfo {
             dest_file,
             arguments: args,
             tables: Mutex::new(Vec::new()),
-            builtins: GlobalBuiltins::new(),
+            builtins: OnceCell::new(),
             static_var_numbers: SyncIntAllocator::new(),
             anonymous_nums: SyncIntAllocator::new(),
             default_functions: Mutex::new(Vec::new()),
@@ -75,8 +76,8 @@ impl GlobalCompilerInfo {
         &self.warnings
     }
 
-    pub fn global_builtins(&self) -> &GlobalBuiltins {
-        &self.builtins
+    pub fn global_builtins(&self) -> Option<&Builtins> {
+        self.builtins.get()
     }
 
     pub fn get_arguments(&self) -> &CLArgs {
@@ -233,7 +234,7 @@ impl GlobalCompilerInfo {
     }
 
     pub fn parse_builtins(&self, builtin_path: PathBuf) -> Result<(), Box<dyn Error>> {
-        self.builtins.parse(self, builtin_path)
+        builtins::parse(&self.builtins, self, builtin_path)
     }
 
     pub fn clone_errors(&self) -> Arc<ErrorCounter> {

@@ -7,7 +7,6 @@ use indexmap::IndexSet;
 
 use crate::util::{usize_to_bytes, MAGIC_NUMBER};
 
-use super::builtins::Builtins;
 use super::constant::{LangConstant, StringConstant};
 use super::global_info::GlobalCompilerInfo;
 
@@ -125,9 +124,9 @@ fn print_disassembly<W: Write>(
 ) -> std::io::Result<()> {
     writeln!(stream, "{}", info.dest_file().display())?;
     writeln!(stream, "Constants:")?;
-    let builtins = Builtins::new(info.global_builtins());
+    let builtins = &*info.global_builtins().unwrap();
     for (i, constant) in constants.iter().enumerate() {
-        writeln!(stream, "{}: {}", i, constant.display(&builtins))?;
+        writeln!(stream, "{}: {}", i, constant.display(builtins))?;
     }
     writeln!(stream)?;
     let (functions, classes) = info.get_functions_classes();

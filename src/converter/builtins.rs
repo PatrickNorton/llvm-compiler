@@ -2,9 +2,7 @@ use std::borrow::Cow;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::error::Error;
-use std::ops::Deref;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use itertools::Itertools;
 use num::ToPrimitive;
@@ -64,47 +62,12 @@ use super::CompileResult;
 // parse the builtins, can we do away with this distinction & just have
 // GlobalCompilerInfo take ownership of the Builtins?
 
-/// The [`Builtins`] instance that is associated with a [`GlobalCompilerInfo`].
-///
-/// The main use of this struct is to create [`Builtins`] from; it also contains
-/// the machinery to parse `__builtins__.newlang`.
-#[derive(Debug)]
-pub struct GlobalBuiltins {
-    value: OnceCell<Arc<InnerBuiltins>>,
-}
-
 /// The main struct that holds builtin information.
 ///
 /// This contains all types, constants, and functions obtained from parsing
-/// `__builtins__.newlang`, and makes them accessible from methods. The reason
-/// that this is separate from [`GlobalBuiltins`] is so that each access of a
-/// builtin type doesn't invoke a [`OnceCell`] access.
+/// `__builtins__.newlang`, and makes them accessible from methods.
 #[derive(Debug)]
 pub struct Builtins {
-    value: Arc<InnerBuiltins>,
-}
-
-/// The struct used to contain builtin info during the parsing of
-/// `__builtins__.newlang`.
-///
-/// Unlike its companions, [`Builtins`] and [`GlobalBuiltins`], this struct is
-/// meant to be accessed through an `&mut` reference so that the information
-/// can be set.
-#[derive(Debug)]
-pub struct ParsedBuiltins {
-    true_builtins: Vec<Option<LangObject>>,
-    all_builtins: HashMap<String, LangObject>,
-    hidden_builtins: HashMap<String, LangObject>,
-
-    // Types given a static definition, i.e. not defined in __builtins__.newlang
-    tuple_type: TypeObject,
-    null_type: TypeObject,
-    type_type: TypeObject,
-    callable: TypeObject,
-}
-
-#[derive(Debug)]
-pub struct InnerBuiltins {
     true_builtins: Vec<LangObject>,
     all_builtins: HashMap<String, LangObject>,
     hidden_builtins: HashMap<String, LangObject>,
@@ -137,6 +100,25 @@ pub struct InnerBuiltins {
     iter_type: TypeObject,
     hashable: TypeObject,
 
+    tuple_type: TypeObject,
+    null_type: TypeObject,
+    type_type: TypeObject,
+    callable: TypeObject,
+}
+
+/// The struct used to contain builtin info during the parsing of
+/// `__builtins__.newlang`.
+///
+/// Unlike its companions, [`Builtins`] and [`GlobalBuiltins`], this struct is
+/// meant to be accessed through an `&mut` reference so that the information
+/// can be set.
+#[derive(Debug)]
+pub struct ParsedBuiltins {
+    true_builtins: Vec<Option<LangObject>>,
+    all_builtins: HashMap<String, LangObject>,
+    hidden_builtins: HashMap<String, LangObject>,
+
+    // Types given a static definition, i.e. not defined in __builtins__.newlang
     tuple_type: TypeObject,
     null_type: TypeObject,
     type_type: TypeObject,
@@ -197,42 +179,19 @@ pub static CALLABLE: Lazy<TypeObject> = Lazy::new(|| {
     callable.into()
 });
 
-impl GlobalBuiltins {
-    pub const fn new() -> Self {
-        Self {
-            value: OnceCell::new(),
-        }
-    }
-
-    pub fn parse(
-        &self,
-        global_info: &GlobalCompilerInfo,
-        path: PathBuf,
-    ) -> Result<(), Box<dyn Error>> {
-        let node = Parser::parse_file(path.clone())??;
-        let mut builtins = ParsedBuiltins::new();
-        let mut info = CompilerInfo::new_builtins(global_info, path, &mut builtins);
-        // FIXME: Double-check this is all that's needed for Builtins
-        info.compile(&node)?;
-        self.value
-            .set(Arc::new(builtins.into()))
-            .expect("Should only have one builtins file");
-        Ok(())
-    }
-
-    pub fn get_local(&self) -> Builtins {
-        Builtins {
-            value: self
-                .value
-                .get()
-                .expect("Local builtins should have been parsed")
-                .clone(),
-        }
-    }
-
-    pub fn try_get_local(&self) -> Option<Builtins> {
-        self.value.get().map(|x| Builtins { value: x.clone() })
-    }
+pub fn parse(
+    cell: &OnceCell<Builtins>,
+    global_info: &GlobalCompilerInfo,
+    path: PathBuf,
+) -> Result<(), Box<dyn Error>> {
+    let node = Parser::parse_file(path.clone())??;
+    let mut builtins = ParsedBuiltins::new();
+    let mut info = CompilerInfo::new_builtins(global_info, path, &mut builtins);
+    // FIXME: Double-check this is all that's needed for Builtins
+    info.compile(&node)?;
+    cell.set(builtins.into())
+        .expect("Should only have one builtins file");
+    Ok(())
 }
 
 macro_rules! constant_getter {
@@ -264,18 +223,6 @@ macro_rules! type_getter {
 }
 
 impl Builtins {
-    pub fn new(global: &GlobalBuiltins) -> Self {
-        Self {
-            value: global
-                .value
-                .get()
-                .expect("Builtins should have been parsed by now")
-                .clone(),
-        }
-    }
-}
-
-impl InnerBuiltins {
     pub fn has_name(&self, name: &str) -> bool {
         self.all_builtins.contains_key(name)
     }
@@ -429,7 +376,7 @@ impl ParsedBuiltins {
     }
 }
 
-impl From<ParsedBuiltins> for InnerBuiltins {
+impl From<ParsedBuiltins> for Builtins {
     fn from(value: ParsedBuiltins) -> Self {
         let true_builtins = value
             .true_builtins
@@ -522,12 +469,4 @@ where
             .unwrap(),
     )
     .into()
-}
-
-impl Deref for Builtins {
-    type Target = InnerBuiltins;
-
-    fn deref(&self) -> &Self::Target {
-        &self.value
-    }
 }

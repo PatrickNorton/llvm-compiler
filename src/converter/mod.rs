@@ -113,7 +113,7 @@ pub fn convert_to_file(file: PathBuf, node: TopNode, args: CLArgs) -> Result<(),
     let builtin_path = builtins_file(&args);
     let mut global_info = GlobalCompilerInfo::new(dest_file, args);
     global_info.parse_builtins(builtin_path)?;
-    let builtins = global_info.global_builtins().get_local();
+    let builtins = global_info.global_builtins().unwrap();
     let mut info = CompilerInfo::new(
         &global_info,
         file.clone(),

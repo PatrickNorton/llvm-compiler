@@ -41,7 +41,7 @@ pub struct CompilerInfo<'a> {
     fn_indices: HashMap<String, u16>,
     loop_manager: LoopManager,
     warnings: WarningHolder,
-    builtins: Either<Builtins, &'a mut ParsedBuiltins>,
+    builtins: Either<&'a Builtins, &'a mut ParsedBuiltins>,
     features: HashMap<String, usize>,
 
     var_holder: VariableHolder,
@@ -59,7 +59,7 @@ impl<'a> CompilerInfo<'a> {
     pub fn new(
         global_info: &'a GlobalCompilerInfo,
         path: PathBuf,
-        builtins: Builtins,
+        builtins: &'a Builtins,
         perms: PermissionLevel,
     ) -> Self {
         Self::new_inner(global_info, path, Either::Left(builtins), perms)
@@ -81,7 +81,7 @@ impl<'a> CompilerInfo<'a> {
     fn new_inner(
         global_info: &'a GlobalCompilerInfo,
         path: PathBuf,
-        builtins: Either<Builtins, &'a mut ParsedBuiltins>,
+        builtins: Either<&'a Builtins, &'a mut ParsedBuiltins>,
         perms: PermissionLevel,
     ) -> Self {
         Self {
@@ -246,7 +246,7 @@ impl<'a> CompilerInfo<'a> {
             self.dependents_found = true;
             self.import_handler.register_dependents(
                 &mut self.var_holder,
-                self.builtins.as_ref().left(),
+                self.builtins.as_ref().left().copied(),
                 &self.warnings,
                 node,
                 self.global_info.get_arguments(),
@@ -303,7 +303,7 @@ impl<'a> CompilerInfo<'a> {
 
     pub fn class_of(&self, name: &str) -> Option<TypeObject> {
         self.var_holder
-            .class_of(self.builtins.as_ref().left(), name)
+            .class_of(self.builtins.as_ref().left().copied(), name)
     }
 
     pub fn defined_names(&self) -> impl Iterator<Item = &str> {
