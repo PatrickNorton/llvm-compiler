@@ -44,6 +44,10 @@ impl BigDecimal {
         &self.data
     }
 
+    pub fn scale(&self) -> isize {
+        self.scale
+    }
+
     #[inline]
     fn from_str_radix(s: &str, radix: u32) -> Result<BigDecimal, ParseBigDecimalError> {
         if radix != 10 {

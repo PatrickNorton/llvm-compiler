@@ -7,10 +7,9 @@ use num::{BigInt, ToPrimitive};
 
 use crate::converter::builtins::Builtins;
 use crate::converter::type_obj::TypeObject;
-use crate::util::decimal::BigDecimal;
 use crate::util::{usize_to_bytes, U32_BYTES};
 
-use super::{ConstantBytes, DecimalConstant, LangConstant};
+use super::{ConstantBytes, LangConstant};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum NumberConstant {
@@ -170,12 +169,6 @@ impl From<BigInt> for NumberConstant {
             Option::Some(x) => NumberConstant::Int(IntConstant::new(x)),
             Option::None => NumberConstant::Bigint(BigintConstant::new(value)),
         }
-    }
-}
-
-impl From<BigDecimal> for LangConstant {
-    fn from(x: BigDecimal) -> Self {
-        Self::Decimal(DecimalConstant::new(x))
     }
 }
 

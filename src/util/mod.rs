@@ -37,6 +37,10 @@ pub fn usize_to_short_bytes(val: usize) -> [u8; U16_BYTES] {
     u16::try_from(val).unwrap().to_be_bytes()
 }
 
+pub fn isize_to_bytes(val: isize) -> [u8; U32_BYTES] {
+    i32::try_from(val).unwrap().to_be_bytes()
+}
+
 pub fn reborrow_option<'a, 'b, T>(opt: &'a mut Option<&'b mut T>) -> Option<&'a mut T> {
     match opt {
         Some(a) => Some(*a),
