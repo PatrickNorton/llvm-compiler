@@ -547,10 +547,7 @@ impl TypeObject {
     ) -> CompilerException {
         // FIXME: Remove unwrap() and return error instead
         if access != AccessLevel::Private
-            && self
-                .attr_type_access(name, AccessLevel::Private)
-                .unwrap()
-                .is_some()
+            && self.attr_type_access(name, AccessLevel::Private).is_some()
         {
             CompilerException::of(
                 format!(
@@ -561,12 +558,7 @@ impl TypeObject {
                 ),
                 line_info,
             )
-        } else if self
-            .make_mut()
-            .attr_type_access(name, access)
-            .unwrap()
-            .is_some()
-        {
+        } else if self.make_mut().attr_type_access(name, access).is_some() {
             CompilerException::of(
                 format!(
                     "Attribute '{}' requires a mut variable for '{}'",
@@ -603,29 +595,21 @@ impl TypeObject {
         }
     }
 
-    pub fn attr_type(
-        &self,
-        name: &str,
-        info: &mut CompilerInfo,
-    ) -> CompileResult<Option<Cow<'_, TypeObject>>> {
+    pub fn attr_type(&self, name: &str, info: &mut CompilerInfo) -> Option<Cow<'_, TypeObject>> {
         self.attr_type_access(name, info.access_level(self))
     }
 
-    pub fn attr_type_access(
-        &self,
-        name: &str,
-        access: AccessLevel,
-    ) -> CompileResult<Option<Cow<'_, TypeObject>>> {
+    pub fn attr_type_access(&self, name: &str, access: AccessLevel) -> Option<Cow<'_, TypeObject>> {
         match self {
             TypeObject::Interface(i) => i.attr_type(name, access),
-            TypeObject::Module(m) => Ok(m.attr_type(name).map(Cow::Borrowed)),
-            TypeObject::Option(o) => Ok(o.attr_type(name).map(Cow::Owned)),
+            TypeObject::Module(m) => m.attr_type(name).map(Cow::Borrowed),
+            TypeObject::Option(o) => o.attr_type(name).map(Cow::Owned),
             TypeObject::Std(s) => s.attr_type(name, access),
             TypeObject::Template(t) => t.attr_type(name, access),
-            TypeObject::Tuple(t) => Ok(t.attr_type(name).map(Cow::Borrowed)),
-            TypeObject::Type(t) => Ok(t.attr_type(name, access)),
+            TypeObject::Tuple(t) => t.attr_type(name).map(Cow::Borrowed),
+            TypeObject::Type(t) => t.attr_type(name, access),
             TypeObject::Union(u) => u.attr_type(name, access),
-            _ => Ok(None),
+            _ => None,
         }
     }
 
@@ -708,7 +692,7 @@ impl TypeObject {
         &self,
         name: &str,
         access: AccessLevel,
-    ) -> CompileResult<Option<Cow<'_, TypeObject>>> {
+    ) -> Option<Cow<'_, TypeObject>> {
         match self {
             TypeObject::Interface(i) => i.attr_type_with_generics(name, access),
             TypeObject::Std(s) => s.attr_type_with_generics(name, access),

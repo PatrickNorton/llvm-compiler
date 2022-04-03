@@ -138,13 +138,9 @@ pub trait UserTypeLike: UserTypeInner + PartialEq<TypeObject> {
         }
     }
 
-    fn attr_type(
-        &self,
-        value: &str,
-        access: AccessLevel,
-    ) -> CompileResult<Option<Cow<'_, TypeObject>>> {
+    fn attr_type(&self, value: &str, access: AccessLevel) -> Option<Cow<'_, TypeObject>> {
         self.attr_type_with_generics(value, access)
-            .map(|x| x.map(|y| self.generify_attr_type(y)))
+            .map(|x| self.generify_attr_type(x))
     }
 
     fn static_attr_type(&self, value: &str, access: AccessLevel) -> Option<Cow<'_, TypeObject>> {
@@ -228,11 +224,7 @@ impl UserType {
         user_match_all!(self: x => x.get_generics())
     }
 
-    pub fn attr_ty_access(
-        &self,
-        attr: &str,
-        access: AccessLevel,
-    ) -> CompileResult<Option<Cow<'_, TypeObject>>> {
+    pub fn attr_ty_access(&self, attr: &str, access: AccessLevel) -> Option<Cow<'_, TypeObject>> {
         user_match_all!(self: x => x.attr_type(attr, access))
     }
 
@@ -418,7 +410,6 @@ mod private {
     use crate::converter::fn_info::FunctionInfo;
     use crate::converter::mutable::MutableType;
     use crate::converter::type_obj::{ObjectType, TypeObject};
-    use crate::converter::CompileResult;
     use crate::parser::operator_sp::OpSpTypeNode;
 
     use super::UserInfo;
@@ -464,13 +455,13 @@ mod private {
             &self,
             value: &str,
             access: AccessLevel,
-        ) -> CompileResult<Option<Cow<'_, TypeObject>>> {
+        ) -> Option<Cow<'_, TypeObject>> {
             let info = self.get_info();
             // Early return should only be taken during auto-interface check of superclass.
             // Given that, the auto interface will be applied to this type instead
             // of the superclass and thus still work.
             let attr = match info.attributes.get() {
-                Option::None => return Ok(None),
+                Option::None => return None,
                 Option::Some(x) => x.get(value),
             };
             match attr {
@@ -481,16 +472,16 @@ mod private {
                         access
                     };
                     for super_cls in info.supers.get().unwrap() {
-                        let sup_attr = super_cls.attr_type_with_generics(value, new_access)?;
+                        let sup_attr = super_cls.attr_type_with_generics(value, new_access);
                         if let Option::Some(sup_attr) = sup_attr {
                             if attr_has_impl(value, super_cls) {
-                                return Ok(Some(sup_attr));
+                                return Some(sup_attr);
                             }
                         }
                     }
-                    Ok(None)
+                    None
                 }
-                Option::Some(attr) => Ok(type_from_attr(self.is_const(), attr.as_ref(), access)),
+                Option::Some(attr) => type_from_attr(self.is_const(), attr.as_ref(), access),
             }
         }
 

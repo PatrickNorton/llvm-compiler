@@ -171,11 +171,7 @@ impl TemplateParam {
             .collect()
     }
 
-    pub fn attr_type(
-        &self,
-        value: &str,
-        access: AccessLevel,
-    ) -> CompileResult<Option<Cow<'_, TypeObject>>> {
+    pub fn attr_type(&self, value: &str, access: AccessLevel) -> Option<Cow<'_, TypeObject>> {
         self.get_bound().attr_type_access(value, access)
     }
 
