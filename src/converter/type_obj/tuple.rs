@@ -6,9 +6,14 @@ use std::sync::Arc;
 
 use itertools::Itertools;
 
+use crate::converter::access_handler::AccessLevel;
+use crate::converter::argument::ArgumentInfo;
+use crate::converter::builtins::Builtins;
 use crate::converter::error::CompilerException;
+use crate::converter::fn_info::FunctionInfo;
 use crate::converter::CompileResult;
 use crate::parser::line_info::Lined;
+use crate::parser::operator_sp::OpSpTypeNode;
 
 use super::macros::{arc_partial_eq, type_obj_from};
 use super::TypeObject;
@@ -129,6 +134,33 @@ impl TupleType {
             .and_then(|x| self.value.generics.get(x))
     }
 
+    pub fn operator_info(&self, o: OpSpTypeNode, builtins: &Builtins) -> Option<FunctionInfo> {
+        match o {
+            OpSpTypeNode::Equals => Some(FunctionInfo::with_args(
+                ArgumentInfo::of_types([TupleType::new(self.get_generics().to_vec()).into()]),
+                vec![builtins.bool_type().clone()],
+            )),
+            OpSpTypeNode::Bool => Some(FunctionInfo::from_returns(vec![builtins
+                .bool_type()
+                .clone()])),
+            OpSpTypeNode::Str | OpSpTypeNode::Repr => {
+                Some(FunctionInfo::from_returns(vec![builtins
+                    .str_type()
+                    .clone()]))
+            }
+            OpSpTypeNode::Hash => {
+                if self.is_hashable(builtins) {
+                    Some(FunctionInfo::from_returns(vec![builtins
+                        .int_type()
+                        .clone()]))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
     pub fn get_defined(&self) -> impl Iterator<Item = String> {
         (0..self.value.generics.len()).map(|x| x.to_string())
     }
@@ -139,6 +171,13 @@ impl TupleType {
 
     pub fn base_hash<H: Hasher>(&self, state: &mut H) {
         self.base_name().hash(state)
+    }
+
+    fn is_hashable(&self, builtins: &Builtins) -> bool {
+        self.get_generics().iter().all(|x| {
+            x.op_info_access(OpSpTypeNode::Hash, AccessLevel::Public, builtins)
+                .is_some()
+        })
     }
 }
 

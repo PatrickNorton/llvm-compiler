@@ -245,7 +245,11 @@ impl GenerifiedFnInfoType {
 
     pub fn operator_info(&self, op: OpSpTypeNode) -> Option<FunctionInfo> {
         if op == OpSpTypeNode::Call {
-            todo!("Work out lifetimes here")
+            Some(
+                self.value
+                    .info
+                    .generify(&self.clone().into(), self.value.generics.clone()),
+            )
         } else {
             None
         }

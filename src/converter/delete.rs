@@ -173,7 +173,7 @@ impl<'a> DeleteConverter<'a> {
         indices: &mut [TestConverter],
     ) -> CompileResult<()> {
         let ret_type = first(value.return_type(info)?);
-        match ret_type.operator_info(OpSpTypeNode::DelAttr, info)? {
+        match ret_type.operator_info(OpSpTypeNode::DelAttr, info) {
             Option::None => Err(CompilerException::of(
                 format!(
                     "Delete cannot be called on an index with a variable of type '{}' \

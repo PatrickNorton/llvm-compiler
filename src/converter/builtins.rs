@@ -308,8 +308,12 @@ impl Builtins {
             }
         } else {
             assert!(self.iterable().is_superclass(val));
-            let rets =
-                val.try_op_ret_access(LineInfo::empty(), OpSpTypeNode::Iter, AccessLevel::Public)?;
+            let rets = val.try_op_ret_access(
+                LineInfo::empty(),
+                OpSpTypeNode::Iter,
+                AccessLevel::Public,
+                self,
+            )?;
             self.de_iterable(&rets[0])
         }
     }

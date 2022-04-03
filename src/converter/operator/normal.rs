@@ -39,7 +39,7 @@ impl<'a> NormalOperatorConverter<'a> {
     pub fn return_type(&self, info: &mut CompilerInfo) -> CompileTypes {
         let op_type = TestConverter::return_type(info, self.args[0].get_argument(), 1)?;
         let translated = OpSpTypeNode::translate(self.op);
-        let ret_type = first(op_type).operator_return_type(translated, info)?;
+        let ret_type = first(op_type).operator_return_type(translated, info);
         Ok(ret_type.unwrap_or_else(|| vec![info.builtins().throws_type().clone()]))
     }
 
@@ -70,7 +70,7 @@ impl<'a> NormalOperatorConverter<'a> {
         for arg in args {
             let ret_type = first(TestConverter::return_type(info, arg.get_argument(), 1)?);
             let op = OpSpTypeNode::translate(self.op);
-            if op_type.operator_return_type(op, info)?.is_some() {
+            if op_type.operator_return_type(op, info).is_some() {
                 return Err(CompilerException::of(
                     format!(
                         "'{}' returns type '{}', which has no overloaded '{}'",
@@ -82,7 +82,7 @@ impl<'a> NormalOperatorConverter<'a> {
                 )
                 .into());
             } else if op_type
-                .operator_info(op, info)?
+                .operator_info(op, info)
                 .unwrap()
                 .matches(&[Argument::new(String::new(), ret_type.clone())])
             {
@@ -97,7 +97,7 @@ impl<'a> NormalOperatorConverter<'a> {
                 )
                 .into());
             }
-            op_type = first(op_type.operator_return_type(op, info)?.unwrap());
+            op_type = first(op_type.operator_return_type(op, info).unwrap());
             previous_arg = arg;
             bytes.extend(TestConverter::bytes(arg.get_argument(), info, 1)?);
         }

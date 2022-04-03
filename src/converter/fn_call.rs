@@ -225,7 +225,7 @@ impl<'a> FunctionCallConverter<'a> {
                         }
                     }
                     ret_type => {
-                        if ret_type.operator_info(OpSpTypeNode::Iter, info)?.is_some() {
+                        if ret_type.operator_info(OpSpTypeNode::Iter, info).is_some() {
                             return Err(CompilerTodoError::of(
                                 "Unpacking iterables in function calls",
                                 param,
@@ -483,7 +483,7 @@ impl<'a> FunctionCallConverter<'a> {
                 let args = get_args(info, params)?;
                 let builtins = info.builtins();
                 let builtin = builtins.get_name(str_name).unwrap().get_type(builtins);
-                let fn_info = builtin.operator_info(OpSpTypeNode::Call, info)?.unwrap();
+                let fn_info = builtin.operator_info(OpSpTypeNode::Call, info).unwrap();
                 return Err(
                     arg_error(self.node, &builtin.name(), &args, pos_args(&fn_info)).into(),
                 );

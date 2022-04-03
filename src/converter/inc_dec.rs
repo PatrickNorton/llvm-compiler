@@ -148,10 +148,10 @@ impl<'a> IncDecConverter<'a> {
 
     fn check_index(&self, index_type: &TypeObject, info: &mut CompilerInfo) -> CompileResult<()> {
         if index_type
-            .operator_info(OpSpTypeNode::GetAttr, info)?
+            .operator_info(OpSpTypeNode::GetAttr, info)
             .is_none()
             || index_type
-                .operator_info(OpSpTypeNode::SetAttr, info)?
+                .operator_info(OpSpTypeNode::SetAttr, info)
                 .is_none()
         {
             Err(self.type_error(index_type).into())

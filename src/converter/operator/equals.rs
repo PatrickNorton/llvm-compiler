@@ -101,7 +101,7 @@ impl<'a> EqualsConverter<'a> {
         let mut bytes = converter.convert(info)?;
         bytes.extend(TestConverter::bytes(self.args[1].get_argument(), info, 1)?);
         let use_id = match UserType::try_from(return_type) {
-            Result::Ok(x) => x.operator_info(OpSpTypeNode::Equals, info)?.is_none(),
+            Result::Ok(x) => x.operator_info(OpSpTypeNode::Equals, info).is_none(),
             Result::Err(_) => false,
         };
         bytes.add(if use_id {

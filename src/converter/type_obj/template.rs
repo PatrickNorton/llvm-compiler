@@ -6,10 +6,12 @@ use std::sync::Arc;
 use once_cell::sync::OnceCell;
 
 use crate::converter::access_handler::AccessLevel;
-use crate::converter::builtins::OBJECT;
+use crate::converter::builtins::{Builtins, OBJECT};
 use crate::converter::compiler_info::CompilerInfo;
+use crate::converter::fn_info::FunctionInfo;
 use crate::converter::CompileResult;
 use crate::macros::hash_map;
+use crate::parser::operator_sp::OpSpTypeNode;
 use crate::parser::type_node::TypeNode;
 
 use super::macros::{arc_eq_hash, arc_partial_eq, try_from_type_obj, type_obj_from};
@@ -183,6 +185,15 @@ impl TemplateParam {
         access: AccessLevel,
     ) -> Option<Cow<'_, TypeObject>> {
         self.get_bound().static_attr_type(value, access)
+    }
+
+    pub fn operator_info(
+        &self,
+        o: OpSpTypeNode,
+        access: AccessLevel,
+        builtins: &Builtins,
+    ) -> Option<Cow<'_, FunctionInfo>> {
+        self.get_bound().op_info_access(o, access, builtins)
     }
 
     pub fn generify_with(&self, parent: &TypeObject, values: Vec<TypeObject>) -> TypeObject {

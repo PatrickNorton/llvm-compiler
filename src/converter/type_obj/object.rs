@@ -2,7 +2,10 @@ use std::borrow::Cow;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
-use crate::converter::access_handler::AccessLevel;
+use once_cell::sync::OnceCell;
+
+use crate::converter::argument::ArgumentInfo;
+use crate::converter::builtins::{Builtins, OBJECT};
 use crate::converter::fn_info::FunctionInfo;
 use crate::parser::operator_sp::OpSpTypeNode;
 
@@ -27,11 +30,11 @@ impl ObjectType {
         "object".into()
     }
 
-    pub fn operator_info(&self, o: OpSpTypeNode, access: AccessLevel) -> Option<&FunctionInfo> {
+    pub fn operator_info(&self, o: OpSpTypeNode, builtins: &Builtins) -> Option<&FunctionInfo> {
         match o {
-            OpSpTypeNode::Equals => todo!(),
-            OpSpTypeNode::Str | OpSpTypeNode::Repr => todo!(),
-            OpSpTypeNode::Bool => todo!(),
+            OpSpTypeNode::Equals => Some(equals_info(builtins)),
+            OpSpTypeNode::Str | OpSpTypeNode::Repr => Some(str_info(builtins)),
+            OpSpTypeNode::Bool => Some(bool_info(builtins)),
             _ => None,
         }
     }
@@ -57,6 +60,26 @@ impl ObjectType {
     pub fn base_hash<H: Hasher>(&self, state: &mut H) {
         self.base_name().hash(state)
     }
+}
+
+fn equals_info<'a, 'b>(builtins: &'a Builtins) -> &'b FunctionInfo {
+    static EQUALS_INFO: OnceCell<FunctionInfo> = OnceCell::new();
+    EQUALS_INFO.get_or_init(|| {
+        FunctionInfo::with_args(
+            ArgumentInfo::of_types([OBJECT.into()]),
+            vec![builtins.bool_type().clone()],
+        )
+    })
+}
+
+fn str_info<'a, 'b>(builtins: &'a Builtins) -> &'b FunctionInfo {
+    static STR_INFO: OnceCell<FunctionInfo> = OnceCell::new();
+    STR_INFO.get_or_init(|| FunctionInfo::from_returns(vec![builtins.str_type().clone()]))
+}
+
+fn bool_info<'a, 'b>(builtins: &'a Builtins) -> &'b FunctionInfo {
+    static STR_INFO: OnceCell<FunctionInfo> = OnceCell::new();
+    STR_INFO.get_or_init(|| FunctionInfo::from_returns(vec![builtins.bool_type().clone()]))
 }
 
 arc_partial_eq!(ObjectType, Object);

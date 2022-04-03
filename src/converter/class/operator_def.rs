@@ -63,6 +63,10 @@ impl<'a> OperatorDefConverter<'a> {
             .collect()
     }
 
+    pub fn get_operators(&self) -> &HashMap<OpSpTypeNode, (MethodInfo, RawMethod<'a>)> {
+        &self.operators
+    }
+
     pub fn parse(
         &mut self,
         info: &mut CompilerInfo,

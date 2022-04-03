@@ -28,7 +28,7 @@ use super::function::Function;
 use super::type_obj::{OptionTypeObject, TypeObject};
 use super::CompileResult;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Argument {
     line_info: LineInfo,
     name: String,
@@ -37,7 +37,7 @@ pub struct Argument {
     default_val: Option<Arc<DefaultValue>>,
 }
 
-#[derive(Debug, new)]
+#[derive(Debug, Clone, new)]
 pub struct ArgumentInfo {
     position_args: Vec<Argument>,
     normal_args: Vec<Argument>,

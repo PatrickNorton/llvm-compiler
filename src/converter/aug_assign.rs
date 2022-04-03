@@ -71,7 +71,7 @@ impl<'a> AugAssignConverter<'a> {
         let mut value_converter = self.node.get_value().test_converter(1);
         let converter_return = first(assigned_converter.return_type(info)?);
         let operator = self.node.get_operator().get_operator();
-        let op_info = converter_return.operator_info(OpSpTypeNode::translate(operator), info)?;
+        let op_info = converter_return.operator_info(OpSpTypeNode::translate(operator), info);
         let value_return = first(value_converter.return_type(info)?);
         self.check_info(op_info.as_deref(), &converter_return, &value_return)?;
         let mut bytes = assigned_converter.convert(info)?;
@@ -101,7 +101,7 @@ impl<'a> AugAssignConverter<'a> {
             converter_return.try_operator_info(self.node, OpSpTypeNode::SetAttr, info)?;
         converter_return.try_operator_info(self.node, OpSpTypeNode::SetAttr, info)?;
         let dot_type = &attr_info.get_returns()[0];
-        let return_info = dot_type.operator_info(true_op, info)?;
+        let return_info = dot_type.operator_info(true_op, info);
         self.check_info(
             return_info.as_deref(),
             dot_type,
@@ -127,7 +127,7 @@ impl<'a> AugAssignConverter<'a> {
         let mut value_converter = self.node.get_value().test_converter(1);
         let converter_return = first(assigned_converter.return_type(info)?);
         let dot_type = converter_return.try_attr_type(self.node, str_name, info)?;
-        let return_info = dot_type.operator_info(true_op, info)?;
+        let return_info = dot_type.operator_info(true_op, info);
         self.check_info(
             return_info.as_deref(),
             &dot_type,

@@ -187,7 +187,7 @@ impl<'a> UnionConverter<'a> {
         self.parse_statements(info, converter, defaults)?;
         converter
             .methods
-            .add_union_methods(self.variant_methods(info, obj));
+            .add_union_methods(self.variant_methods(info, obj))?;
         obj.set_operators(converter.ops.get_operator_infos());
         obj.set_static_operators(converter.ops.static_operator_infos());
         converter.check_attributes()?;

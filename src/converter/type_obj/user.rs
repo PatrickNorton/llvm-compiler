@@ -7,7 +7,7 @@ use itertools::Itertools;
 use once_cell::sync::OnceCell;
 
 use crate::converter::access_handler::AccessLevel;
-use crate::converter::builtins::THROWS_TYPE;
+use crate::converter::builtins::{Builtins, THROWS_TYPE};
 use crate::converter::class::{AttributeInfo, MethodInfo};
 use crate::converter::compiler_info::CompilerInfo;
 use crate::converter::error::CompilerException;
@@ -76,30 +76,32 @@ pub trait UserTypeLike: UserTypeInner + PartialEq<TypeObject> {
         &self,
         o: OpSpTypeNode,
         access: AccessLevel,
+        builtins: &Builtins,
     ) -> CompileResult<Option<Vec<TypeObject>>> {
-        self.get_info().op_ret_with_generics(o, access)
+        self.get_info().op_ret_with_generics(o, access, builtins)
     }
 
     fn true_operator_info(
         &self,
         o: OpSpTypeNode,
         access: AccessLevel,
-    ) -> CompileResult<Option<Cow<'_, FunctionInfo>>> {
+        builtins: &Builtins,
+    ) -> Option<Cow<'_, FunctionInfo>> {
         let info = self.get_info();
         let operators = info.operators.get();
         let op_info = match operators {
-            Option::None => return Ok(None),
+            Option::None => return None,
             Option::Some(ops) => match ops.get(&o) {
                 Option::Some(op) => op.as_ref(),
-                Option::None => return Ok(None),
+                Option::None => return None,
             },
         };
         if self.is_const() && op_info.is_mut && o != OpSpTypeNode::New {
-            Ok(None)
+            None
         } else if AccessLevel::can_access(op_info.access_level, access) {
-            Ok(Some(Cow::Borrowed(&op_info.function_info)))
+            Some(Cow::Borrowed(&op_info.function_info))
         } else {
-            self.super_operator_info(o, access)
+            self.super_operator_info(o, access, builtins)
         }
     }
 
@@ -107,13 +109,14 @@ pub trait UserTypeLike: UserTypeInner + PartialEq<TypeObject> {
         &self,
         o: OpSpTypeNode,
         access: AccessLevel,
-    ) -> CompileResult<Option<FunctionInfo>> {
-        let true_info = self.true_operator_info(o, access)?;
-        Ok(if self.generics().is_empty() {
+        builtins: &Builtins,
+    ) -> Option<FunctionInfo> {
+        let true_info = self.true_operator_info(o, access, builtins);
+        if self.generics().is_empty() {
             true_info.map(|x| x.boundify())
         } else {
             true_info.map(|x| x.generify(&self.clone().into(), self.generics().to_vec()))
-        })
+        }
     }
 
     fn can_set_attr(&self, name: &str, access: AccessLevel) -> bool {
@@ -233,20 +236,17 @@ impl UserType {
         user_match_all!(self: x => x.attr_type(attr, access))
     }
 
-    pub fn operator_info(
-        &self,
-        o: OpSpTypeNode,
-        info: &mut CompilerInfo,
-    ) -> CompileResult<Option<FunctionInfo>> {
-        self.op_info_access(o, info.user_access_level(self))
+    pub fn operator_info(&self, o: OpSpTypeNode, info: &mut CompilerInfo) -> Option<FunctionInfo> {
+        self.op_info_access(o, info.user_access_level(self), info.builtins())
     }
 
     pub fn op_info_access(
         &self,
         o: OpSpTypeNode,
         access: AccessLevel,
-    ) -> CompileResult<Option<FunctionInfo>> {
-        user_match_all!(self: x => x.operator_info(o, access))
+        builtins: &Builtins,
+    ) -> Option<FunctionInfo> {
+        user_match_all!(self: x => x.operator_info(o, access, builtins))
     }
 
     pub fn try_operator_info(
@@ -255,11 +255,9 @@ impl UserType {
         o: OpSpTypeNode,
         info: &mut CompilerInfo,
     ) -> CompileResult<FunctionInfo> {
-        self.operator_info(o, info)?.ok_or_else(|| {
-            match self.op_info_exception(line_info, o, info.user_access_level(self)) {
-                Result::Ok(x) => x.into(),
-                Result::Err(x) => x,
-            }
+        self.operator_info(o, info).ok_or_else(|| {
+            self.op_info_exception(line_info, o, info.user_access_level(self), info.builtins())
+                .into()
         })
     }
 
@@ -268,27 +266,35 @@ impl UserType {
         line_info: impl Lined,
         o: OpSpTypeNode,
         access: AccessLevel,
-    ) -> CompileResult<CompilerException> {
-        if access != AccessLevel::Private && self.op_info_access(o, AccessLevel::Private)?.is_some()
+        builtins: &Builtins,
+    ) -> CompilerException {
+        if access != AccessLevel::Private
+            && self
+                .op_info_access(o, AccessLevel::Private, builtins)
+                .is_some()
         {
-            Ok(CompilerException::of(
+            CompilerException::of(
                 format!(
                     "Cannot get '{}' from type '{}' operator has too strict of an access level",
                     o,
                     self.name()
                 ),
                 line_info,
-            ))
-        } else if self.make_mut().op_info_access(o, access)?.is_some() {
-            Ok(CompilerException::of(
+            )
+        } else if self
+            .make_mut()
+            .op_info_access(o, access, builtins)
+            .is_some()
+        {
+            CompilerException::of(
                 format!("'{}' requires a mut variable for type '{}'", o, self.name()),
                 line_info,
-            ))
+            )
         } else {
-            Ok(CompilerException::of(
+            CompilerException::of(
                 format!("'{}' does not exist in type '{}'", o, self.name()),
                 line_info,
-            ))
+            )
         }
     }
 
@@ -296,8 +302,9 @@ impl UserType {
         &self,
         o: OpSpTypeNode,
         access: AccessLevel,
+        builtins: &Builtins,
     ) -> CompileResult<Option<Vec<TypeObject>>> {
-        let types = self.op_ret_with_generics(o, access)?;
+        let types = self.op_ret_with_generics(o, access, builtins)?;
         Ok(types.map(|x| self.generify_all(&x)))
     }
 
@@ -305,8 +312,9 @@ impl UserType {
         &self,
         o: OpSpTypeNode,
         access: AccessLevel,
+        builtins: &Builtins,
     ) -> CompileResult<Option<Vec<TypeObject>>> {
-        user_match_all!(self: x => x.get_info().op_ret_with_generics(o, access))
+        user_match_all!(self: x => x.get_info().op_ret_with_generics(o, access, builtins))
     }
 
     pub fn make_const(&self) -> UserType {
@@ -405,6 +413,7 @@ mod private {
     use std::ptr;
 
     use crate::converter::access_handler::AccessLevel;
+    use crate::converter::builtins::Builtins;
     use crate::converter::class::{AttributeInfo, MethodInfo};
     use crate::converter::fn_info::FunctionInfo;
     use crate::converter::mutable::MutableType;
@@ -427,21 +436,24 @@ mod private {
             &self,
             o: OpSpTypeNode,
             access: AccessLevel,
-        ) -> CompileResult<Option<Cow<'_, FunctionInfo>>> {
+            builtins: &Builtins,
+        ) -> Option<Cow<'_, FunctionInfo>> {
             let new_access = if access == AccessLevel::Private {
                 AccessLevel::Protected
             } else {
                 access
             };
             for super_cls in self.get_info().supers.get().unwrap() {
-                if let Option::Some(sup_attr) = super_cls.true_operator_info(o, new_access)? {
+                if let Option::Some(sup_attr) =
+                    super_cls.true_operator_info(o, new_access, builtins)
+                {
                     if op_has_impl(o, super_cls) {
-                        return Ok(Some(sup_attr));
+                        return Some(sup_attr);
                     }
                 }
             }
             static OBJECT: ObjectType = ObjectType::new();
-            Ok(OBJECT.operator_info(o, access).map(Cow::Borrowed))
+            OBJECT.operator_info(o, builtins).map(Cow::Borrowed)
         }
 
         fn base_hash<H: Hasher>(&self, state: &mut H) {
@@ -580,6 +592,7 @@ impl<O: AsRef<MethodInfo>, A: AsRef<AttributeInfo>> UserInfo<O, A> {
         &self,
         o: OpSpTypeNode,
         access: AccessLevel,
+        builtins: &Builtins,
     ) -> CompileResult<Option<Vec<TypeObject>>> {
         let operators = self
             .operators
@@ -591,7 +604,7 @@ impl<O: AsRef<MethodInfo>, A: AsRef<AttributeInfo>> UserInfo<O, A> {
                 .then(|| op.function_info.get_returns().to_vec()));
         }
         for sup in self.supers.get().unwrap() {
-            if let Option::Some(op_ret) = sup.op_ret_access(o, access)? {
+            if let Option::Some(op_ret) = sup.op_ret_access(o, access, builtins) {
                 return Ok(Some(op_ret));
             }
         }

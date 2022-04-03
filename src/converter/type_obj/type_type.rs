@@ -4,9 +4,12 @@ use std::slice;
 use std::sync::Arc;
 
 use crate::converter::access_handler::AccessLevel;
+use crate::converter::builtins::Builtins;
 use crate::converter::error::CompilerException;
+use crate::converter::fn_info::FunctionInfo;
 use crate::converter::CompileResult;
 use crate::parser::line_info::Lined;
+use crate::parser::operator_sp::OpSpTypeNode;
 use crate::util::first;
 
 use super::macros::{arc_eq_hash, try_from_type_obj, type_obj_from};
@@ -126,6 +129,25 @@ impl TypeTypeObject {
             .into()),
             Option::Some(generic) => generic.try_static_attr_type(&line_info, name, access),
         }
+    }
+
+    pub fn operator_info(
+        &self,
+        o: OpSpTypeNode,
+        access: AccessLevel,
+        builtins: &Builtins,
+    ) -> Option<FunctionInfo> {
+        self.value.generic.as_ref().and_then(|gen| {
+            if o == OpSpTypeNode::Call {
+                let mut_gen = gen.make_mut();
+                let op_info = mut_gen
+                    .op_info_access(OpSpTypeNode::New, access, builtins)
+                    .map(Cow::into_owned);
+                op_info.map(|fi| FunctionInfo::with_args(fi.get_args().clone(), vec![mut_gen]))
+            } else {
+                None
+            }
+        })
     }
 
     pub fn get_defined(&self) -> Option<Box<dyn Iterator<Item = Cow<'_, str>> + '_>> {

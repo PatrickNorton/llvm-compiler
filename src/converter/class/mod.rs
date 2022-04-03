@@ -474,6 +474,7 @@ pub(self) fn check_contract(
     node: impl Lined,
     ty: &UserType,
     supers: &[TypeObject],
+    builtins: &Builtins,
 ) -> CompileResult<()> {
     let mut_ty = ty.make_mut();
     for sup in supers {
@@ -496,7 +497,10 @@ pub(self) fn check_contract(
             }
             for &op in operators {
                 // FIXME: Mutability
-                if mut_ty.op_info_access(op, AccessLevel::Public)?.is_none() {
+                if mut_ty
+                    .op_info_access(op, AccessLevel::Public, builtins)
+                    .is_none()
+                {
                     return Err(CompilerException::of(
                         format!(
                             "Missing impl for {} (defined by interface '{}')",

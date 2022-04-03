@@ -425,7 +425,7 @@ fn check_tuple(
 ) -> CompileResult<usize> {
     if let TypeObject::Tuple(ty) = ret_type {
         Ok(ty.get_generics().len())
-    } else if ret_type.operator_info(OpSpTypeNode::Iter, info)?.is_some() {
+    } else if ret_type.operator_info(OpSpTypeNode::Iter, info).is_some() {
         Err(CompilerException::of(
             "Vararg on declared assignment does not work for iterables, only tuples",
             node,

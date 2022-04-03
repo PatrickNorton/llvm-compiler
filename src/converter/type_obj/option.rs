@@ -5,14 +5,16 @@ use std::sync::Arc;
 
 use once_cell::sync::OnceCell;
 
+use crate::converter::access_handler::AccessLevel;
 use crate::converter::argument::ArgumentInfo;
-use crate::converter::builtins::{NULL_TYPE, OBJECT};
+use crate::converter::builtins::{Builtins, NULL_TYPE, OBJECT};
 use crate::converter::bytecode::Bytecode;
 use crate::converter::bytecode_list::BytecodeList;
 use crate::converter::fn_info::FunctionInfo;
 use crate::converter::generic::GenericInfo;
 use crate::converter::type_obj::TemplateParam;
 use crate::parser::line_info::LineInfo;
+use crate::parser::operator_sp::OpSpTypeNode;
 
 use super::macros::{arc_eq_hash, try_from_type_obj, type_obj_from};
 use super::TypeObject;
@@ -141,6 +143,18 @@ impl OptionTypeObject {
                     .clone()
                     .into(),
             ),
+            _ => None,
+        }
+    }
+
+    pub fn operator_info(
+        &self,
+        o: OpSpTypeNode,
+        access: AccessLevel,
+        builtins: &Builtins,
+    ) -> Option<Cow<'_, FunctionInfo>> {
+        match o {
+            OpSpTypeNode::Hash => self.value.option_val.op_info_access(o, access, builtins),
             _ => None,
         }
     }

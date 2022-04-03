@@ -27,6 +27,7 @@ pub use self::template::TemplateParam;
 pub use self::tuple::TupleType;
 pub use self::type_type::TypeTypeObject;
 pub use self::union_type::UnionTypeObject;
+use self::user::UserTypeInner;
 pub use self::user::{UserType, UserTypeLike};
 
 use std::borrow::Cow;
@@ -37,7 +38,6 @@ use std::iter::zip;
 
 use itertools::Itertools;
 
-use crate::converter::type_obj::user::UserTypeInner;
 use crate::parser::line_info::Lined;
 use crate::parser::operator_sp::OpSpTypeNode;
 use crate::util::levenshtein;
@@ -400,28 +400,29 @@ impl TypeObject {
         &self,
         o: OpSpTypeNode,
         info: &CompilerInfo,
-    ) -> CompileResult<Option<Cow<'_, FunctionInfo>>> {
-        self.op_info_access(o, info.access_level(self))
+    ) -> Option<Cow<'_, FunctionInfo>> {
+        self.op_info_access(o, info.access_level(self), info.builtins())
     }
 
     pub fn op_info_access(
         &self,
         o: OpSpTypeNode,
         access: AccessLevel,
-    ) -> CompileResult<Option<Cow<'_, FunctionInfo>>> {
+        builtins: &Builtins,
+    ) -> Option<Cow<'_, FunctionInfo>> {
         match self {
-            TypeObject::FnInfo(f) => Ok(f.operator_info(o).map(Cow::Borrowed)),
-            TypeObject::GenerifiedFn(f) => Ok(f.operator_info(o).map(Cow::Owned)),
-            TypeObject::Interface(i) => i.operator_info(o, access).map(|x| x.map(Cow::Owned)),
-            TypeObject::List(_) => Ok(None),
-            TypeObject::Module(_) => Ok(None),
-            TypeObject::Object(_) => todo!(),
-            TypeObject::Option(_) => todo!(),
-            TypeObject::Std(s) => s.operator_info(o, access).map(|x| x.map(Cow::Owned)),
-            TypeObject::Template(_) => todo!(),
-            TypeObject::Tuple(_) => todo!(),
-            TypeObject::Type(_) => todo!(),
-            TypeObject::Union(u) => u.operator_info(o, access).map(|x| x.map(Cow::Owned)),
+            TypeObject::FnInfo(f) => f.operator_info(o).map(Cow::Borrowed),
+            TypeObject::GenerifiedFn(f) => f.operator_info(o).map(Cow::Owned),
+            TypeObject::Interface(i) => i.operator_info(o, access, builtins).map(Cow::Owned),
+            TypeObject::List(_) => None,
+            TypeObject::Module(_) => None,
+            TypeObject::Object(ob) => ob.operator_info(o, builtins).map(Cow::Borrowed),
+            TypeObject::Option(op) => op.operator_info(o, access, builtins),
+            TypeObject::Std(s) => s.operator_info(o, access, builtins).map(Cow::Owned),
+            TypeObject::Template(t) => t.operator_info(o, access, builtins),
+            TypeObject::Tuple(t) => t.operator_info(o, builtins).map(Cow::Owned),
+            TypeObject::Type(t) => t.operator_info(o, access, builtins).map(Cow::Owned),
+            TypeObject::Union(u) => u.operator_info(o, access, builtins).map(Cow::Owned),
         }
     }
 
@@ -431,7 +432,7 @@ impl TypeObject {
         o: OpSpTypeNode,
         info: &mut CompilerInfo,
     ) -> CompileResult<Cow<'_, FunctionInfo>> {
-        self.try_op_info_access(line_info, o, info.access_level(self))
+        self.try_op_info_access(line_info, o, info.access_level(self), info.builtins())
     }
 
     pub fn try_op_info_access(
@@ -439,12 +440,13 @@ impl TypeObject {
         line_info: impl Lined,
         o: OpSpTypeNode,
         access: AccessLevel,
+        builtins: &Builtins,
     ) -> CompileResult<Cow<'_, FunctionInfo>> {
-        self.op_info_access(o, access).and_then(|x| {
-            x.ok_or_else(|| match self.op_info_exception(line_info, o, access) {
+        self.op_info_access(o, access, builtins).ok_or_else(|| {
+            match self.op_info_exception(line_info, o, access, builtins) {
                 Result::Ok(x) => x.into(),
                 Result::Err(x) => x,
-            })
+            }
         })
     }
 
@@ -453,8 +455,12 @@ impl TypeObject {
         line_info: impl Lined,
         o: OpSpTypeNode,
         access: AccessLevel,
+        builtins: &Builtins,
     ) -> CompileResult<CompilerException> {
-        if access != AccessLevel::Private && self.op_info_access(o, AccessLevel::Private)?.is_some()
+        if access != AccessLevel::Private
+            && self
+                .op_info_access(o, AccessLevel::Private, builtins)
+                .is_some()
         {
             Ok(CompilerException::of(
                 format!(
@@ -464,7 +470,11 @@ impl TypeObject {
                 ),
                 line_info,
             ))
-        } else if self.make_mut().op_info_access(o, access)?.is_some() {
+        } else if self
+            .make_mut()
+            .op_info_access(o, access, builtins)
+            .is_some()
+        {
             Ok(CompilerException::of(
                 format!("'{}' requires a mut variable for type '{}'", o, self.name()),
                 line_info,
@@ -481,17 +491,18 @@ impl TypeObject {
         &self,
         o: OpSpTypeNode,
         info: &mut CompilerInfo,
-    ) -> CompileResult<Option<Vec<TypeObject>>> {
-        self.op_ret_access(o, info.access_level(self))
+    ) -> Option<Vec<TypeObject>> {
+        self.op_ret_access(o, info.access_level(self), info.builtins())
     }
 
     pub fn op_ret_access(
         &self,
         o: OpSpTypeNode,
         access: AccessLevel,
-    ) -> CompileResult<Option<Vec<TypeObject>>> {
-        self.op_info_access(o, access)
-            .map(|x| x.map(|i| i.get_returns().to_vec()))
+        builtins: &Builtins,
+    ) -> Option<Vec<TypeObject>> {
+        self.op_info_access(o, access, builtins)
+            .map(|i| i.get_returns().to_vec())
     }
 
     pub fn try_operator_return_type(
@@ -500,7 +511,7 @@ impl TypeObject {
         o: OpSpTypeNode,
         info: &mut CompilerInfo,
     ) -> CompileTypes {
-        self.try_op_ret_access(line_info, o, info.access_level(self))
+        self.try_op_ret_access(line_info, o, info.access_level(self), info.builtins())
     }
 
     pub fn try_op_ret_access(
@@ -508,8 +519,9 @@ impl TypeObject {
         line_info: impl Lined,
         o: OpSpTypeNode,
         access: AccessLevel,
+        builtins: &Builtins,
     ) -> CompileTypes {
-        self.try_op_info_access(line_info, o, access)
+        self.try_op_info_access(line_info, o, access, builtins)
             .map(|x| x.get_returns().to_vec())
     }
 
@@ -722,12 +734,13 @@ impl TypeObject {
         &self,
         o: OpSpTypeNode,
         access: AccessLevel,
-    ) -> CompileResult<Option<Cow<'_, FunctionInfo>>> {
+        builtins: &Builtins,
+    ) -> Option<Cow<'_, FunctionInfo>> {
         match self {
-            TypeObject::Interface(i) => i.true_operator_info(o, access),
-            TypeObject::Std(s) => s.true_operator_info(o, access),
-            TypeObject::Union(u) => u.true_operator_info(o, access),
-            x => x.op_info_access(o, access),
+            TypeObject::Interface(i) => i.true_operator_info(o, access, builtins),
+            TypeObject::Std(s) => s.true_operator_info(o, access, builtins),
+            TypeObject::Union(u) => u.true_operator_info(o, access, builtins),
+            x => x.op_info_access(o, access, builtins),
         }
     }
 

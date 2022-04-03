@@ -293,7 +293,7 @@ impl<'a> LiteralConverter<'a> {
             } else {
                 Ok((conv_ret.get_generics().len() - 1).try_into().unwrap())
             }
-        } else if conv_ret.operator_info(OpSpTypeNode::Iter, info)?.is_some() {
+        } else if conv_ret.operator_info(OpSpTypeNode::Iter, info).is_some() {
             bytes.add(Bytecode::UnpackIterable());
             if !unknowns.is_empty() {
                 bytes.add(Bytecode::DupTop());
@@ -431,7 +431,7 @@ impl<'a> LiteralConverter<'a> {
                 "*" => {
                     if let TypeObject::Tuple(_) = &value {
                         result.extend(value.get_generics().to_vec());
-                    } else if value.operator_info(OpSpTypeNode::Iter, info)?.is_some() {
+                    } else if value.operator_info(OpSpTypeNode::Iter, info).is_some() {
                         return Err(CompilerException::of(
                             "Cannot unpack iterable in tuple literal",
                             arg,

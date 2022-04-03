@@ -86,7 +86,7 @@ impl<'a> AnnotatableConverter<'a> for ClassConverter<'a> {
         };
         let super_constants = self.get_super_constants(info, type_val.get_supers())?;
         let ty = UserType::from(type_val);
-        check_contract(self.node, &ty, ty.get_supers())?;
+        check_contract(self.node, &ty, ty.get_supers(), info.builtins())?;
         self.put_in_info(info, ty, "class", None, super_constants, converter)?;
         Ok((BytecodeList::new(), DivergingInfo::new()))
     }
