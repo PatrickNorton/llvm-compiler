@@ -12,6 +12,7 @@ use super::convertible::{BaseConvertible, ConverterBase};
 use super::declare::DeclarationConverter;
 use super::declared_assign::DeclaredAssignConverter;
 use super::delete::DeleteConverter;
+use super::derived_op::DerivedOperatorConverter;
 use super::diverge::DivergingInfo;
 use super::do_while::DoWhileConverter;
 use super::dotimes::DotimesConverter;
@@ -40,6 +41,7 @@ pub enum BaseConverter<'a> {
     Declaration(DeclarationConverter<'a>),
     DeclaredAssign(DeclaredAssignConverter<'a>),
     Delete(DeleteConverter<'a>),
+    Derived(DerivedOperatorConverter<'a>),
     Do(DoWhileConverter<'a>),
     Dotimes(DotimesConverter<'a>),
     Enum(EnumConverter<'a>),
@@ -71,6 +73,7 @@ macro_rules! base_converter_each {
             BaseConverter::Declaration($var) => $result,
             BaseConverter::DeclaredAssign($var) => $result,
             BaseConverter::Delete($var) => $result,
+            BaseConverter::Derived($var) => $result,
             BaseConverter::Do($var) => $result,
             BaseConverter::Dotimes($var) => $result,
             BaseConverter::Enum($var) => $result,
@@ -134,7 +137,7 @@ impl<'a> BaseConvertible<'a> for &'a IndependentNode {
             IndependentNode::DeclaredAssign(d) => BaseConverter::DeclaredAssign(d.base_converter()),
             IndependentNode::Defer(_) => todo!(),
             IndependentNode::Delete(d) => BaseConverter::Delete(d.base_converter()),
-            IndependentNode::Derived(_) => todo!(),
+            IndependentNode::Derived(d) => BaseConverter::Derived(d.base_converter()),
             IndependentNode::Do(d) => BaseConverter::Do(d.base_converter()),
             IndependentNode::Dotimes(d) => BaseConverter::Dotimes(d.base_converter()),
             IndependentNode::Enum(e) => BaseConverter::Enum(e.base_converter()),

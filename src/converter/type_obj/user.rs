@@ -333,6 +333,10 @@ impl UserType {
         user_match_all!(self: x => x.name())
     }
 
+    pub fn base_name(&self) -> &str {
+        user_match_all!(self: x => &x.get_info().name)
+    }
+
     pub fn contract(&self) -> &(HashSet<String>, HashSet<OpSpTypeNode>) {
         user_match_all!(self: x => x.contract())
     }
@@ -355,6 +359,18 @@ impl UserType {
 
     pub fn recursive_supers(&self) -> impl Iterator<Item = &TypeObject> {
         RecursiveSuperIter::new(self)
+    }
+
+    pub fn get_fields(&self) -> Box<dyn Iterator<Item = &str> + '_> {
+        user_match_all!(self: x => Box::new(
+            x.get_info()
+                .attributes
+                .get()
+                .unwrap()
+                .iter()
+                .filter(|(_, x)| !x.as_ref().is_method())
+                .map(|(x, _)| x.as_str()),
+        ))
     }
 
     pub(super) fn std_name<'a>(

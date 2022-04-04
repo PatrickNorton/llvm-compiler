@@ -171,6 +171,10 @@ impl AttributeInfo {
         &self.type_val
     }
 
+    pub fn is_method(&self) -> bool {
+        self.is_method
+    }
+
     pub fn get_mut_type(&self) -> MutableType {
         self.mut_type
     }

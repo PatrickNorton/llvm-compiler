@@ -21,6 +21,7 @@ mod declare;
 mod declared_assign;
 mod default_holder;
 mod delete;
+mod derived_op;
 mod dict_comp;
 mod dict_literal;
 mod diverge;
