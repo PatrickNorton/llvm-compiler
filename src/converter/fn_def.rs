@@ -66,7 +66,7 @@ impl<'a> FunctionDefConverter<'a> {
             .into());
         }
         func.get_info().set_must_use(message);
-        todo!()
+        Ok(BytecodeList::new())
     }
 
     pub fn convert_sys(&self, info: &mut CompilerInfo) -> CompileBytes {

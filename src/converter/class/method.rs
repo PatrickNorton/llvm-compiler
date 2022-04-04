@@ -213,12 +213,16 @@ impl<'a> MethodConverter<'a> {
         Ok(())
     }
 
-    pub fn add_union_methods(&mut self, variant_methods: HashMap<String, RawMethod<'a>>) {
+    pub fn add_union_methods(
+        &mut self,
+        variant_methods: HashMap<String, RawMethod<'a>>,
+    ) -> CompileResult<()> {
         for (key, val) in &variant_methods {
-            todo!()
+            check_vars(key, val, &self.static_methods)?;
         }
         self.static_methods
             .extend(variant_methods.into_iter().map(|(x, y)| (x.into(), y)));
+        Ok(())
     }
 
     pub fn get_methods(&self) -> &HashMap<&'a str, RawMethod<'a>> {

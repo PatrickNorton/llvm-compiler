@@ -2,6 +2,7 @@ use derive_new::new;
 use itertools::Itertools;
 
 use crate::converter::annotation::{impl_annotatable, AnnotatableConverter};
+use crate::converter::builtins::OBJECT;
 use crate::converter::bytecode_list::BytecodeList;
 use crate::converter::compiler_info::CompilerInfo;
 use crate::converter::convertible::base_convertible;
@@ -9,12 +10,14 @@ use crate::converter::default_holder::DefaultHolder;
 use crate::converter::diverge::DivergingInfo;
 use crate::converter::error::CompilerException;
 use crate::converter::generic::GenericInfo;
+use crate::converter::mutable::MutableType;
 use crate::converter::type_obj::{StdTypeObject, TypeObject, UserType, UserTypeLike};
 use crate::converter::{CompileBytes, CompileResult};
 use crate::parser::annotation::AnnotatableRef;
 use crate::parser::class_def::ClassDefinitionNode;
 use crate::parser::definition::BaseClassRef;
 use crate::parser::descriptor::DescriptorNode;
+use crate::parser::operator_sp::OpSpTypeNode;
 
 use super::converter_holder::ConverterHolder;
 use super::{check_contract, convert_supers, ensure_proper_inheritance, ClassConverterBase};
@@ -191,11 +194,32 @@ impl<'a> ClassConverter<'a> {
 }
 
 fn super_type(obj: &StdTypeObject) -> &TypeObject {
-    todo!()
+    static OBJECT_TY: TypeObject = TypeObject::Object(OBJECT);
+    obj.get_supers().first().unwrap_or(&OBJECT_TY)
 }
 
 fn class_is_constant(converter: &ConverterHolder<'_>) -> bool {
-    todo!()
+    for info in converter.attrs.get_vars().values() {
+        if info.get_mut_type() != MutableType::Standard {
+            return false;
+        }
+    }
+    for info in converter.methods.get_methods().values() {
+        if info.is_mut {
+            return false;
+        }
+    }
+    for (&op, (_, info)) in converter.ops.get_operators() {
+        if info.is_mut && op != OpSpTypeNode::New {
+            return false;
+        }
+    }
+    for (info, _) in converter.props.get_properties().values() {
+        if info.get_mut_type() != MutableType::Standard {
+            return false;
+        }
+    }
+    true
 }
 
 base_convertible!(ClassDefinitionNode, ClassConverter);
