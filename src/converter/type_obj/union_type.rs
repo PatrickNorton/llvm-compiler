@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use itertools::Itertools;
+use once_cell::race::OnceBool;
 use once_cell::sync::{Lazy, OnceCell};
 
 use crate::converter::class::{AttributeInfo, MethodInfo};
@@ -36,7 +37,7 @@ struct UnionTypeInner {
 struct UnionInfo {
     info: UserInfo<MethodInfo, AttributeInfo>,
     variants: OnceCell<Vec<(String, TypeObject)>>,
-    is_const_class: bool,
+    is_const_class: OnceBool,
 }
 
 impl UnionTypeObject {
@@ -46,7 +47,7 @@ impl UnionTypeObject {
                 info: Arc::new(UnionInfo {
                     info: UserInfo::new(name, supers, generics),
                     variants: OnceCell::new(),
-                    is_const_class: false,
+                    is_const_class: OnceBool::new(),
                 }),
                 typedef_name: None,
                 generics: Vec::new(),
@@ -96,7 +97,7 @@ impl UnionTypeObject {
             &self.value.generics,
             self.value.is_const,
             &self.value.typedef_name,
-            self.value.info.is_const_class,
+            self.value.info.is_const_class.get().unwrap(),
         )
     }
 
@@ -112,7 +113,7 @@ impl UnionTypeObject {
     }
 
     pub fn is_const_class(&self) {
-        todo!()
+        self.value.info.is_const_class.set(true).unwrap();
     }
 
     pub fn variant_count(&self) -> u16 {
@@ -214,6 +215,18 @@ impl UnionTypeObject {
             .into())
         }
     }
+
+    pub fn generify_with(&self, parent: &TypeObject, values: Vec<TypeObject>) -> TypeObject {
+        UnionTypeObject {
+            value: Arc::new(UnionTypeInner {
+                info: self.value.info.clone(),
+                typedef_name: self.value.typedef_name.clone(),
+                generics: self.generify_with_inner(parent, values),
+                is_const: self.value.is_const,
+            }),
+        }
+        .into()
+    }
 }
 
 impl UserTypeLike for UnionTypeObject {
@@ -225,7 +238,7 @@ impl UserTypeLike for UnionTypeObject {
     }
 
     fn const_semantics(&self) -> bool {
-        self.value.info.is_const_class
+        self.value.info.is_const_class.get().unwrap()
     }
 
     fn make_const(&self) -> Self {
@@ -246,6 +259,12 @@ impl UserTypeLike for UnionTypeObject {
 
     fn get_supers(&self) -> &[TypeObject] {
         self.get_info().supers.get().unwrap()
+    }
+
+    fn seal(&self) {
+        // FIXME: addFulfilledInterfaces
+        self.value.info.is_const_class.get_or_init(|| true);
+        self.get_info().seal();
     }
 }
 

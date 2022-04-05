@@ -476,10 +476,7 @@ mod private {
             // Early return should only be taken during auto-interface check of superclass.
             // Given that, the auto interface will be applied to this type instead
             // of the superclass and thus still work.
-            let attr = match info.attributes.get() {
-                Option::None => return None,
-                Option::Some(x) => x.get(value),
-            };
+            let attr = info.attributes.get()?.get(value);
             match attr {
                 Option::None => {
                     let new_access = if access == AccessLevel::Private {
@@ -524,6 +521,35 @@ mod private {
                 // TODO: Remove clone
                 Cow::Owned(ty.generify_with(&self.clone().into(), self.generics().to_vec()))
             }
+        }
+
+        fn generify_with_inner(
+            &self,
+            parent: &TypeObject,
+            values: Vec<TypeObject>,
+        ) -> Vec<TypeObject> {
+            // TODO: Remove clone here
+            if self.clone().into().same_base_type(parent) {
+                return values;
+            }
+            let mut result = Vec::with_capacity(self.generics().len());
+            for generic in self.generics() {
+                if let TypeObject::Template(template) = generic {
+                    if template.get_parent().same_base_type(parent) {
+                        let value = &values[template.get_index()];
+                        result.push(if template.is_vararg() {
+                            TypeObject::list([value.clone()])
+                        } else {
+                            value.clone()
+                        })
+                    } else {
+                        result.push(generic.clone())
+                    }
+                } else {
+                    result.push(generic.generify_with(parent, values.clone()))
+                }
+            }
+            result
         }
     }
 

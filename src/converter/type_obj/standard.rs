@@ -167,6 +167,18 @@ impl StdTypeObject {
         }
     }
 
+    pub fn generify_with(&self, parent: &TypeObject, values: Vec<TypeObject>) -> TypeObject {
+        StdTypeObject {
+            value: Arc::new(TypeObjInner {
+                info: self.value.info.clone(),
+                typedef_name: self.value.typedef_name.clone(),
+                generics: self.generify_with_inner(parent, values),
+                is_const: self.value.is_const,
+            }),
+        }
+        .into()
+    }
+
     pub fn typedef_as(&self, name: String) -> Self {
         Self {
             value: Arc::new(TypeObjInner {

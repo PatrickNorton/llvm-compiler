@@ -160,6 +160,18 @@ impl InterfaceType {
         }
     }
 
+    pub fn generify_with(&self, parent: &TypeObject, values: Vec<TypeObject>) -> TypeObject {
+        InterfaceType {
+            value: Arc::new(InterfaceTypeInner {
+                info: self.value.info.clone(),
+                typedef_name: self.value.typedef_name.clone(),
+                generics: self.generify_with_inner(parent, values),
+                is_const: self.value.is_const,
+            }),
+        }
+        .into()
+    }
+
     pub fn contract(&self) -> &(HashSet<String>, HashSet<OpSpTypeNode>) {
         self.value
             .info

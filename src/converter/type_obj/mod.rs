@@ -318,12 +318,12 @@ impl TypeObject {
     pub fn generify_with(&self, parent: &TypeObject, values: Vec<TypeObject>) -> TypeObject {
         match self {
             TypeObject::FnInfo(f) => f.generify_with(parent, values),
-            TypeObject::Interface(_) => todo!(),
+            TypeObject::Interface(i) => i.generify_with(parent, values),
             TypeObject::List(l) => l.generify_with(parent, values),
             TypeObject::Option(o) => o.generify_with(parent, values),
-            TypeObject::Std(_) => todo!(),
+            TypeObject::Std(s) => s.generify_with(parent, values),
             TypeObject::Template(t) => t.generify_with(parent, values),
-            TypeObject::Union(_) => todo!(),
+            TypeObject::Union(u) => u.generify_with(parent, values),
             _ => self.clone(),
         }
     }

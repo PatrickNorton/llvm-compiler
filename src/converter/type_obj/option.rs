@@ -122,7 +122,7 @@ impl OptionTypeObject {
             TypeObject::Option(o) => self
                 .get_option_val()
                 .generify_as(parent, o.get_option_val()),
-            TypeObject::Object(o) => Some(HashMap::new()),
+            TypeObject::Object(_) => Some(HashMap::new()),
             _ => None,
         }
     }
