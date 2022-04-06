@@ -50,3 +50,29 @@ impl Display for PermissionLevel {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::converter::permission::PermissionLevel;
+
+    #[test]
+    fn stdlib_perm() {
+        assert!(!PermissionLevel::Normal.is_stdlib());
+        assert!(PermissionLevel::Stdlib.is_stdlib());
+        assert!(PermissionLevel::Builtin.is_stdlib());
+    }
+
+    #[test]
+    fn builtin_perm() {
+        assert!(!PermissionLevel::Normal.is_builtin());
+        assert!(!PermissionLevel::Stdlib.is_builtin());
+        assert!(PermissionLevel::Builtin.is_builtin());
+    }
+
+    #[test]
+    fn perm_display() {
+        assert_eq!(format!("{}", PermissionLevel::Normal), "normal");
+        assert_eq!(format!("{}", PermissionLevel::Stdlib), "stdlib");
+        assert_eq!(format!("{}", PermissionLevel::Builtin), "builtin");
+    }
+}
