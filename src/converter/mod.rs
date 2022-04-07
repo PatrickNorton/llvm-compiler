@@ -17,6 +17,7 @@ mod config;
 mod constant;
 mod continue_conv;
 mod convertible;
+mod dead_code;
 mod declare;
 mod declared_assign;
 mod default_holder;
@@ -122,7 +123,7 @@ pub fn convert_to_file(file: PathBuf, node: TopNode, args: CLArgs) -> Result<(),
         PermissionLevel::Normal,
     );
     import_handler::compile_all(&mut info, &node)?;
-    run_optimization_passes(&global_info);
+    run_optimization_passes(&mut global_info);
     write_to_file(&mut global_info, file)?;
     let end = Instant::now();
     let elapsed = end.duration_since(start);
@@ -189,12 +190,12 @@ fn stdlib_path(args: &CLArgs) -> PathBuf {
         .unwrap_or_else(|| canonicalize("Lib").expect("Could not find builtin file"))
 }
 
-fn run_optimization_passes(info: &GlobalCompilerInfo) {
+fn run_optimization_passes(info: &mut GlobalCompilerInfo) {
     if info.opt_is_enabled(Optimization::InlineFunctions) {
         todo!("Inline functions")
     }
     if info.opt_is_enabled(Optimization::DeadCode) {
-        todo!("Dead-code elimination")
+        dead_code::eliminate(info)
     }
 }
 

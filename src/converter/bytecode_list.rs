@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::io::Write;
 
 use super::bytecode::{Bytecode, Label};
@@ -13,6 +14,11 @@ pub struct BytecodeList {
 pub enum BytecodeValue {
     Bytecode(Bytecode),
     Label(Label),
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct Index {
+    value: usize,
 }
 
 impl BytecodeList {
@@ -62,6 +68,14 @@ impl BytecodeList {
         self.values.push(BytecodeValue::Label(label))
     }
 
+    pub fn remove_all(&mut self, indices: HashSet<Index>) {
+        let mut i = 0;
+        self.values.retain(|_| {
+            i += 1;
+            !indices.contains(&Index::new(i - 1))
+        })
+    }
+
     pub fn disassemble_to<W: Write>(
         &self,
         functions: &[&Function],
@@ -99,7 +113,22 @@ impl BytecodeList {
         }
     }
 
-    fn set_labels(&self) {
+    pub fn next_label(&self, start: Index) -> Option<Index> {
+        self.values[start.value..]
+            .iter()
+            .enumerate()
+            .find(|(_, x)| matches!(x, BytecodeValue::Label(_)))
+            .map(|(i, _)| Index::new(i + start.value))
+    }
+
+    pub fn enumerate(&self) -> impl Iterator<Item = (Index, &Bytecode)> {
+        self.values.iter().enumerate().filter_map(|(i, x)| match x {
+            BytecodeValue::Label(_) => None,
+            BytecodeValue::Bytecode(b) => Some((Index::new(i), b)),
+        })
+    }
+
+    pub(super) fn set_labels(&self) {
         let mut index = 0;
         for value in &self.values {
             match value {
@@ -107,6 +136,16 @@ impl BytecodeList {
                 BytecodeValue::Label(lbl) => lbl.set_value(index),
             }
         }
+    }
+}
+
+impl Index {
+    pub fn new(value: usize) -> Self {
+        Self { value }
+    }
+
+    pub fn next(&self) -> Self {
+        Self::new(self.value + 1)
     }
 }
 

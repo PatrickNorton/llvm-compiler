@@ -27,6 +27,10 @@ impl Function {
         &self.bytes
     }
 
+    pub fn mut_bytes(&mut self) -> &mut BytecodeList {
+        &mut self.bytes
+    }
+
     pub fn is_generator(&self) -> bool {
         self.info.is_generator()
     }

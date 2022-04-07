@@ -47,6 +47,10 @@ impl LocationBytecode {
     pub const fn new(value: Label) -> Self {
         Self { value }
     }
+
+    pub fn get_label(&self) -> &Label {
+        &self.value
+    }
 }
 
 impl BytecodeType for LocationBytecode {

@@ -127,22 +127,8 @@ impl GlobalCompilerInfo {
     }
 
     pub fn get_functions_classes(&mut self) -> (Vec<&Function>, &Vec<Option<ClassInfo>>) {
-        let functions = self.functions.get_mut();
-        if functions[0].is_none() {
-            let default_fns = self.default_functions.get_mut();
-            let mut bytes = single_default_pos(default_fns).map_or_else(
-                || create_default_fn(default_fns, functions),
-                |x| default_fns[x].clone().unwrap(),
-            );
-            if self.is_test() {
-                let index = convert_test_start(self);
-                bytes.add(Bytecode::CallFn(index.into(), 0.into()));
-            }
-            self.functions.get_mut()[0] = Some(Function::new(
-                LineInfo::empty(),
-                FunctionInfo::named("__default__"),
-                bytes,
-            ));
+        if self.functions.get_mut()[0].is_none() {
+            self.init_default_function();
         }
         (
             self.functions
@@ -155,6 +141,39 @@ impl GlobalCompilerInfo {
                 .collect(),
             self.classes.get_mut(),
         )
+    }
+
+    pub fn mut_functions(&mut self) -> Vec<&mut Function> {
+        if self.functions.get_mut()[0].is_none() {
+            self.init_default_function();
+        }
+        self.functions
+            .get_mut()
+            .iter_mut()
+            .map(|x| {
+                x.as_mut()
+                    .expect("All functions should be written before this point")
+            })
+            .collect()
+    }
+
+    fn init_default_function(&mut self) {
+        debug_assert!(self.functions.get_mut()[0].is_none());
+        let functions = self.functions.get_mut();
+        let default_fns = self.default_functions.get_mut();
+        let mut bytes = single_default_pos(default_fns).map_or_else(
+            || create_default_fn(default_fns, functions),
+            |x| default_fns[x].clone().unwrap(),
+        );
+        if self.is_test() {
+            let index = convert_test_start(self);
+            bytes.add(Bytecode::CallFn(index.into(), 0.into()));
+        }
+        self.functions.get_mut()[0] = Some(Function::new(
+            LineInfo::empty(),
+            FunctionInfo::named("__default__"),
+            bytes,
+        ));
     }
 
     pub fn get_tables(&mut self) -> &[SwitchTable] {

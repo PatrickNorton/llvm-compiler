@@ -1,4 +1,5 @@
 mod argc;
+mod bytecode_ref;
 mod constant;
 mod fn_no;
 mod location;
@@ -15,6 +16,7 @@ use derive_new::new;
 use indexmap::IndexSet;
 
 pub use self::argc::ArgcBytecode;
+pub use self::bytecode_ref::BytecodeRef;
 pub use self::constant::ConstantBytecode;
 pub use self::fn_no::FunctionNoBytecode;
 pub use self::location::{Label, LocationBytecode};
