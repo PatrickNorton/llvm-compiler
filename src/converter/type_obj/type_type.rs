@@ -12,10 +12,10 @@ use crate::parser::line_info::Lined;
 use crate::parser::operator_sp::OpSpTypeNode;
 use crate::util::first;
 
-use super::macros::{arc_eq_hash, try_from_type_obj, type_obj_from};
+use super::macros::{arc_partial_eq, try_from_type_obj, type_obj_from};
 use super::TypeObject;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeTypeObject {
     value: Arc<InnerType>,
 }
@@ -173,7 +173,7 @@ impl Default for TypeTypeObject {
     }
 }
 
-arc_eq_hash!(TypeTypeObject);
+arc_partial_eq!(TypeTypeObject, Type);
 
 type_obj_from!(TypeTypeObject, Type);
 try_from_type_obj!(TypeTypeObject, Type);
@@ -181,6 +181,8 @@ try_from_type_obj!(TypeTypeObject, Type);
 #[cfg(test)]
 mod tests {
     use crate::converter::builtins::OBJECT;
+    use crate::converter::type_obj::{TupleType, TypeObject};
+    use crate::parser::line_info::LineInfo;
 
     use super::TypeTypeObject;
 
@@ -202,5 +204,44 @@ mod tests {
         let typedefed = ty.typedef_as("test".into());
         assert_eq!(typedefed.name(), "test");
         assert_eq!(typedefed.base_name(), "type");
+    }
+
+    #[test]
+    fn type_type_equals() {
+        let ty = TypeTypeObject::new_empty();
+        assert_eq!(ty, ty);
+        assert_eq!(TypeTypeObject::new_empty(), TypeTypeObject::new_empty());
+        let obj = TypeTypeObject::new(OBJECT.into());
+        assert_eq!(obj, obj);
+        assert_eq!(
+            TypeTypeObject::new(OBJECT.into()),
+            TypeTypeObject::new(OBJECT.into()),
+        );
+    }
+
+    #[test]
+    fn generify_type() {
+        let ty = TypeTypeObject::new_empty();
+        assert_eq!(
+            ty.generify(&LineInfo::empty(), vec![OBJECT.into()])
+                .unwrap(),
+            TypeObject::Type(TypeTypeObject::new(OBJECT.into())),
+        );
+    }
+
+    #[test]
+    fn generify_type_error() {
+        let ty = TypeTypeObject::new_empty();
+        assert!(ty.generify(&LineInfo::empty(), Vec::new()).is_err());
+        assert!(ty
+            .generify(&LineInfo::empty(), vec![OBJECT.into(), OBJECT.into()])
+            .is_err());
+        let full = TypeTypeObject::new(OBJECT.into());
+        assert!(full
+            .generify(&LineInfo::empty(), vec![TupleType::default().into()])
+            .is_err());
+        assert!(full
+            .generify(&LineInfo::empty(), vec![OBJECT.into()])
+            .is_err());
     }
 }
