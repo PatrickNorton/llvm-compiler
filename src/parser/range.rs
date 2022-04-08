@@ -41,11 +41,11 @@ impl RangeLiteralNode {
     }
 
     pub fn get_stop(&self) -> &TestNode {
-        &self.start
+        &self.stop
     }
 
     pub fn get_step(&self) -> &TestNode {
-        &self.start
+        &self.step
     }
 
     pub fn parse(tokens: &mut TokenList) -> ParseResult<RangeLiteralNode> {
