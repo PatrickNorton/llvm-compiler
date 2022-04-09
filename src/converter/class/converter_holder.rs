@@ -99,15 +99,11 @@ fn merge_attrs(
     attrs
         .iter()
         .map(|(x, y)| (x.clone(), y.clone()))
-        .chain(
-            colons
-                .iter()
-                .map(|(x, y)| (x.clone(), attr_info(x, y, false))),
-        )
+        .chain(colons.iter().map(|(x, y)| (x.clone(), attr_info(y, false))))
         .chain(
             methods
                 .iter()
-                .map(|(x, y)| (x.borrow().to_string(), attr_info(x.borrow(), y, true))),
+                .map(|(x, y)| (x.borrow().to_string(), attr_info(y, true))),
         )
         .chain(
             properties
@@ -117,7 +113,7 @@ fn merge_attrs(
         .collect()
 }
 
-fn attr_info(name: &str, method: &RawMethod<'_>, is_method: bool) -> AttributeInfo {
+fn attr_info(method: &RawMethod<'_>, is_method: bool) -> AttributeInfo {
     let mut_type = if method.is_mut {
         MutableType::MutMethod
     } else {
