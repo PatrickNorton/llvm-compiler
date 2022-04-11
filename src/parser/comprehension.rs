@@ -23,7 +23,6 @@ pub struct ComprehensionNode {
 #[derive(Debug)]
 pub struct DictComprehensionNode {
     line_info: LineInfo,
-    brace: char,
     variables: Vec<VarLikeNode>,
     key: Box<TestNode>,
     builder: Box<TestNode>,
@@ -130,7 +129,6 @@ impl DictComprehensionNode {
     ) -> Self {
         Self {
             line_info,
-            brace: '{',
             variables,
             key,
             builder,
