@@ -252,7 +252,7 @@ impl<'a> TestConvertible<'a> for &'a TestNode {
 }
 
 impl<'a> From<DotConverter<'a>> for TestConverter<'a> {
-    fn from(_: DotConverter<'a>) -> Self {
-        todo!()
+    fn from(x: DotConverter<'a>) -> Self {
+        TestConverter::Dotted(x)
     }
 }
