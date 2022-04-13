@@ -48,7 +48,7 @@ impl ModuleType {
         self.base_name().hash(state)
     }
 
-    pub fn typedef_as(&self, name: String) -> Self {
+    pub fn typedef_as(&self, _name: String) -> Self {
         panic!("Cannot typedef a module")
     }
 }
