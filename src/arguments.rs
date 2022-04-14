@@ -9,6 +9,7 @@ use std::str::FromStr;
 use crate::util::version::CURRENT_VERSION;
 
 // TODO? Rewrite using clap
+/// The result of parsing command line arguments.
 #[derive(Debug)]
 pub struct CLArgs {
     target: PathBuf,
@@ -22,6 +23,16 @@ pub struct CLArgs {
     stdlib_path: Option<PathBuf>,
 }
 
+/// A codegen optimization.
+///
+/// These are the ones triggered by `-f` flags in the argument list, e.g.
+/// passing `-fdce` will cause `Optimization::DeadStore` to be run.
+///
+/// # Examples
+/// ```
+/// assert_eq!(Optimization::parse("dce"), Ok(Optimization::DeadStore));
+/// assert_eq!(Optimization::parse("pure-const"), Ok(Optimization::PureConst));
+/// ```
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Optimization {
     ConstBytes,
@@ -34,6 +45,7 @@ pub enum Optimization {
     PureConst,
 }
 
+/// An error from parsing command-line arguments.
 #[derive(Debug, Clone)]
 pub enum CLArgError {
     NotEnoughArgs,
@@ -75,6 +87,7 @@ const OPT_LIST: &[&[Optimization]] = &[
 ];
 
 impl CLArgs {
+    /// Whether or not the given optimization was enabled by the user.
     pub fn opt_is_enabled(&self, opt: Optimization) -> bool {
         self.explicit_opts.get(&opt).cloned().unwrap_or_else(|| {
             OPT_LIST[..=self.opt_level as usize]
@@ -83,34 +96,62 @@ impl CLArgs {
         })
     }
 
+    /// The target location for the final bytecode to be written.
     pub fn target(&self) -> &Path {
         &self.target
     }
 
+    /// If debug mode is on.
+    ///
+    /// In debug mode, assertions are enabled, and `$cfg(debug)` is true.
     pub fn is_debug(&self) -> bool {
         self.is_debug
     }
 
+    /// If this is compiling a test binary or not.
+    ///
+    /// If this is compiling a test binary, `$cfg(debug)` is true and all
+    /// functions with `$test` will be run as tests.
     pub fn is_test(&self) -> bool {
         self.is_test
     }
 
+    /// The set of options passed by `--cfg foo`.
+    ///
+    /// `$cfg(foo)` is true if and only if `"foo"` is a member of
+    /// `cfg_options()`.
     pub fn cfg_options(&self) -> &HashSet<String> {
         &self.cfg_options
     }
 
+    /// Whether or not the bytecode disassembly should be printed to stdout.
+    ///
+    /// This is controlled by the `--print-bytecode` command-line flag.
     pub fn should_print_bytecode(&self) -> bool {
         self.print_bytecode
     }
 
+    /// The path to write the bytecode output to, if present.
+    ///
+    /// If this is absent, no bytecode output should be written, excluding that
+    /// given by the `--print-bytecode` flag.
     pub fn get_bytecode_path(&self) -> &Option<PathBuf> {
         &self.bytecode_path
     }
 
+    /// The path to the standard library, if present.
+    ///
+    /// If no stdlib path was given, the default stdlib path should be used.
     pub fn stdlib_path(&self) -> &Option<PathBuf> {
         &self.stdlib_path
     }
 
+    /// Parses the `ArgumentInfo` from an iterator of strings.
+    ///
+    /// # Examples
+    /// ```
+    /// let args = ArgumentInfo::parse(std::env::args());
+    /// ```
     pub fn parse(args: impl IntoIterator<Item = String>) -> Result<CLArgs, CLArgError> {
         let mut args = args.into_iter();
         let _this = args.next().ok_or(CLArgError::NotEnoughArgs)?;
@@ -221,6 +262,7 @@ impl CLArgs {
 }
 
 impl Optimization {
+    /// The name of the optimization.
     pub fn name(&self) -> &'static str {
         match self {
             Optimization::ConstBytes => "const-bytes-object",
@@ -278,6 +320,12 @@ impl FromStr for Optimization {
     }
 }
 
+impl Display for Optimization {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.name().fmt(f)
+    }
+}
+
 impl Error for CLArgError {}
 
 impl Display for CLArgError {
@@ -289,7 +337,7 @@ impl Display for CLArgError {
             CLArgError::MultipleStdlib => f.write_str("Redefinition of stdlib path"),
             CLArgError::UnknownOptimization(x) => write!(f, "Unknown optimization option {}", x),
             CLArgError::OptimizationRedef(o) => {
-                write!(f, "Redefinition of optimization option {}", o.name())
+                write!(f, "Redefinition of optimization option {}", o)
             }
             CLArgError::OptLevelRedef => f.write_str("Optimization level defined multiple times"),
             CLArgError::MissingValue => f.write_str("Argument expected value but didn't get one"),
