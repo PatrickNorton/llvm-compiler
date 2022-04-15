@@ -95,11 +95,11 @@ impl ClassInfo {
         }
         add_variables(&mut bytes, &self.variables);
         add_variables(&mut bytes, &self.static_variables);
-        add_operators(&mut bytes, &self.operator_defs);
-        add_operators(&mut bytes, &self.static_operators);
-        add_methods(&mut bytes, &self.method_defs);
-        add_methods(&mut bytes, &self.static_methods);
-        add_properties(&mut bytes, &self.properties);
+        add_operators(&mut bytes, &self.operator_defs, constants);
+        add_operators(&mut bytes, &self.static_operators, constants);
+        add_methods(&mut bytes, &self.method_defs, constants);
+        add_methods(&mut bytes, &self.static_methods, constants);
+        add_properties(&mut bytes, &self.properties, constants);
         bytes
     }
 
@@ -132,37 +132,45 @@ fn add_variables(bytes: &mut Vec<u8>, byte_map: &HashMap<String, u16>) {
     }
 }
 
-fn add_operators(bytes: &mut Vec<u8>, byte_map: &HashMap<OpSpTypeNode, Method>) {
+fn add_operators(
+    bytes: &mut Vec<u8>,
+    byte_map: &HashMap<OpSpTypeNode, Method>,
+    constants: &ConstantSet,
+) {
     bytes.extend(usize_to_bytes(byte_map.len()));
     for (name, method) in byte_map {
         bytes.push(*name as u8);
         bytes.push(method.get_info().function_info.is_generator().into());
-        let op_bytes = method.get_bytes().convert_to_bytes();
+        let op_bytes = method.get_bytes().convert_to_bytes(constants);
         bytes.extend(usize_to_bytes(op_bytes.len()));
         bytes.extend(op_bytes);
     }
 }
 
-fn add_methods(bytes: &mut Vec<u8>, byte_map: &HashMap<String, Method>) {
+fn add_methods(bytes: &mut Vec<u8>, byte_map: &HashMap<String, Method>, constants: &ConstantSet) {
     bytes.extend(usize_to_bytes(byte_map.len()));
     for (name, method) in byte_map {
         bytes.extend(StringConstant::str_bytes(name));
         bytes.push(method.get_info().function_info.is_generator().into());
-        let method_bytes = method.get_bytes().convert_to_bytes();
+        let method_bytes = method.get_bytes().convert_to_bytes(constants);
         bytes.extend(usize_to_bytes(method_bytes.len()));
         bytes.extend(method_bytes);
     }
 }
 
-fn add_properties(bytes: &mut Vec<u8>, properties: &HashMap<String, (Method, Method)>) {
+fn add_properties(
+    bytes: &mut Vec<u8>,
+    properties: &HashMap<String, (Method, Method)>,
+    constants: &ConstantSet,
+) {
     bytes.extend(&usize_to_bytes(properties.len()));
     for (name, (getter, setter)) in properties {
         bytes.extend(StringConstant::str_bytes(name));
-        let getter_bytes = getter.get_bytes().convert_to_bytes();
+        let getter_bytes = getter.get_bytes().convert_to_bytes(constants);
         bytes.push(getter.get_info().function_info.is_generator().into());
         bytes.extend(usize_to_bytes(getter_bytes.len()));
         bytes.extend(getter_bytes);
-        let setter_bytes = setter.get_bytes().convert_to_bytes();
+        let setter_bytes = setter.get_bytes().convert_to_bytes(constants);
         bytes.push(setter.get_info().function_info.is_generator().into());
         bytes.extend(usize_to_bytes(setter_bytes.len()));
         bytes.extend(setter_bytes);

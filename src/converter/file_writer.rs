@@ -94,7 +94,7 @@ fn write_bytes(
     let (functions, classes) = info.get_functions_classes();
     writer.write_all(&usize_to_bytes(functions.len()))?;
     for function in &*functions {
-        let bytes = function.get_bytes().convert_to_bytes();
+        let bytes = function.get_bytes().convert_to_bytes(constants);
         writer.write_all(&StringConstant::str_bytes(function.get_name()))?;
         writer.write_all(&[function.is_generator().into()])?;
         writer.write_all(&function.get_max().to_be_bytes())?;
@@ -193,5 +193,11 @@ impl<'a> IntoIterator for &'a ConstantSet {
 
     fn into_iter(self) -> Self::IntoIter {
         self.value.iter()
+    }
+}
+
+impl From<IndexSet<LangConstant>> for ConstantSet {
+    fn from(x: IndexSet<LangConstant>) -> Self {
+        Self::new(x)
     }
 }

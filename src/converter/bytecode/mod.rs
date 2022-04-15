@@ -13,7 +13,6 @@ mod variant;
 use std::fmt::Display;
 
 use derive_new::new;
-use indexmap::IndexSet;
 
 pub use self::argc::ArgcBytecode;
 pub use self::bytecode_ref::BytecodeRef;
@@ -28,6 +27,7 @@ pub use self::variable::VariableBytecode;
 pub use self::variant::VariantBytecode;
 
 use super::constant::LangConstant;
+use super::file_writer::ConstantSet;
 use super::function::Function;
 
 #[derive(Debug, Clone)]
@@ -157,7 +157,171 @@ trait BytecodeType {
         functions: &[&Function],
     ) -> std::fmt::Result;
 
-    fn assemble(&self, buffer: &mut Vec<u8>, constants: &IndexSet<LangConstant>);
+    fn assemble(&self, buffer: &mut Vec<u8>, constants: &ConstantSet);
+
+    fn size(&self) -> usize
+    where
+        Self: Sized,
+    {
+        <Self as BytecodeType>::SIZE
+    }
+}
+
+macro_rules! sum_sizes {
+    () => {0};
+    ($val:ident $(,)?) => {$val.size()};
+    ($val:ident, $($vals:ident),* $(,)?) => {
+        $val.size() + sum_sizes!($($vals),*)
+    };
+}
+
+macro_rules! bytecode_size {
+    ($($val:ident),* $(,)?) => {
+        sum_sizes!($($val),*) + 1
+    };
+}
+
+// NOTE: feature(macro_metavar_expressions) (#83527) would improve this
+macro_rules! count {
+    () => {
+        0
+    };
+    ($a:ident $(,)?) => {{
+        let _ = $a;
+        1
+    }};
+    ($a:ident, $b:ident $(,)?) => {{
+        let _ = ($a, $b);
+        2
+    }};
+}
+
+macro_rules! dispatch_assemble {
+    ($self:ident, $constants:ident) => {
+        $self.assemble_0()
+    };
+    ($a:ident, $self:ident, $constants:ident) => {{
+        $self.assemble_1($a, $constants)
+    }};
+    ($a:ident, $b:ident, $self:ident, $constants:ident) => {{
+        $self.assemble_2($a, $b, $constants)
+    }};
+}
+
+macro_rules! bytecode_match {
+    ($val:expr => macro $name:ident) => {
+        bytecode_match!($val => macro $name())
+    };
+
+    ($val:expr => macro $name:ident ($($vals:ident),*)) => {
+        match $val {
+            Bytecode::Nop() => $name!($($vals),*),
+            Bytecode::LoadNull() => $name!($($vals),*),
+            Bytecode::LoadConst(x) => $name!(x, $($vals),*),
+            Bytecode::LoadValue(x) => $name!(x, $($vals),*),
+            Bytecode::LoadDot(x) => $name!(x, $($vals),*),
+            Bytecode::LoadSubscript(x) => $name!(x, $($vals),*),
+            Bytecode::LoadOp(x) => $name!(x, $($vals),*),
+            Bytecode::PopTop() => $name!($($vals),*),
+            Bytecode::DupTop() => $name!($($vals),*),
+            Bytecode::Swap2() => $name!($($vals),*),
+            Bytecode::Swap3() => $name!($($vals),*),
+            Bytecode::SwapN(x) => $name!(x, $($vals),*),
+            Bytecode::Store(x) => $name!(x, $($vals),*),
+            Bytecode::StoreSubscript(x) => $name!(x, $($vals),*),
+            Bytecode::StoreAttr(x) => $name!(x, $($vals),*),
+            Bytecode::SwapStack(x, y) => $name!(x, y, $($vals),*),
+            Bytecode::Plus() => $name!($($vals),*),
+            Bytecode::Minus() => $name!($($vals),*),
+            Bytecode::Times() => $name!($($vals),*),
+            Bytecode::Divide() => $name!($($vals),*),
+            Bytecode::FloorDiv() => $name!($($vals),*),
+            Bytecode::Mod() => $name!($($vals),*),
+            Bytecode::Subscript() => $name!($($vals),*),
+            Bytecode::Power() => $name!($($vals),*),
+            Bytecode::LBitshift() => $name!($($vals),*),
+            Bytecode::RBitshift() => $name!($($vals),*),
+            Bytecode::BitwiseAnd() => $name!($($vals),*),
+            Bytecode::BitwiseOr() => $name!($($vals),*),
+            Bytecode::BitwiseXor() => $name!($($vals),*),
+            Bytecode::Compare() => $name!($($vals),*),
+            Bytecode::DelSubscript() => $name!($($vals),*),
+            Bytecode::UMinus() => $name!($($vals),*),
+            Bytecode::BitwiseNot() => $name!($($vals),*),
+            Bytecode::BoolAnd() => $name!($($vals),*),
+            Bytecode::BoolOr() => $name!($($vals),*),
+            Bytecode::BoolNot() => $name!($($vals),*),
+            Bytecode::BoolXor() => $name!($($vals),*),
+            Bytecode::Identical() => $name!($($vals),*),
+            Bytecode::Instanceof() => $name!($($vals),*),
+            Bytecode::CallOp(x, y) => $name!(x, y, $($vals),*),
+            Bytecode::PackTuple(x) => $name!(x, $($vals),*),
+            Bytecode::UnpackTuple() => $name!($($vals),*),
+            Bytecode::Equal() => $name!($($vals),*),
+            Bytecode::LessThan() => $name!($($vals),*),
+            Bytecode::GreaterThan() => $name!($($vals),*),
+            Bytecode::LessEqual() => $name!($($vals),*),
+            Bytecode::GreaterEqual() => $name!($($vals),*),
+            Bytecode::Contains() => $name!($($vals),*),
+            Bytecode::Jump(x) => $name!(x, $($vals),*),
+            Bytecode::JumpFalse(x) => $name!(x, $($vals),*),
+            Bytecode::JumpTrue(x) => $name!(x, $($vals),*),
+            Bytecode::JumpNN(x) => $name!(x, $($vals),*),
+            Bytecode::JumpNull(x) => $name!(x, $($vals),*),
+            Bytecode::CallMethod(x, y) => $name!(x, y, $($vals),*),
+            Bytecode::CallTos(x) => $name!(x, $($vals),*),
+            Bytecode::CallFn(x, y) => $name!(x, y, $($vals),*),
+            Bytecode::TailMethod(x) => $name!(x, $($vals),*),
+            Bytecode::TailTos(x) => $name!(x, $($vals),*),
+            Bytecode::TailFn(x, y) => $name!(x, y, $($vals),*),
+            Bytecode::Return(x) => $name!(x, $($vals),*),
+            Bytecode::Yield(x) => $name!(x, $($vals),*),
+            Bytecode::SwitchTable(x) => $name!(x, $($vals),*),
+            Bytecode::Throw() => $name!($($vals),*),
+            Bytecode::ThrowQuick(x) => $name!(x, $($vals),*),
+            Bytecode::EnterTry(x) => $name!(x, $($vals),*),
+            Bytecode::ExceptN(x) => $name!(x, $($vals),*),
+            Bytecode::Finally() => $name!($($vals),*),
+            Bytecode::EndTry(x) => $name!(x, $($vals),*),
+            Bytecode::FuncDef() => $name!($($vals),*),
+            Bytecode::ClassDef() => $name!($($vals),*),
+            Bytecode::EndClass() => $name!($($vals),*),
+            Bytecode::ForIter(x, y) => $name!(x, y, $($vals),*),
+            Bytecode::ListCreate(x) => $name!(x, $($vals),*),
+            Bytecode::SetCreate(x) => $name!(x, $($vals),*),
+            Bytecode::DictCreate(x) => $name!(x, $($vals),*),
+            Bytecode::ListAdd() => $name!($($vals),*),
+            Bytecode::SetAdd() => $name!($($vals),*),
+            Bytecode::DictAdd() => $name!($($vals),*),
+            Bytecode::Dotimes(x) => $name!(x, $($vals),*),
+            Bytecode::ForParallel(x, y) => $name!(x, y, $($vals),*),
+            Bytecode::MakeSlice() => $name!($($vals),*),
+            Bytecode::ListDyn() => $name!($($vals),*),
+            Bytecode::SetDyn() => $name!($($vals),*),
+            Bytecode::DictDyn() => $name!($($vals),*),
+            Bytecode::ListCap() => $name!($($vals),*),
+            Bytecode::SetCap() => $name!($($vals),*),
+            Bytecode::DictCap() => $name!($($vals),*),
+            Bytecode::DoStatic(x) => $name!(x, $($vals),*),
+            Bytecode::StoreStatic(x) => $name!(x, $($vals),*),
+            Bytecode::LoadStatic(x) => $name!(x, $($vals),*),
+            Bytecode::GetVariant(x) => $name!(x, $($vals),*),
+            Bytecode::MakeVariant(x) => $name!(x, $($vals),*),
+            Bytecode::VariantNo() => $name!($($vals),*),
+            Bytecode::MakeOption() => $name!($($vals),*),
+            Bytecode::IsSome() => $name!($($vals),*),
+            Bytecode::UnwrapOption() => $name!($($vals),*),
+            Bytecode::MakeFunction(x) => $name!(x, $($vals),*),
+            Bytecode::GetType() => $name!($($vals),*),
+            Bytecode::GetSys(x) => $name!(x, $($vals),*),
+            Bytecode::Syscall(x, y) => $name!(x, y, $($vals),*),
+            Bytecode::DupTop2() => $name!($($vals),*),
+            Bytecode::DupTopN(x) => $name!(x, $($vals),*),
+            Bytecode::UnpackIterable() => $name!($($vals),*),
+            Bytecode::PackIterable() => $name!($($vals),*),
+            Bytecode::SwapDyn() => $name!($($vals),*),
+        }
+    };
 }
 
 impl Bytecode {
@@ -170,11 +334,11 @@ impl Bytecode {
     }
 
     pub fn size(&self) -> usize {
-        todo!()
+        bytecode_match!(self => macro bytecode_size)
     }
 
-    pub fn assemble(&self) -> Vec<u8> {
-        todo!()
+    pub fn assemble(&self, constants: &ConstantSet) -> Vec<u8> {
+        bytecode_match!(self => macro dispatch_assemble (self, constants))
     }
 
     pub fn get_constant(&self) -> Option<&LangConstant> {
@@ -185,6 +349,41 @@ impl Bytecode {
             Bytecode::CallMethod(x, _) => Some(x.get_value()),
             _ => None,
         }
+    }
+
+    pub fn byte_value(&self) -> u8 {
+        todo!()
+    }
+
+    const fn bytecode_count(&self) -> usize {
+        bytecode_match!(self => macro count)
+    }
+
+    fn assemble_0(&self) -> Vec<u8> {
+        debug_assert_eq!(self.bytecode_count(), 0);
+        vec![self.byte_value()]
+    }
+
+    fn assemble_1(&self, a: &impl BytecodeType, constants: &ConstantSet) -> Vec<u8> {
+        debug_assert_eq!(self.bytecode_count(), 1);
+        let mut bytes = Vec::with_capacity(self.size());
+        bytes.push(self.byte_value());
+        a.assemble(&mut bytes, constants);
+        bytes
+    }
+
+    fn assemble_2(
+        &self,
+        a: &impl BytecodeType,
+        b: &impl BytecodeType,
+        constants: &ConstantSet,
+    ) -> Vec<u8> {
+        debug_assert_eq!(self.bytecode_count(), 2);
+        let mut bytes = Vec::with_capacity(self.size());
+        bytes.push(self.byte_value());
+        a.assemble(&mut bytes, constants);
+        b.assemble(&mut bytes, constants);
+        bytes
     }
 }
 

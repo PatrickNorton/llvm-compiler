@@ -1,8 +1,6 @@
 use std::fmt::Display;
 
-use indexmap::IndexSet;
-
-use crate::converter::constant::LangConstant;
+use crate::converter::file_writer::ConstantSet;
 use crate::converter::function::Function;
 
 use super::BytecodeType;
@@ -29,7 +27,7 @@ impl BytecodeType for VariantBytecode {
         Display::fmt(&self.variant, f)
     }
 
-    fn assemble(&self, buffer: &mut Vec<u8>, _constants: &IndexSet<LangConstant>) {
+    fn assemble(&self, buffer: &mut Vec<u8>, _constants: &ConstantSet) {
         buffer.extend(&self.variant.to_be_bytes())
     }
 }
@@ -53,7 +51,7 @@ mod tests {
         ];
         for &value in values {
             let mut buf = Vec::new();
-            VariantBytecode::new(value).assemble(&mut buf, &IndexSet::new());
+            VariantBytecode::new(value).assemble(&mut buf, &IndexSet::new().into());
             assert_eq!(buf.len(), VariantBytecode::SIZE);
             assert_eq!(buf, &value.to_be_bytes());
         }

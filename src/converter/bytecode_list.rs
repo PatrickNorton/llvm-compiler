@@ -1,10 +1,22 @@
 use std::collections::HashSet;
 use std::io::Write;
 
+use indexmap::IndexSet;
+
 use super::bytecode::{Bytecode, Label};
 use super::constant::LangConstant;
+use super::file_writer::ConstantSet;
 use super::function::Function;
 
+/// A list of executable bytecode.
+///
+/// This is intentionally opaque, due to the fact that it contains labels.
+///
+/// # Examples
+/// ```
+/// let mut list = BytecodeList::new();
+/// list.add(Bytecode::Null());
+/// ```
 #[derive(Debug, Clone)]
 pub struct BytecodeList {
     values: Vec<BytecodeValue>,
@@ -16,6 +28,17 @@ pub enum BytecodeValue {
     Label(Label),
 }
 
+/// An index into a [`BytecodeList`].
+///
+/// This is intentionally an opaque wrapper, and should only be created through
+/// methods on [`BytecodeList`].
+///
+/// # Examples
+/// ```
+/// let list = BytecodeList::of(Bytecode::Null());
+/// let first_index = list.enumerate().next().unwrap().0;
+/// assert!(matches!())
+/// ```
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Index {
     value: usize,
@@ -92,12 +115,12 @@ impl BytecodeList {
         stream.flush()
     }
 
-    pub fn convert_to_bytes(&self) -> Vec<u8> {
+    pub fn convert_to_bytes(&self, constants: &ConstantSet) -> Vec<u8> {
         self.set_labels();
         let mut result = Vec::new();
         for value in &self.values {
             if let BytecodeValue::Bytecode(b) = value {
-                result.extend(b.assemble());
+                result.extend(b.assemble(constants));
             }
         }
         result
@@ -140,7 +163,7 @@ impl BytecodeList {
 }
 
 impl Index {
-    pub fn new(value: usize) -> Self {
+    fn new(value: usize) -> Self {
         Self { value }
     }
 
@@ -160,4 +183,69 @@ macro_rules! bytecode_list {
 }
 
 pub(super) use bytecode_list;
-use indexmap::IndexSet;
+
+#[cfg(test)]
+mod tests {
+    use crate::converter::bytecode::{Bytecode, Label};
+
+    use super::BytecodeList;
+
+    #[test]
+    fn empty_disassemble() {
+        let list = BytecodeList::new();
+        let mut text = Vec::new();
+        list.disassemble_to(&[], &mut text).unwrap();
+        assert_eq!(text, &[]);
+    }
+
+    #[test]
+    fn of_disassemble() {
+        let list = BytecodeList::of(Bytecode::Nop());
+        let mut text = Vec::new();
+        list.disassemble_to(&[], &mut text).unwrap();
+        assert_eq!(text, "0      NOP\n".as_bytes());
+    }
+
+    #[test]
+    fn one_disassemble() {
+        let mut list = BytecodeList::new();
+        list.add(Bytecode::Nop());
+        let mut text = Vec::new();
+        list.disassemble_to(&[], &mut text).unwrap();
+        assert_eq!(text, "0      NOP\n".as_bytes());
+    }
+
+    #[test]
+    fn two_disassemble() {
+        let list = bytecode_list!(Bytecode::Nop(), Bytecode::LoadNull());
+        let mut text = Vec::new();
+        list.disassemble_to(&[], &mut text).unwrap();
+        assert_eq!(text, "0      NOP\n1      LOAD_NULL\n".as_bytes());
+    }
+
+    #[test]
+    fn set_label() {
+        let label = Label::new();
+        let mut list = BytecodeList::new();
+        list.add(Bytecode::Jump(label.clone().into()));
+        list.add(Bytecode::LoadNull());
+        list.add_label(label.clone());
+        list.set_labels();
+        assert_eq!(label.get_value(), 6);
+    }
+
+    #[test]
+    fn label_disassemble() {
+        let label = Label::new();
+        let mut list = BytecodeList::new();
+        list.add(Bytecode::Jump(label.clone().into()));
+        list.add(Bytecode::LoadNull());
+        list.add_label(label);
+        let mut text = Vec::new();
+        list.disassemble_to(&[], &mut text).unwrap();
+        assert_eq!(
+            text,
+            "0      JUMP            6\n5      LOAD_NULL\n".as_bytes()
+        );
+    }
+}

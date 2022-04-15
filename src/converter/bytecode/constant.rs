@@ -1,6 +1,5 @@
-use indexmap::IndexSet;
-
 use crate::converter::constant::LangConstant;
+use crate::converter::file_writer::ConstantSet;
 use crate::converter::function::Function;
 use crate::util::usize_to_short_bytes;
 
@@ -32,7 +31,7 @@ impl BytecodeType for ConstantBytecode {
         todo!("Needs set of constants")
     }
 
-    fn assemble(&self, buffer: &mut Vec<u8>, constants: &IndexSet<LangConstant>) {
+    fn assemble(&self, buffer: &mut Vec<u8>, constants: &ConstantSet) {
         let index = constants.get_index_of(&self.value).unwrap();
         buffer.extend(&usize_to_short_bytes(index))
     }
@@ -58,9 +57,10 @@ mod tests {
     fn assemble_constant() {
         let constants: IndexSet<LangConstant> =
             indexset! {true.into(), 3.into(), 4.into(), 1.into(), false.into()};
+        let constant_set = constants.clone().into();
         for (i, constant) in constants.iter().enumerate() {
             let mut buf = Vec::new();
-            ConstantBytecode::new(constant.clone()).assemble(&mut buf, &constants);
+            ConstantBytecode::new(constant.clone()).assemble(&mut buf, &constant_set);
             assert_eq!(buf.len(), ConstantBytecode::SIZE);
             assert_eq!(buf, &(i as u16).to_be_bytes());
         }

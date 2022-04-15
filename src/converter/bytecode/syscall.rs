@@ -1,6 +1,4 @@
-use indexmap::IndexSet;
-
-use crate::converter::constant::LangConstant;
+use crate::converter::file_writer::ConstantSet;
 use crate::converter::function::Function;
 use crate::converter::syscalls::syscall_name;
 
@@ -28,7 +26,7 @@ impl BytecodeType for SyscallBytecode {
         write!(f, "{} ({})", self.syscall, syscall_name(self.syscall))
     }
 
-    fn assemble(&self, buffer: &mut Vec<u8>, _constants: &IndexSet<LangConstant>) {
+    fn assemble(&self, buffer: &mut Vec<u8>, _constants: &ConstantSet) {
         buffer.extend(&self.syscall.to_be_bytes())
     }
 }
@@ -52,7 +50,7 @@ mod tests {
         ];
         for &value in values {
             let mut buf = Vec::new();
-            SyscallBytecode::new(value).assemble(&mut buf, &IndexSet::new());
+            SyscallBytecode::new(value).assemble(&mut buf, &IndexSet::new().into());
             assert_eq!(buf.len(), SyscallBytecode::SIZE);
             assert_eq!(buf, &value.to_be_bytes());
         }

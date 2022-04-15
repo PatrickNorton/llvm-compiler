@@ -1,6 +1,4 @@
-use indexmap::IndexSet;
-
-use crate::converter::constant::LangConstant;
+use crate::converter::file_writer::ConstantSet;
 use crate::converter::function::Function;
 use crate::parser::operator_sp::OpSpTypeNode;
 
@@ -28,7 +26,7 @@ impl BytecodeType for OperatorBytecode {
         write!(f, "{} ({})", self.value as u16, self.value)
     }
 
-    fn assemble(&self, buffer: &mut Vec<u8>, _constants: &IndexSet<LangConstant>) {
+    fn assemble(&self, buffer: &mut Vec<u8>, _constants: &ConstantSet) {
         buffer.extend(&(self.value as u16).to_be_bytes())
     }
 }
@@ -52,7 +50,7 @@ mod tests {
     fn assemble_op() {
         for (i, op) in operator_sp::VALUES.into_iter().enumerate() {
             let mut buf = Vec::new();
-            OperatorBytecode::new(op).assemble(&mut buf, &IndexSet::new());
+            OperatorBytecode::new(op).assemble(&mut buf, &IndexSet::new().into());
             assert_eq!(buf.len(), OperatorBytecode::SIZE);
             assert_eq!(buf, &(i as u16).to_be_bytes());
         }

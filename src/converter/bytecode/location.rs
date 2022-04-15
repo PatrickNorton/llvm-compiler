@@ -3,9 +3,7 @@ use std::hash::Hash;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use indexmap::IndexSet;
-
-use crate::converter::constant::LangConstant;
+use crate::converter::file_writer::ConstantSet;
 use crate::converter::function::Function;
 use crate::util::usize_to_bytes;
 
@@ -64,7 +62,7 @@ impl BytecodeType for LocationBytecode {
         Display::fmt(&self.value.get_value(), f)
     }
 
-    fn assemble(&self, buffer: &mut Vec<u8>, _constants: &IndexSet<LangConstant>) {
+    fn assemble(&self, buffer: &mut Vec<u8>, _constants: &ConstantSet) {
         buffer.extend(usize_to_bytes(self.value.get_value()))
     }
 }
@@ -106,7 +104,7 @@ mod tests {
             let mut buf = Vec::new();
             let label = Label::new();
             label.set_value(value as usize);
-            LocationBytecode::new(label).assemble(&mut buf, &IndexSet::new());
+            LocationBytecode::new(label).assemble(&mut buf, &IndexSet::new().into());
             assert_eq!(buf.len(), LocationBytecode::SIZE);
             assert_eq!(buf, &value.to_be_bytes());
         }
