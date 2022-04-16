@@ -99,6 +99,18 @@ impl BytecodeList {
         })
     }
 
+    pub fn remove_all_ranges(&mut self, indices: &[(Index, Option<Index>)]) {
+        let mut i = 0;
+        self.values.retain(|_| {
+            let old_i = i;
+            i += 1;
+            indices.iter().any(|(start, end)| match end {
+                Option::Some(end) => old_i >= start.value && old_i < end.value,
+                Option::None => old_i >= start.value,
+            })
+        })
+    }
+
     pub fn disassemble_to<W: Write>(
         &self,
         functions: &[&Function],

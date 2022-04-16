@@ -71,6 +71,8 @@ fn eliminate_jumps(bytes: &mut BytecodeList) {
 ///     (more code)
 /// ```
 fn eliminate_post_jump(bytes: &mut BytecodeList) {
+    // It would be nice to be able to do this without all the excess iteration,
+    // but that doesn't seem to be possible
     let mut to_remove = Vec::new();
     for (index, bytecode) in bytes.enumerate() {
         if let Bytecode::Jump(_) | Bytecode::Return(_) = bytecode {
@@ -78,6 +80,6 @@ fn eliminate_post_jump(bytes: &mut BytecodeList) {
         }
     }
     if !to_remove.is_empty() {
-        todo!("Need to deal with eliminating ranges without invalidating indices")
+        bytes.remove_all_ranges(&to_remove);
     }
 }
