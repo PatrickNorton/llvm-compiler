@@ -61,6 +61,8 @@ pub enum CLArgError {
     Illegal(String),
 }
 
+const MAX_OPT: u32 = 3;
+
 const O0_OPTIMIZATIONS: &[Optimization] = &[];
 
 const O1_OPTIMIZATIONS: &[Optimization] = &[
@@ -235,9 +237,9 @@ impl CLArgs {
                     } else if let Option::Some(rest) = arg.strip_prefix("-O") {
                         let level = rest.parse().map_err(CLArgError::InvalidOptLevel)?;
                         check_opt_level(&opt_level)?;
-                        if level > 3 {
-                            println!("Warning: -O{} is equivalent to -O3", level);
-                            opt_level = Some(3);
+                        if level > MAX_OPT {
+                            println!("Warning: -O{} is equivalent to -O{}", level, MAX_OPT);
+                            opt_level = Some(MAX_OPT);
                         } else {
                             opt_level = Some(level);
                         }
