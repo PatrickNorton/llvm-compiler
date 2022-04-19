@@ -420,14 +420,20 @@ pub(self) fn ensure_proper_inheritance(
 fn recursively_allow_protected_access(handler: &mut AccessHandler, type_val: &UserType) {
     for super_cls in type_val.get_supers() {
         handler.allow_protected_access(super_cls.clone());
-        todo!("Recursive call")
+        if let TypeObject::Std(super_cls) = super_cls {
+            // TODO: Remove clone
+            recursively_allow_protected_access(handler, &super_cls.clone().into())
+        }
     }
 }
 
 fn recursively_remove_protected_access(handler: &mut AccessHandler, type_val: &UserType) {
     for super_cls in type_val.get_supers() {
         handler.remove_protected_access(super_cls.clone());
-        todo!("Recursive call")
+        if let TypeObject::Std(super_cls) = super_cls {
+            // TODO: Remove clone
+            recursively_remove_protected_access(handler, &super_cls.clone().into())
+        }
     }
 }
 
