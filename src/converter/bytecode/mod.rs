@@ -324,6 +324,8 @@ macro_rules! bytecode_match {
     };
 }
 
+pub(self) use bytecode_match;
+
 impl Bytecode {
     pub fn jump_if(value: bool, label: Label) -> Bytecode {
         if value {

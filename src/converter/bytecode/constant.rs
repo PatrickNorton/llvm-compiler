@@ -5,7 +5,7 @@ use crate::util::usize_to_short_bytes;
 
 use super::BytecodeType;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ConstantBytecode {
     value: LangConstant,
 }
