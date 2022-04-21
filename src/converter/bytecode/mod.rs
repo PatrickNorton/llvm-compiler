@@ -182,6 +182,7 @@ macro_rules! bytecode_size {
 }
 
 // NOTE: feature(macro_metavar_expressions) (#83527) would improve this
+// NOTE: ${ignore} is being stabilized in 1.62.0
 macro_rules! count {
     () => {
         0
@@ -200,14 +201,40 @@ macro_rules! dispatch_assemble {
     ($self:ident, $constants:ident) => {
         $self.assemble_0()
     };
-    ($a:ident, $self:ident, $constants:ident) => {{
+    ($a:ident, $self:ident, $constants:ident) => {
         $self.assemble_1($a, $constants)
-    }};
-    ($a:ident, $b:ident, $self:ident, $constants:ident) => {{
+    };
+    ($a:ident, $b:ident, $self:ident, $constants:ident) => {
         $self.assemble_2($a, $b, $constants)
-    }};
+    };
 }
 
+/// Implements the given macro on each [`Bytecode`] variant.
+///
+/// The given macro should be callable with 0, 1, or 2 comma-separated
+/// arguments with the simple variant. If additional arguments are given,
+/// those will be appended to the macro call.
+///
+/// # Examples
+/// ```ignore
+/// bytecode_match!(foo => macro bar)
+/// // expands to
+/// match foo {
+///     Bytecode::Nop() => bar!(),
+///     Bytecode::LoadNull() => bar!(),
+///     Bytecode::LoadConst(x) => bar!(x),
+///     // etc.
+/// }
+///
+/// bytecode_match!(foo => macro bar(baz))
+/// // expands to
+/// match foo {
+///     Bytecode::Nop() => bar!(baz),
+///     Bytecode::LoadNull() => bar!(baz),
+///     Bytecode::LoadConst(x) => bar!(x, baz),
+///     // etc.
+/// }
+/// ```
 macro_rules! bytecode_match {
     ($val:expr => macro $name:ident) => {
         bytecode_match!($val => macro $name())
