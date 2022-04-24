@@ -10,6 +10,13 @@ use crate::util::{usize_to_bytes, U32_BYTES};
 use super::bytecode::Label;
 use super::constant::{BigintConstant, CharConstant, StringConstant};
 
+/// A table used in optimized `switch` statements.
+///
+/// # See also:
+/// * [`BigSwitchTable`]
+/// * [`CharSwitchTable`]
+/// * [`CompactSwitchTable`]
+/// * [`StringSwitchTable`]
 #[derive(Debug)]
 pub enum SwitchTable {
     Big(BigSwitchTable),
@@ -18,24 +25,35 @@ pub enum SwitchTable {
     String(StringSwitchTable),
 }
 
+/// A table used for `switch` statements on an integer.
+///
+/// A more compact and faster alternative is [`CompactSwitchTable`], which
+/// should be considered when there are a small number of small cases.
 #[derive(Debug, new)]
 pub struct BigSwitchTable {
     values: HashMap<BigInt, Label>,
     default_val: Label,
 }
 
+/// A table used for `switch` statements on characters.
 #[derive(Debug, new)]
 pub struct CharSwitchTable {
     values: HashMap<char, Label>,
     default_val: Label,
 }
 
+/// A table used for compact integer `switch` statements.
+///
+/// Unlike the other tables, which store (and write) their values as a key-value
+/// map, this table stores its values as a [`Vec`] of labels. Where this may be
+/// less efficient, [`BigSwitchTable`] should be used instead.
 #[derive(Debug, new)]
 pub struct CompactSwitchTable {
     values: Vec<Label>,
     default_val: Label,
 }
 
+/// A table used for `switch` statements on character literals.
 #[derive(Debug, new)]
 pub struct StringSwitchTable {
     values: HashMap<String, Label>,
@@ -85,7 +103,7 @@ impl SwitchTable {
 impl BigSwitchTable {
     /// Converts the table into its byte representation.
     ///
-    /// The representation is as follows:
+    /// # Byte representation
     /// ```text
     /// [byte] 1
     /// The number of values
@@ -119,7 +137,7 @@ impl BigSwitchTable {
 impl CharSwitchTable {
     /// Converts the table into its byte representation.
     ///
-    /// The representation is as follows:
+    /// # Byte representation
     /// ```text
     /// [byte] 1
     /// The number of values
@@ -157,6 +175,7 @@ impl CharSwitchTable {
 impl CompactSwitchTable {
     /// Converts the table into its byte representation.
     ///
+    /// # Byte representation
     /// ```text
     /// [byte] 0
     /// The number of values
@@ -192,7 +211,7 @@ impl CompactSwitchTable {
 impl StringSwitchTable {
     /// Converts the table into its byte representation.
     ///
-    /// The representation is as follows:
+    /// # Byte representation
     /// ```text
     /// [byte] 2
     /// The number of values
@@ -234,3 +253,58 @@ impl_from!(Big, BigSwitchTable);
 impl_from!(Char, CharSwitchTable);
 impl_from!(Compact, CompactSwitchTable);
 impl_from!(String, StringSwitchTable);
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use crate::converter::bytecode::Label;
+    use crate::converter::switch_table::{
+        BigSwitchTable, CharSwitchTable, CompactSwitchTable, StringSwitchTable,
+    };
+
+    fn label_value(val: usize) -> Label {
+        let label = Label::new();
+        label.set_value(val);
+        label
+    }
+
+    #[test]
+    fn empty_big_bytes() {
+        let default_val = label_value(0);
+        assert_eq!(
+            BigSwitchTable::new(HashMap::new(), default_val).to_bytes(),
+            &[1, 0, 0, 0, 0, 0, 0, 0, 0]
+        );
+    }
+
+    #[test]
+    fn empty_char_bytes() {
+        let default_val = label_value(0);
+        default_val.set_value(0);
+        assert_eq!(
+            CharSwitchTable::new(HashMap::new(), default_val).to_bytes(),
+            &[3, 0, 0, 0, 0, 0, 0, 0, 0]
+        );
+    }
+
+    #[test]
+    fn empty_compact_bytes() {
+        let default_val = label_value(0);
+        default_val.set_value(0);
+        assert_eq!(
+            CompactSwitchTable::new(Vec::new(), default_val).to_bytes(),
+            &[0, 0, 0, 0, 0, 0, 0, 0, 0]
+        );
+    }
+
+    #[test]
+    fn empty_string_bytes() {
+        let default_val = label_value(0);
+        default_val.set_value(0);
+        assert_eq!(
+            StringSwitchTable::new(HashMap::new(), default_val).to_bytes(),
+            &[2, 0, 0, 0, 0, 0, 0, 0, 0]
+        );
+    }
+}
