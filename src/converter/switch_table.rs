@@ -258,10 +258,13 @@ impl_from!(String, StringSwitchTable);
 mod tests {
     use std::collections::HashMap;
 
+    use num::{BigInt, One};
+
     use crate::converter::bytecode::Label;
     use crate::converter::switch_table::{
         BigSwitchTable, CharSwitchTable, CompactSwitchTable, StringSwitchTable,
     };
+    use crate::macros::hash_map;
 
     fn label_value(val: usize) -> Label {
         let label = Label::new();
@@ -279,6 +282,21 @@ mod tests {
     }
 
     #[test]
+    fn single_big_bytes() {
+        let default_val = label_value(0xff);
+        let values = hash_map!(BigInt::one() => label_value(27));
+        let result = &[
+            1, // ID byte
+            0, 0, 0, 1, // Variable count
+            0, 0, 0, 1, // Bigint length
+            0, 0, 0, 1, // Bigint value
+            0, 0, 0, 27, // Jump location
+            0, 0, 0, 255, // Default value
+        ];
+        assert_eq!(BigSwitchTable::new(values, default_val).to_bytes(), result);
+    }
+
+    #[test]
     fn empty_char_bytes() {
         let default_val = label_value(0);
         default_val.set_value(0);
@@ -286,6 +304,20 @@ mod tests {
             CharSwitchTable::new(HashMap::new(), default_val).to_bytes(),
             &[3, 0, 0, 0, 0, 0, 0, 0, 0]
         );
+    }
+
+    #[test]
+    fn single_char_bytes() {
+        let default_val = label_value(0xffff);
+        let values = hash_map!('a' => label_value(35));
+        let result = &[
+            3, // ID byte
+            0, 0, 0, 1, // Variable count
+            0, 0, 0, 97, // Character value
+            0, 0, 0, 35, // Jump location
+            0, 0, 255, 255, // Default value
+        ];
+        assert_eq!(CharSwitchTable::new(values, default_val).to_bytes(), result);
     }
 
     #[test]
@@ -299,12 +331,46 @@ mod tests {
     }
 
     #[test]
+    fn single_compact_bytes() {
+        let default_val = label_value(0x0f);
+        let values = vec![label_value(19)];
+        let result = &[
+            0, // ID byte
+            0, 0, 0, 1, // Variable count
+            0, 0, 0, 19, // Jump location
+            0, 0, 0, 15, // Default value
+        ];
+        assert_eq!(
+            CompactSwitchTable::new(values, default_val).to_bytes(),
+            result
+        );
+    }
+
+    #[test]
     fn empty_string_bytes() {
         let default_val = label_value(0);
         default_val.set_value(0);
         assert_eq!(
             StringSwitchTable::new(HashMap::new(), default_val).to_bytes(),
             &[2, 0, 0, 0, 0, 0, 0, 0, 0]
+        );
+    }
+
+    #[test]
+    fn single_string_bytes() {
+        let default_val = label_value(0xffffffff);
+        let values = hash_map!("test".to_string() => label_value(7));
+        let result = &[
+            2, // ID byte
+            0, 0, 0, 1, // Variable count
+            0, 0, 0, 4, // String length
+            116, 101, 115, 116, // String value
+            0, 0, 0, 7, // Jump location
+            255, 255, 255, 255, // Default value
+        ];
+        assert_eq!(
+            StringSwitchTable::new(values, default_val).to_bytes(),
+            result
         );
     }
 }
