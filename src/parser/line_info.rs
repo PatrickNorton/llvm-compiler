@@ -82,6 +82,12 @@ impl LineInfo {
     }
 }
 
+impl Default for LineInfo {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
 impl Lined for LineInfo {
     fn line_info(&self) -> &LineInfo {
         self
