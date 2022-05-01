@@ -48,3 +48,150 @@ fn ne(consts: Vec<LangConstant>) -> Option<bool> {
     })
     .ok()
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::converter::constant::LangConstant;
+    use crate::parser::operator::OperatorTypeNode;
+
+    use super::compute_const;
+
+    macro_rules! lang_const_vec {
+        () => {vec![]};
+
+        ($($x:expr),+ $(,)?) => {
+            vec![$(LangConstant::from($x)),+]
+        }
+    }
+
+    #[test]
+    fn string_add() {
+        let values = vec![
+            (lang_const_vec![], ""),
+            (lang_const_vec!["a"], "a"),
+            (lang_const_vec!["foo", "bar"], "foobar"),
+            (
+                lang_const_vec!["string", " ", "summation"],
+                "string summation",
+            ),
+        ];
+        for (values, result) in values {
+            assert_eq!(
+                compute_const(OperatorTypeNode::Add, values),
+                Some(result.into())
+            );
+        }
+    }
+
+    #[test]
+    fn string_add_fail() {
+        let values = vec![
+            lang_const_vec![1],
+            lang_const_vec!["a", 1],
+            lang_const_vec![true, "false"],
+            lang_const_vec!["12345", 67],
+        ];
+        for val in values {
+            assert_eq!(compute_const(OperatorTypeNode::Add, val), None);
+        }
+    }
+
+    #[test]
+    fn string_mul() {
+        let values = vec![
+            (lang_const_vec!["foo"], "foo"),
+            (lang_const_vec!["test", 5], "testtesttesttesttest"),
+            (lang_const_vec!["bar ", 3, 2], "bar bar bar bar bar bar "),
+        ];
+        for (values, result) in values {
+            assert_eq!(
+                compute_const(OperatorTypeNode::Multiply, values),
+                Some(result.into())
+            );
+        }
+    }
+
+    #[test]
+    fn string_mul_fail() {
+        let values = vec![
+            lang_const_vec![],
+            lang_const_vec!["foo", "bar"],
+            lang_const_vec!["test", true],
+            lang_const_vec!["temp", usize::MAX],
+        ];
+        for val in values {
+            assert_eq!(compute_const(OperatorTypeNode::Multiply, val), None);
+        }
+    }
+
+    #[test]
+    fn string_eq() {
+        let values = vec![
+            (lang_const_vec![], true),
+            (lang_const_vec!["a"], true),
+            (lang_const_vec!["foo", "bar"], false),
+            (lang_const_vec!["test", "test"], true),
+            (lang_const_vec!["test", "test", "foo"], false),
+        ];
+        for (val, result) in values {
+            assert_eq!(
+                compute_const(OperatorTypeNode::Equals, val.clone()),
+                Some(result.into())
+            );
+            assert_eq!(
+                compute_const(OperatorTypeNode::Is, val),
+                Some(result.into())
+            );
+        }
+    }
+
+    #[test]
+    fn string_eq_fail() {
+        let values = vec![
+            lang_const_vec!["a", 'a'],
+            lang_const_vec!["foo", true, "bar"],
+        ];
+        for val in values {
+            assert_eq!(compute_const(OperatorTypeNode::Equals, val.clone()), None);
+            assert_eq!(compute_const(OperatorTypeNode::Is, val), None);
+        }
+    }
+
+    #[test]
+    fn string_not_eq() {
+        let values = vec![
+            (lang_const_vec![], false),
+            (lang_const_vec!["a"], false),
+            (lang_const_vec!["foo", "bar"], true),
+            (lang_const_vec!["test", "test"], false),
+            (lang_const_vec!["test", "test", "foo"], true),
+            (lang_const_vec!["test", "foo", "test"], true),
+        ];
+        for (val, result) in values {
+            assert_eq!(
+                compute_const(OperatorTypeNode::NotEquals, val.clone()),
+                Some(result.into())
+            );
+            assert_eq!(
+                compute_const(OperatorTypeNode::IsNot, val),
+                Some(result.into())
+            );
+        }
+    }
+
+    #[test]
+    fn string_not_eq_fail() {
+        let values = vec![
+            lang_const_vec!["a", 'a'],
+            lang_const_vec!["a", 'b'],
+            lang_const_vec!["foo", true, "bar"],
+        ];
+        for val in values {
+            assert_eq!(
+                compute_const(OperatorTypeNode::NotEquals, val.clone()),
+                None
+            );
+            assert_eq!(compute_const(OperatorTypeNode::IsNot, val), None);
+        }
+    }
+}
