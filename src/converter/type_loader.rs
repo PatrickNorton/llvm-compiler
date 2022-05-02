@@ -9,7 +9,7 @@ use super::compiler_info::CompilerInfo;
 use super::constant::{ClassConstant, OptionTypeConstant};
 use super::convertible::{test_convertible, ConverterBase, ConverterTest};
 use super::error::{CompilerException, CompilerTodoError};
-use super::type_obj::{OptionTypeObject, TypeObject, UserType};
+use super::type_obj::{OptionTypeObject, TemplateParam, TypeObject, UserType};
 use super::{CompileBytes, CompileConstant, CompileTypes};
 
 #[derive(Debug, new)]
@@ -58,7 +58,16 @@ impl ConverterBase for TypeLoader {
         if let Option::Some(constant) = self.constant_return(info)? {
             Ok(BytecodeList::of(Bytecode::LoadConst(constant.into())))
         } else {
-            todo!()
+            let value = <&TemplateParam>::try_from(&self.value).unwrap();
+            TypeLoader::new(self.line_info.clone(), value.get_bound().clone()).convert(info)
+            // Commented out until better type inference can come around
+            //
+            // let parent = info.local_parent(value).map_err(|| {
+            //     CompilerException::of(format!("Unknown type {}", value.name()), line_info)
+            // })?;
+            // let mut bytes = TypeLoader::new(self.line_info.clone(), parent).convert(info)?;
+            // bytes.add(Bytecode::LoadDot(value.base_name().into()));
+            // Ok(bytes)
         }
     }
 }
