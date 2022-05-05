@@ -26,6 +26,18 @@ where
     (dist <= max_distance).then(|| min)
 }
 
+/// Find the Levenshtein distance between two strings.
+///
+/// The Levenshtein distance is the number of single-character edits required to
+/// transform one string into the other. An edit is either an insertion,
+/// deletion, or substitution.
+///
+/// # Examples
+/// ```
+/// assert_eq!(distance("abcde", "bcdef"), 2);
+/// assert_eq!(distance("foo", "bar"), 3);
+/// assert_eq!(distance("identical", "identical"), 0);
+/// ```
 fn distance(a: &str, b: &str) -> usize {
     if a.is_empty() {
         return b.len();
