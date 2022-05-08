@@ -11,6 +11,11 @@ use super::compiler_info::CompilerInfo;
 use super::error::{CompilerException, CompilerTodoError};
 use super::CompileResult;
 
+/// Determine whether or not a `cfg(foo)` annotation evaluates to `true` or
+/// `false`.
+///
+/// This takes the entire annotation as an argument; the function call passed
+/// should be named `cfg`.
 pub fn convert_cfg(info: &mut CompilerInfo, node: &FunctionCallNode) -> CompileResult<bool> {
     assert_eq!(node.get_variable().map(|x| x.get_name()), Some("cfg"));
     if let [param] = node.get_parameters() {
@@ -28,6 +33,10 @@ pub fn convert_cfg(info: &mut CompilerInfo, node: &FunctionCallNode) -> CompileR
     }
 }
 
+/// Determines the boolean value of a `cfg` expression.
+///
+/// Unlike [`convert_cfg`], this does not take an entire annotation, just the
+/// internal expression.
 pub fn value_of(info: &mut CompilerInfo, value: &TestNode) -> CompileResult<bool> {
     match value {
         TestNode::Name(NameNode::Variable(val)) => Ok(match val.get_name() {
