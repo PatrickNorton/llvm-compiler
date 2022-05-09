@@ -4,16 +4,19 @@ use crate::parser::token::{Token, TokenType};
 use crate::parser::token_list::TokenList;
 use std::collections::BTreeSet;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Cursor, Read};
-use std::path::PathBuf;
+use std::io::{self, BufRead, BufReader, Cursor, Read};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use unicode_normalization::UnicodeNormalization;
+
+use super::token::STRING_PREFIXES;
 
 #[derive(Debug)]
 pub struct Tokenizer {
     reader: Reader,
-    file_name: PathBuf,
+    file_name: Arc<Path>,
     next: String,
-    full_line: String,
+    full_line: Arc<str>,
     lb_indices: BTreeSet<usize>,
     line_number: usize,
 }
@@ -25,26 +28,25 @@ enum Reader {
 }
 
 impl Tokenizer {
-    fn from_file(f: File) -> ParseResult<Tokenizer> {
+    fn from_file(path: PathBuf) -> io::Result<ParseResult<Tokenizer>> {
         let mut tokenizer = Tokenizer {
-            reader: Reader::File(BufReader::new(f)),
-            file_name: PathBuf::new(), // FIXME
+            file_name: (&*path).into(),
+            reader: Reader::File(BufReader::new(File::open(path)?)),
             next: String::new(),
-            full_line: String::new(),
+            full_line: Arc::from(""),
             lb_indices: BTreeSet::new(),
             line_number: 0,
         };
         // Get rid of leading newline
-        tokenizer.next_token()?;
-        Ok(tokenizer)
+        Ok(tokenizer.next_token().map(|_| tokenizer))
     }
 
     fn from_str(str: &str, path: PathBuf, _line_no: usize) -> ParseResult<Tokenizer> {
         let mut tokenizer = Tokenizer {
             reader: Reader::String(Cursor::new(str.as_bytes().to_vec())),
-            file_name: path,
+            file_name: path.into(),
             next: String::new(),
-            full_line: String::new(),
+            full_line: Arc::from(""),
             lb_indices: BTreeSet::new(),
             line_number: 0,
         };
@@ -62,8 +64,8 @@ impl Tokenizer {
         }
     }
 
-    pub fn parse(f: File) -> ParseResult<TokenList> {
-        Ok(TokenList::new(Tokenizer::from_file(f)?))
+    pub fn parse(f: PathBuf) -> io::Result<ParseResult<TokenList>> {
+        Ok(Tokenizer::from_file(f)?.map(TokenList::new))
     }
 
     pub fn parse_str(str: &str, path: PathBuf, line_no: usize) -> ParseResult<TokenList> {
@@ -108,11 +110,11 @@ impl Tokenizer {
         assert!(self.next.is_empty());
         ParseResult::Ok(match self.read_line()? {
             Option::None => Token::epsilon(self.line_info()),
-            Option::Some(mut next_line) => {
-                next_line.truncate(next_line.trim_end().len());
-                next_line = next_line.nfkd().collect::<String>();
-                self.next = next_line.clone();
-                self.full_line = next_line;
+            Option::Some(next_line) => {
+                let next_trimmed = next_line.trim_end();
+                let next_line = next_trimmed.nfkd().collect::<String>();
+                self.full_line = (&*next_line).into();
+                self.next = next_line;
                 self.lb_indices.clear();
                 self.append_escaped_lines()?;
                 Token::newline(self.line_info())
@@ -179,7 +181,7 @@ impl Tokenizer {
                 return ParseResult::Ok(line_info);
             }
             let next_line = self.read_line()?.expect("TODO: Error message");
-            self.full_line = next_line;
+            self.full_line = (&*next_line).into();
             self.append_escaped_lines()?;
         }
     }
@@ -199,7 +201,7 @@ impl Tokenizer {
                         sequence.push_str(&next_line[..i + 1]);
                         // TODO? clone_into() when stable (#41263)
                         self.next = next_line[i + 1..].to_owned();
-                        self.full_line = next_line;
+                        self.full_line = (&*next_line).into();
                         return ParseResult::Ok((sequence, line_info));
                     } else {
                         backslashes = 0;
@@ -217,7 +219,7 @@ impl Tokenizer {
             self.next.truncate(self.next.len() - 1);
             let next_line = self.read_line()?.unwrap();
             self.next.push_str(&next_line);
-            self.full_line = self.next.clone();
+            self.full_line = (&*self.next).into();
             self.lb_indices.insert(self.full_line.len());
         }
         ParseResult::Ok(())

@@ -5,7 +5,7 @@ use crate::parser::token_list::TokenList;
 use crate::parser::tokenizer::Tokenizer;
 use std::fs::File;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub struct Parser {
@@ -34,8 +34,7 @@ impl Parser {
     }
 
     pub fn parse_file(f: PathBuf) -> io::Result<ParseResult<TopNode>> {
-        let file = File::open(&f)?;
-        Ok(Tokenizer::parse(file).and_then(|t| Self::parse(f, t)))
+        Ok(Tokenizer::parse(f.clone())?.and_then(|t| Self::parse(f, t)))
     }
 }
 

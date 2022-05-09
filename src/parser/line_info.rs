@@ -8,9 +8,9 @@ pub struct LineInfo {
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 struct InfoInner {
-    path: PathBuf,
+    path: Arc<Path>,
     line_no: usize,
-    line: String,
+    line: Arc<str>,
     start: usize,
 }
 
@@ -19,7 +19,7 @@ pub trait Lined {
 }
 
 impl LineInfo {
-    pub fn new(path: PathBuf, line_no: usize, line: String, start: usize) -> LineInfo {
+    pub fn new(path: Arc<Path>, line_no: usize, line: Arc<str>, start: usize) -> LineInfo {
         LineInfo {
             inner: Some(Arc::new(InfoInner {
                 path,
