@@ -126,8 +126,8 @@ impl Tokenizer {
         ParseResult::Ok(if self.multiline_comment() {
             let info = self.concat_comment()?;
             Option::Some(Token::new(TokenType::Whitespace, "", info))
-        } else if self.multiline_string() {
-            let (text, info) = self.concat_string()?;
+        } else if let Option::Some(delim) = self.multiline_string() {
+            let (text, info) = self.concat_string(delim)?;
             Option::Some(Token::new(TokenType::String(text.clone()), text, info))
         } else {
             Option::None
@@ -138,21 +138,21 @@ impl Tokenizer {
         self.next.starts_with("#|") && !self.next[2..].contains("|#")
     }
 
-    fn multiline_string(&self) -> bool {
+    fn multiline_string(&self) -> Option<char> {
         let mut chars = self.next.chars();
         let mut next = match chars.next() {
             Option::Some(x) => x,
-            Option::None => return false,
+            Option::None => return None,
         };
-        while "refbcy".contains(next) {
+        while STRING_PREFIXES.contains(next) {
             next = match chars.next() {
                 Option::Some(x) => x,
-                Option::None => return false,
+                Option::None => return None,
             };
         }
         let delim = match next {
             '"' | '\'' => next,
-            _ => return false,
+            _ => return None,
         };
         let mut backslashes = 0usize;
         for chr in chars {
@@ -160,7 +160,7 @@ impl Tokenizer {
                 backslashes += 1;
             } else if chr == delim {
                 if backslashes % 2 == 0 {
-                    return false; // String terminates, no multiline
+                    return None; // String terminates, no multiline
                 } else {
                     backslashes = 0;
                 }
@@ -168,7 +168,7 @@ impl Tokenizer {
                 backslashes = 0;
             }
         }
-        true
+        Some(delim)
     }
 
     fn concat_comment(&mut self) -> ParseResult<LineInfo> {
@@ -186,10 +186,9 @@ impl Tokenizer {
         }
     }
 
-    fn concat_string(&mut self) -> ParseResult<(String, LineInfo)> {
+    fn concat_string(&mut self, delim: char) -> ParseResult<(String, LineInfo)> {
         let line_info = self.line_info();
         let mut sequence = self.next.clone();
-        let delim = '"'; // FIXME
         loop {
             let next_line = self.read_line()?.unwrap();
             let mut backslashes = 0usize;
