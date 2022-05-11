@@ -1,6 +1,22 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
+/// A location within a source file and the information required to display that
+/// to the user.
+///
+/// Most `LineInfo`s are created by [`TokenList`] as part of the tokenization
+/// process. These are therefore associated with a [`Token`], and from there
+/// enter the token tree.
+///
+/// There are two methods that create a `LineInfo` that don't correspond to any
+/// position in a source file: [`LineInfo::empty`] and [`LineInfo::empty_ref`].
+/// [`LineInfo::empty`] is a `const fn` that returns a `LineInfo` by value,
+/// whereas [`LineInfo::empty_ref`] returns a reference to a static, identical
+/// `LineInfo`.
+///
+/// The user-facing representation of a `LineInfo` can be obtained through the
+/// [`info_string`](Self::info_string) method. Additionally, both the file and
+/// line number can be obtained through getter methods.
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct LineInfo {
     inner: Option<Arc<InfoInner>>,
@@ -14,11 +30,20 @@ struct InfoInner {
     start: usize,
 }
 
+/// A trait for an object that has an associated [`LineInfo`].
 pub trait Lined {
     fn line_info(&self) -> &LineInfo;
 }
 
 impl LineInfo {
+    /// Creates a new [`LineInfo`].
+    ///
+    /// # Examples
+    /// ```
+    /// let line_info = LineInfo::new(
+    ///     Arc::from(Path::new("/dev/null")), 0, "test_line", 0
+    /// );
+    /// ```
     pub fn new(path: Arc<Path>, line_no: usize, line: Arc<str>, start: usize) -> LineInfo {
         LineInfo {
             inner: Some(Arc::new(InfoInner {
@@ -30,27 +55,96 @@ impl LineInfo {
         }
     }
 
+    /// Creates an empty [`LineInfo`].
+    ///
+    /// This does not correspond to any particular position in a source file.
+    /// Instead, it is mostly used as a placeholder in methods that usually
+    /// expect a [`LineInfo`] (usually for debugging purposes), but cannot
+    /// provide an actual location for whatever reason. In particular, this
+    /// applies to methods generated through `$derive` annotations or the
+    /// "magic" builtins such as `object`.
+    ///
+    /// If a reference is wanted, use [`LineInfo::empty_ref`] instead.
+    ///
+    /// # Examples
+    /// ```
+    /// let empty = LineInfo::empty();
+    /// ```
     pub const fn empty() -> LineInfo {
         Self { inner: None }
     }
 
+    /// Returns a reference to an empty [`LineInfo`].
+    ///
+    /// The value referenced by this function is equal to
+    /// [`LineInfo::empty()`](LineInfo::empty). If you want to get this by
+    /// value, use that function instead.
+    ///
+    /// # Examples
+    /// ```
+    /// let empty = LineInfo::empty();
+    /// let empty_ref = LineInfo::empty_ref();
+    /// assert_eq!(&empty, empty_ref);
+    /// ```
     pub fn empty_ref<'a>() -> &'a LineInfo {
         static EMPTY: LineInfo = LineInfo::empty();
         &EMPTY
     }
 
+    /// The path to the file that this [`LineInfo`] references.
+    ///
+    /// # Examples
+    /// ```
+    /// let line_info = LineInfo::new(
+    ///     Arc::from(Path::new("/dev/null")), 0, "test_line", 0
+    /// );
+    /// assert_eq!(line_info.get_path(), "/dev/null".as_ref());
+    ///
+    /// // An empty LineInfo returns an empty path.
+    /// let empty = LineInfo::empty();
+    /// assert_eq!(empty.get_path(), Path::new(""));
+    /// ```
     pub fn get_path(&self) -> &Path {
         self.inner
             .as_ref()
             .map_or_else(|| Path::new(""), |x| &x.path)
     }
 
+    /// The line number within the file that this [`LineInfo`] references.
+    ///
+    /// # Examples
+    /// ```
+    /// let line_info = LineInfo::new(
+    ///     Arc::from(Path::new("/dev/null")), 5, "test_line", 0
+    /// );
+    /// assert_eq!(line_info.get_line_number(), 5);
+    ///
+    /// // An empty LineInfo has a maximum line number.
+    /// let empty = LineInfo::empty();
+    /// assert_eq!(empty.get_path(), usize::MAX);
+    /// ```
     pub fn get_line_number(&self) -> usize {
         self.inner
             .as_ref()
             .map_or_else(|| usize::MAX, |x| x.line_no)
     }
 
+    /// The user-facing display of the region associated with the [`LineInfo`].
+    ///
+    /// This does not include the current file; that is usually printed
+    /// elsewhere. It does include the line number, text of the line and a
+    /// carat pointing to the location within the line.
+    ///
+    /// # Examples
+    /// ```
+    /// let info = let line_info = LineInfo::new(
+    ///     Arc::from(Path::new("/dev/null")), 0, "test_line", 5
+    /// );
+    /// let text = "\
+    /// 0: test_line
+    ///         ^";
+    /// assert_eq!(info.info_string(), text);
+    /// ```
     pub fn info_string(&self) -> String {
         match &self.inner {
             Option::Some(inner) => {
@@ -67,6 +161,24 @@ impl LineInfo {
         }
     }
 
+    /// Creates a [`LineInfo`] identical to `self`, but pointing to a location
+    /// `start` additional characters down the line.
+    ///
+    /// # Examples
+    /// ```
+    /// let line_info = LineInfo::new(
+    ///     Arc::from(Path::new("/dev/null")), 17, "test_line", 0
+    /// );
+    /// let substring = line_info.substring(5);
+    /// let identical = LineInfo::new(
+    ///     Arc::from(Path::new("/dev/null")), 17, "test_line", 5
+    /// );
+    /// assert_eq!(substring, identical);
+    ///
+    /// // Calling `substring` on an empty LineInfo returns an empty LineInfo
+    /// let empty = LineInfo::empty();
+    /// assert_eq!(empty.substring(100), LineInfo::empty());
+    /// ```
     pub fn substring(&self, start: usize) -> LineInfo {
         match &self.inner {
             Option::Some(inner) => LineInfo {
