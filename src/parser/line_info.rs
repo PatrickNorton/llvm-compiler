@@ -214,3 +214,111 @@ where
         (*self).line_info()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+    use std::sync::Arc;
+
+    use super::LineInfo;
+
+    #[test]
+    fn empty_eq() {
+        assert_eq!(LineInfo::empty(), LineInfo::empty());
+    }
+
+    #[test]
+    fn empty_is_empty_ref() {
+        assert_eq!(&LineInfo::empty(), LineInfo::empty_ref());
+    }
+
+    #[test]
+    #[allow(clippy::redundant_clone)]
+    fn clone_equal() {
+        assert_eq!(LineInfo::empty().clone(), LineInfo::empty());
+        let line_info = LineInfo::new(
+            Arc::from(Path::new("/dev/null")),
+            0,
+            Arc::from("test_string"),
+            0,
+        );
+        assert_eq!(line_info.clone(), line_info);
+    }
+
+    #[test]
+    fn identical_equal() {
+        let first = LineInfo::new(
+            Arc::from(Path::new("/dev/null")),
+            0,
+            Arc::from("test_string"),
+            0,
+        );
+        let second = LineInfo::new(
+            Arc::from(Path::new("/dev/null")),
+            0,
+            Arc::from("test_string"),
+            0,
+        );
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn path() {
+        let line_info = LineInfo::new(
+            Arc::from(Path::new("/dev/null")),
+            0,
+            Arc::from("test_string"),
+            0,
+        );
+        assert_eq!(line_info.get_path(), Path::new("/dev/null"));
+        let empty = LineInfo::empty();
+        assert_eq!(empty.get_path(), Path::new(""));
+    }
+
+    #[test]
+    fn line_number() {
+        let line_info = LineInfo::new(
+            Arc::from(Path::new("/dev/null")),
+            0,
+            Arc::from("test_string"),
+            0,
+        );
+        assert_eq!(line_info.get_line_number(), 0);
+        let empty = LineInfo::empty();
+        assert_eq!(empty.get_line_number(), usize::MAX);
+    }
+
+    #[test]
+    fn info_string() {
+        assert_eq!(LineInfo::empty().info_string(), "Line info not found");
+        let line_info = LineInfo::new(
+            Arc::from(Path::new("/dev/null")),
+            0,
+            Arc::from("test_string"),
+            5,
+        );
+        assert_eq!(line_info.info_string(), "0: test_string\n        ^");
+    }
+
+    #[test]
+    fn empty_substring() {
+        assert_eq!(LineInfo::empty().substring(10), LineInfo::empty());
+    }
+
+    #[test]
+    fn substring() {
+        let line_info = LineInfo::new(
+            Arc::from(Path::new("/dev/null")),
+            0,
+            Arc::from("test_string"),
+            0,
+        );
+        let substring = LineInfo::new(
+            Arc::from(Path::new("/dev/null")),
+            0,
+            Arc::from("test_string"),
+            5,
+        );
+        assert_eq!(line_info.substring(5), substring);
+    }
+}
