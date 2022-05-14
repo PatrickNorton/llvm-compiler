@@ -10,6 +10,20 @@ use crate::util::version::CURRENT_VERSION;
 
 // TODO? Rewrite using clap
 /// The result of parsing command line arguments.
+///
+/// # Arguments
+/// ```text
+/// -t, --test          Compile in test mode
+/// --debug             Turn on debug mode (with assertions)
+/// --ndebug            Turn off debug mode (no assertions)
+/// -O0, -O1, -O2, -O3  Set the optimization level
+/// --cfg <argument>    Enable the given cfg value
+/// --print-bytecode    Print the compiled bytecode to stdout
+/// -S <file>           Write the bytecode in text form to the given file
+/// --stdlib <file>     The directory containing the standard library
+/// -f<optimization>    Turn on the given optimization pass
+/// -F<optimization>    Turn off the given optimization pass
+/// ```
 #[derive(Debug)]
 pub struct CLArgs {
     target: PathBuf,
@@ -148,7 +162,9 @@ impl CLArgs {
         &self.stdlib_path
     }
 
-    /// Parses the `ArgumentInfo` from an iterator of strings.
+    /// Parses the [`CLArgs`] from an iterator of strings.
+    ///
+    /// For arguments and their meanings, see the [`CLArgs`] documentation.
     ///
     /// # Examples
     /// ```
