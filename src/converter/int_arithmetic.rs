@@ -136,7 +136,7 @@ mod tests {
             (bigint_vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 55.into()),
             (bigint_vec![usize::MAX, 2], BigInt::from(usize::MAX) + 2),
             (
-                bigint_vec!(1000000, 200000, 30000, 4000, 500, 60, 7),
+                bigint_vec![1000000, 200000, 30000, 4000, 500, 60, 7],
                 1234567.into(),
             ),
         ];
