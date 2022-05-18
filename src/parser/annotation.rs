@@ -19,6 +19,15 @@ use super::method::MethodDefinitionNode;
 use super::operator_def::OperatorDefinitionNode;
 use super::property::PropertyDefinitionNode;
 
+/// A node that can be preceded by an annotation.
+///
+/// An annotation is a tag preceding a node that starts with a dollar sign
+/// (`$`). This is used for compiler-intrinsic things, such as `$cfg(foo)` and
+/// `$test`.It might, however, be possible for user-defined annotations to
+/// exist in the future.
+///
+/// Not to be confused with [decorations](super::decorator), which begin with an
+/// at sign (`@`) and are used to wrap a function with another function.
 #[derive(Debug)]
 pub enum AnnotatableNode {
     Definition(DefinitionNode),
@@ -26,6 +35,10 @@ pub enum AnnotatableNode {
     DeclaredAssignment(DeclaredAssignmentNode),
 }
 
+/// A reference to a node that can be preceded by an annotation.
+///
+/// This is the by-reference equivalent of [`AnnotatableNode`]; see it for more
+/// information.
 #[derive(Debug)]
 pub enum AnnotatableRef<'a> {
     BaseClass(BaseClassRef<'a>),
@@ -39,6 +52,14 @@ pub enum AnnotatableRef<'a> {
 }
 
 impl AnnotatableNode {
+    /// Parses an annotation from the given [`TokenList`].
+    ///
+    /// The first token in the list must be a dollar sign.
+    ///
+    /// # Annotation syntax
+    /// ```text
+    /// $[NameNode]
+    /// ```
     pub fn parse_left_annotation(tokens: &mut TokenList) -> ParseResult<AnnotatableNode> {
         assert!(matches!(tokens.token_type()?, TokenType::Dollar));
         let mut annotations = Vec::new();
@@ -55,6 +76,7 @@ impl AnnotatableNode {
         }
     }
 
+    /// The list of annotations associated with the given node.
     pub fn get_annotations(&self) -> &Vec<NameNode> {
         match self {
             AnnotatableNode::Definition(d) => d.get_annotations(),
@@ -63,6 +85,13 @@ impl AnnotatableNode {
         }
     }
 
+    /// Replace the node's annotations with the given list.
+    ///
+    /// # Important note
+    /// While this function is called `add_annotations`, it is assumed that it
+    /// is not called more than once per object, and as such, it simply replaces
+    /// the annotation list with the new list. This behavior is not strictly
+    /// defined and may change in the future.
     pub fn add_annotations(&mut self, annotations: Vec<NameNode>) {
         match self {
             AnnotatableNode::Definition(d) => d.add_annotations(annotations),
@@ -71,12 +100,23 @@ impl AnnotatableNode {
         }
     }
 
+    /// Parse an annotatable node from a list of tokens.
+    ///
+    /// Note that this does not parse the annotations in front of the node; if
+    /// you see an annotation, it is best to use [`Self::parse_left_annotation`]
+    /// instead.
     pub fn parse(tokens: &mut TokenList) -> ParseResult<AnnotatableNode> {
         IndependentNode::parse(tokens)?.try_into().map_err(|stmt| {
             ParserException::of("Attempted to use un-annotatable node", stmt).into()
         })
     }
 
+    /// The annotations associated with the given [`ClassStatementNode`], if
+    /// that node supports annotations.
+    ///
+    /// The two [`ClassStatementNode`]s at the moment that do not allow
+    /// annotations are [special-operator assignment](SpecialOpAssignNode) and
+    /// [static blocks](StaticBlockNode).
     pub fn try_get_annotations(node: &ClassStatementNode) -> Option<&Vec<NameNode>> {
         match node {
             ClassStatementNode::BaseClass(b) => Some(b.get_annotations()),
@@ -91,6 +131,14 @@ impl AnnotatableNode {
         }
     }
 
+    /// The annotations associated with the given [`InterfaceStatementNode`], if
+    /// that node supports annotations.
+    ///
+    /// This works identically to [`Self::try_get_annotations`] for all
+    /// statements that are also a [`ClassStatementNode`]; the only node for
+    /// which that is not the case is
+    /// [generic definitions](GenericDefinitionNode), which do not support
+    /// annotations.
     pub fn try_interface_annotations(node: &InterfaceStatementNode) -> Option<&Vec<NameNode>> {
         match node {
             InterfaceStatementNode::ClassStmt(c) => Self::try_get_annotations(c),
@@ -100,6 +148,9 @@ impl AnnotatableNode {
 }
 
 impl<'a> AnnotatableRef<'a> {
+    /// The list of annotations associated with the given node.
+    ///
+    /// Equivalent to [`AnnotatableNode::get_annotations`].
     pub fn get_annotations(&self) -> &[NameNode] {
         match self {
             AnnotatableRef::BaseClass(b) => b.get_annotations(),
