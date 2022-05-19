@@ -1,7 +1,7 @@
 use std::env::args;
 use std::error::Error;
 use std::fs::create_dir;
-use std::process::exit;
+use std::process::ExitCode;
 
 use crate::arguments::CLArgs;
 use crate::parser::Parser;
@@ -14,14 +14,14 @@ mod macros;
 mod parser;
 mod util;
 
-fn main() {
-    exit(match inner_main() {
-        Result::Ok(_) => 0,
+fn main() -> ExitCode {
+    match inner_main() {
+        Result::Ok(()) => ExitCode::SUCCESS,
         Result::Err(e) => {
             println!("{}", e);
-            1
+            ExitCode::FAILURE
         }
-    })
+    }
 }
 
 fn inner_main() -> Result<(), Box<dyn Error>> {
