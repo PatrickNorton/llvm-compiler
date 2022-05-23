@@ -31,6 +31,10 @@ impl BreakStatementNode {
         &self.cond
     }
 
+    pub fn get_as(&self) -> &TestNode {
+        &self.as_stmt
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<BreakStatementNode> {
         let (info, tok) = tokens.next_token()?.deconstruct();
         assert!(matches!(tok, TokenType::Keyword(Keyword::Break)));

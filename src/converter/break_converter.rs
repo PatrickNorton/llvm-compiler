@@ -7,6 +7,7 @@ use super::bytecode_list::BytecodeList;
 use super::compiler_info::CompilerInfo;
 use super::convertible::{base_convertible, ConverterBase, ConverterTest, TestConvertible};
 use super::diverge::DivergingInfo;
+use super::error::CompilerInternalError;
 use super::warning::{self, WarningType};
 use super::{CompileBytes, CompileResult};
 
@@ -24,6 +25,13 @@ impl<'a> ConverterBase for BreakConverter<'a> {
         &mut self,
         info: &mut CompilerInfo,
     ) -> CompileResult<(BytecodeList, DivergingInfo)> {
+        if !self.node.get_as().is_empty() {
+            return Err(CompilerInternalError::of(
+                "'break as' statements are not supported yet",
+                self.node.get_as(),
+            )
+            .into());
+        }
         let mut bytes = BytecodeList::new();
         let mut diverging_info = DivergingInfo::new();
         let levels = self.node.get_loops();
