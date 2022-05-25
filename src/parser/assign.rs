@@ -23,11 +23,18 @@ pub enum AssignStatementNode {
     Normal(AssignmentNode),
 }
 
+/// Any node that can be on the left side of an equals sign.
 #[derive(Debug)]
 pub enum AssignableNode {
     Name(NameNode),
 }
 
+/// The node representing an assignment (non-declared).
+///
+/// # Syntax
+/// ```text
+/// [AssignableNode] (, [AssignableNode])* (=|:=) [TestNode] (, [TestNode])*
+/// ```
 #[derive(Debug)]
 pub struct AssignmentNode {
     is_colon: bool,
@@ -38,6 +45,7 @@ pub struct AssignmentNode {
 }
 
 impl AssignStatementNode {
+    /// Parses an assignment from the given [`TokenList`].
     pub fn parse(tokens: &mut TokenList) -> ParseResult<AssignStatementNode> {
         if let TokenType::Keyword(Keyword::Var) = tokens.token_type()? {
             DeclaredAssignmentNode::parse(tokens).map(AssignStatementNode::Declared)
@@ -55,6 +63,11 @@ impl AssignStatementNode {
 }
 
 impl AssignableNode {
+    /// Parses an [`AssignableNode`] from the given [`TokenList`].
+    ///
+    /// This is assumed to be used in the left half of an assignment-like
+    /// statement (e.g. assignments, augmented assignments), and the error
+    /// messages assume that.
     pub fn parse(tokens: &mut TokenList) -> ParseResult<AssignableNode> {
         assert!(tokens.line_contains(|x| matches!(x.token_type(), TokenType::Assign(_)))?);
         match tokens.token_type()? {
@@ -101,6 +114,7 @@ impl AssignableNode {
 }
 
 impl AssignmentNode {
+    /// Creates a new [`AssignmentNode`].
     pub fn new(
         is_colon: bool,
         name: Vec<AssignableNode>,
@@ -117,27 +131,39 @@ impl AssignmentNode {
         }
     }
 
+    /// If the assignment has a colon (for dynamic assignment).
     pub fn is_colon(&self) -> bool {
         self.is_colon
     }
 
+    /// The names that are assigned to.
     pub fn get_names(&self) -> &[AssignableNode] {
         &self.name
     }
 
+    /// The values on the right-hand side of the assignment.
     pub fn get_values(&self) -> &TestListNode {
         &self.value
     }
 
+    /// The set of descriptors that are valid for this node.
+    ///
+    /// For more information, see [`DescribableNode::valid_descriptors`].
     pub fn valid_descriptors(&self) -> &'static HashSet<DescriptorNode> {
         todo!()
     }
 
+    /// Adds the descriptors to the node.
+    ///
+    /// This assumes that there is only one descriptor in the set and that
+    /// descriptor is a valid mutability. For more information, see
+    /// [`DescribableNode::add_descriptors`].
     pub fn add_descriptors(&mut self, descriptors: HashSet<DescriptorNode>) {
         debug_assert!(descriptors.len() == 1 && self.mutability.is_none());
         self.mutability = descriptors.into_iter().next();
     }
 
+    /// Parses an [`AssignmentNode`] from the given list of tokens.
     pub fn parse(tokens: &mut TokenList) -> ParseResult<AssignmentNode> {
         let mut names = Vec::new();
         while !matches!(tokens.token_type()?, TokenType::Assign(_)) {
@@ -147,6 +173,7 @@ impl AssignmentNode {
             }
             tokens.next_token()?;
         }
+        debug_assert!(tokens.token_eq_either("=", ":=")?);
         let is_colon = tokens.token_equals(":=")?;
         tokens.next_token()?;
         let value = TestListNode::parse(tokens, false)?;
