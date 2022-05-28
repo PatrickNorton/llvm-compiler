@@ -45,6 +45,14 @@ use crate::parser::yield_stmt::YieldStatementNode;
 use super::decorator;
 use super::derived_op::DerivedOperatorNode;
 
+/// Any node that can function as an independent statement.
+///
+/// These nodes are used as the values of a [`StatementBodyNode`]. This means
+/// that they are the principal building block of function definitions, as well
+/// as any other statements with block bodies, such as
+/// [if statements](IfStatementNode), [for](ForStatementNode),
+/// [dotimes](DotimesStatementNode), and [while loops](WhileStatementNode),
+/// [try statements](TryStatementNode), and many more.
 #[derive(Debug)]
 pub enum IndependentNode {
     Assert(AssertStatementNode),
@@ -84,6 +92,7 @@ pub enum IndependentNode {
 }
 
 impl IndependentNode {
+    /// Parses an [`IndependentNode`] from the given list of tokens.
     pub fn parse(tokens: &mut TokenList) -> ParseResult<IndependentNode> {
         tokens.pass_newlines()?;
         match tokens.token_type()? {
@@ -121,6 +130,8 @@ impl IndependentNode {
         }
     }
 
+    /// Parses an [`IndependentNode`] from the given list of tokens. The first
+    /// element in the list must be a `var` keyword.
     pub fn parse_var(tokens: &mut TokenList) -> ParseResult<IndependentNode> {
         assert!(tokens.first()?.is_kwd(Keyword::Var));
         if line_matches!(tokens, TokenType::Assign(_))? {
