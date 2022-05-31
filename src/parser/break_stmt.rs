@@ -5,6 +5,12 @@ use crate::parser::test_node::TestNode;
 use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
 
+/// A node representing a `break` statement.
+///
+/// # Syntax
+/// ```text
+/// "break" [number] ["as" TestNode] ["if" TestNode]
+/// ```
 #[derive(Debug)]
 pub struct BreakStatementNode {
     line_info: LineInfo,
@@ -14,6 +20,7 @@ pub struct BreakStatementNode {
 }
 
 impl BreakStatementNode {
+    /// Creates a new [`BreakStatementNode`].
     pub fn new(line_info: LineInfo, loops: usize, cond: TestNode, as_stmt: TestNode) -> Self {
         Self {
             line_info,
@@ -23,18 +30,29 @@ impl BreakStatementNode {
         }
     }
 
+    /// The depth of loops that are to be broken out from.
     pub fn get_loops(&self) -> usize {
         self.loops
     }
 
+    /// The condition associated with the `break`.
+    ///
+    /// If the method returns [`TestNode::empty`], then there is no condition.
     pub fn get_cond(&self) -> &TestNode {
         &self.cond
     }
 
+    /// The `as` clause associated with the `break`.
+    ///
+    /// If the method returns [`TestNode::empty`], then there is no associated
+    /// `as` clause.
     pub fn get_as(&self) -> &TestNode {
         &self.as_stmt
     }
 
+    /// Parses a [`BreakStatementNode`] from the given list of tokens.
+    ///
+    /// This method assumes the first token in the list is the `break` keyword.
     pub fn parse(tokens: &mut TokenList) -> ParseResult<BreakStatementNode> {
         let (info, tok) = tokens.next_token()?.deconstruct();
         assert!(matches!(tok, TokenType::Keyword(Keyword::Break)));
