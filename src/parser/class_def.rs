@@ -18,6 +18,12 @@ use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
 use crate::parser::type_node::TypeNode;
 
+/// The node representing a class definition.
+///
+/// # Syntax
+/// ```text
+/// *DescriptorNode "class" TypeNode ["from" TypeNode] ClassBodyNode
+/// ```
 #[derive(Debug)]
 pub struct ClassDefinitionNode {
     line_info: LineInfo,
@@ -29,12 +35,22 @@ pub struct ClassDefinitionNode {
     annotations: Vec<NameNode>,
 }
 
+/// The body of a class.
+///
+/// This class is the equivalent of [`StatementBodyNode`], but only allowing
+/// [`ClassStatementNodes`](ClassStatementNode).
+///
+/// # Syntax
+/// ```text
+/// "{" *ClassStatementNode "}"
+/// ```
 #[derive(Debug)]
 pub struct ClassBodyNode {
     line_info: LineInfo,
     statements: Vec<ClassStatementNode>,
 }
 
+/// A statement that is valid in a class body.
 #[derive(Debug)]
 pub enum ClassStatementNode {
     BaseClass(BaseClassNode),
@@ -49,6 +65,7 @@ pub enum ClassStatementNode {
 }
 
 impl ClassDefinitionNode {
+    /// Creates a new [`ClassDefinitionNode`].
     pub fn new(
         line_info: LineInfo,
         name: TypeNode,
@@ -66,50 +83,71 @@ impl ClassDefinitionNode {
         }
     }
 
+    /// The set of descriptors that may be prepended to this node.
+    ///
+    /// For more information, see [`BaseClassNode::valid_descriptors`].
     pub fn valid_descriptors(&self) -> &'static HashSet<DescriptorNode> {
         &DEFINITION_VALID
     }
 
+    /// Adds the descriptors to the node.
+    ///
+    /// For more information, see [`DescribableNode::add_descriptors`].
     pub fn add_descriptors(&mut self, descriptors: HashSet<DescriptorNode>) {
         self.descriptors = descriptors;
     }
 
+    /// The set of descriptors this node has.
     pub fn get_descriptors(&self) -> &HashSet<DescriptorNode> {
         &self.descriptors
     }
 
+    /// The set of annotations attached to this node.
     pub fn get_annotations(&self) -> &Vec<NameNode> {
         &self.annotations
     }
 
+    /// The types listed as superclasses of this class.
     pub fn get_superclasses(&self) -> &[TypeNode] {
         &self.superclasses
     }
 
+    /// Adds the annotationns to the node.
     pub fn add_annotations(&mut self, annotations: Vec<NameNode>) {
         self.annotations = annotations;
     }
 
+    /// The decorators associated with this node.
     pub fn get_decorators(&self) -> &Vec<NameNode> {
         &self.decorators
     }
 
+    /// Adds the decorators to the node.
     pub fn add_decorators(&mut self, decorators: Vec<NameNode>) {
         self.decorators = decorators;
     }
 
+    /// The name of the type, along with any generics it might have.
     pub fn get_name(&self) -> &TypeNode {
         &self.name
     }
 
+    /// The body of the class definition.
     pub fn get_body(&self) -> &ClassBodyNode {
         &self.body
     }
 
+    /// The string name of the type.
+    ///
+    /// This is equivalent to `self.get_name().str_name()`.
     pub fn str_name(&self) -> &str {
         self.name.str_name()
     }
 
+    /// Parses a class definition from the list of tokens.
+    ///
+    /// The token list must begin with the `class` keyword, or the method will
+    /// panic.
     pub fn parse(tokens: &mut TokenList) -> ParseResult<ClassDefinitionNode> {
         let (info, tok) = tokens.next_token()?.deconstruct();
         assert!(matches!(tok, TokenType::Keyword(Keyword::Class)));
@@ -128,6 +166,8 @@ impl ClassDefinitionNode {
 }
 
 impl ClassBodyNode {
+    /// Creates a new [`ClassBodyNode`] with the given line info and list of
+    /// statements.
     pub fn new(line_info: LineInfo, statements: Vec<ClassStatementNode>) -> Self {
         Self {
             line_info,
@@ -135,6 +175,11 @@ impl ClassBodyNode {
         }
     }
 
+    /// Creates a new [`ClassBodyNode`] from the given list of statements.
+    ///
+    /// The [`LineInfo`] associated with this node is the info associated with
+    /// the first statement, or [`LineInfo::empty`] if the statement list is
+    /// empty.
     pub fn from_vec(statements: Vec<ClassStatementNode>) -> Self {
         Self {
             line_info: statements
@@ -144,6 +189,7 @@ impl ClassBodyNode {
         }
     }
 
+    /// Parses a [`ClassBodyNode`] from the list of tokens.
     pub fn parse(tokens: &mut TokenList) -> ParseResult<ClassBodyNode> {
         if !tokens.token_equals("{")? {
             return Err(tokens.error("The body of a class must be enclosed in curly brackets"));
@@ -155,6 +201,11 @@ impl ClassBodyNode {
         Ok(cb)
     }
 
+    /// Parses the [`ClassBodyNode`] of an enum.
+    ///
+    /// Since enum definitions begin with a list of variants (which is assumed
+    /// to be already parsed), this does not check for an opening brace, just a
+    /// closing brace. In all other ways, it is identical to [`Self::parse`].
     pub fn parse_enum(tokens: &mut TokenList) -> ParseResult<ClassBodyNode> {
         let cb = Self::parse_until_token(tokens.line_info()?.clone(), tokens, "}")?;
         assert!(tokens.token_equals("}")?);
@@ -179,6 +230,10 @@ impl ClassBodyNode {
 }
 
 impl ClassStatementNode {
+    /// The set of valid descriptors associated with this node.
+    ///
+    /// This method delegates to identically-named implementations on each of
+    /// its subclasses; see them for more details.
     pub fn valid_descriptors(&self) -> &'static HashSet<DescriptorNode> {
         match self {
             ClassStatementNode::BaseClass(b) => b.valid_descriptors(),
@@ -193,6 +248,10 @@ impl ClassStatementNode {
         }
     }
 
+    /// Adds the set of valid descriptors to the given node.
+    ///
+    /// This method delegates to identically-named implementations on each of
+    /// its subclasses; see them for more details.
     pub fn add_descriptors(&mut self, descriptors: HashSet<DescriptorNode>) {
         match self {
             ClassStatementNode::BaseClass(b) => b.add_descriptors(descriptors),
@@ -207,6 +266,7 @@ impl ClassStatementNode {
         }
     }
 
+    /// Parses a [`ClassStatementNode`] from the given list of tokens.
     pub fn parse(tokens: &mut TokenList) -> ParseResult<ClassStatementNode> {
         if tokens.token_equals("static")? && tokens.token_eq_at(1, "{")? {
             StaticBlockNode::parse(tokens).map(ClassStatementNode::StaticBlock)
