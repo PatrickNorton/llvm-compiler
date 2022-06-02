@@ -9,6 +9,15 @@ use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
 use crate::parser::variable::VarLikeNode;
 
+/// A node representing a list comprehension, set comprehension, or generator
+/// literal.
+///
+/// # Syntax
+/// ```text
+/// OPEN_BRACE TestNode *("," TestNode) [","] "for" VarLikeNode
+///     *("," VarLikeNode) [","] "in" TestNode *("," TestNode) [","]
+///     ["if" TestNode] ["while" TestNode] CLOSE_BRACE
+/// ```
 #[derive(Debug)]
 pub struct ComprehensionNode {
     line_info: LineInfo,
@@ -20,6 +29,13 @@ pub struct ComprehensionNode {
     while_cond: Box<TestNode>,
 }
 
+/// A node representing a dictionary comprehension.
+///
+/// # Syntax
+/// ```text
+/// "{" TestNode ":" TestNode "for" VarLikeNode *("," VarLikeNode) [","] "in"
+///     TestNode *("," VarLikeNode) [","] ["if" TestNode] ["while" TestNode] "}"
+/// ```
 #[derive(Debug)]
 pub struct DictComprehensionNode {
     line_info: LineInfo,
@@ -32,6 +48,7 @@ pub struct DictComprehensionNode {
 }
 
 impl ComprehensionNode {
+    /// Creates a new [`ComprehensionNode`].
     pub fn new(
         line_info: LineInfo,
         brace: char,
@@ -52,30 +69,48 @@ impl ComprehensionNode {
         }
     }
 
+    /// The type of brace surrounding the comprehension.
+    ///
+    /// This can only return 3 chars (and may be replaced with an enum in the
+    /// future):
+    /// - `'('`: for generator literals
+    /// - `'['`: for list comprehensions
+    /// - `'{'`: for set comprehensions
     pub fn get_brace(&self) -> char {
         self.brace
     }
 
+    /// The list of statements that are being looped over.
     pub fn get_looped(&self) -> &TestListNode {
         &self.looped
     }
 
+    /// The list of variable names in the loop.
     pub fn get_variables(&self) -> &[VarLikeNode] {
         &self.variables
     }
 
+    /// The conditional statement in the comprehension, or [`TestNode::empty`]
+    /// when the node has no conditional.
     pub fn get_condition(&self) -> &TestNode {
         &self.condition
     }
 
+    /// The list of builders of the comprehension.
     pub fn get_builder(&self) -> &[ArgumentNode] {
         &self.builder
     }
 
+    /// The `while` conditional in the comprehension, or [`TestNode::empty`]
+    /// when the node has no conditional.
     pub fn get_while_cond(&self) -> &TestNode {
         &self.while_cond
     }
 
+    /// Parses a comprehension from the given list of tokens.
+    ///
+    /// This assumes that the first token in the list is an open brace, or the
+    /// method will panic.
     pub fn parse(tokens: &mut TokenList) -> ParseResult<ComprehensionNode> {
         let (line_info, token) = tokens.next_tok(true)?.deconstruct();
         let brace = match token {
@@ -118,6 +153,7 @@ impl ComprehensionNode {
 }
 
 impl DictComprehensionNode {
+    /// Creates a new [`DictComprehensionNode`].
     pub fn new(
         line_info: LineInfo,
         variables: Vec<VarLikeNode>,
@@ -138,26 +174,35 @@ impl DictComprehensionNode {
         }
     }
 
+    /// The list of variable names in the `for` loop.
     pub fn get_variables(&self) -> &[VarLikeNode] {
         &self.variables
     }
 
+    /// The key expression in the dict comprehension.
     pub fn get_key(&self) -> &TestNode {
         &self.key
     }
 
+    /// The value expression in the dict comprehension.
     pub fn get_builder(&self) -> &TestNode {
         &self.builder
     }
 
+    /// The list of expressions that are looped over in the `for` loop.
     pub fn get_looped(&self) -> &TestListNode {
         &self.looped
     }
 
+    /// The condition in the comprehension.
     pub fn get_condition(&self) -> &TestNode {
         &self.condition
     }
 
+    /// Parses a dict comprehension from the given list of tokens.
+    ///
+    /// This assumes the first token in the list is `"{"`, otherwise it will
+    /// panic.
     pub fn parse(tokens: &mut TokenList) -> ParseResult<DictComprehensionNode> {
         assert!(tokens.token_equals("{")?);
         let line_info = tokens.next_tok(true)?.deconstruct().0;
