@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
@@ -22,7 +23,6 @@ pub struct TemplateParam {
     value: Arc<TemplateInner>,
 }
 
-#[derive(Debug)]
 struct TemplateInner {
     name: String,
     index: usize,
@@ -262,6 +262,19 @@ impl TemplateParam {
 impl TemplateBound {
     pub fn is_known(&self) -> bool {
         matches!(self, TemplateBound::Known(_))
+    }
+}
+
+impl Debug for TemplateInner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TemplateInner")
+            .field("name", &self.name)
+            .field("index", &self.index)
+            .field("bound", &"...")
+            .field("is_vararg", &self.is_vararg)
+            .field("typedef_name", &self.typedef_name)
+            .field("parent", &"...")
+            .finish()
     }
 }
 
