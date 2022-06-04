@@ -15,6 +15,13 @@ use crate::parser::token_list::TokenList;
 use crate::parser::typed_arg::TypedArgumentListNode;
 use crate::parser::variable::VariableNode;
 
+/// The node representing a `context` statement.
+///
+/// # Syntax
+/// ```text
+/// "context" VariableNode "{" ["enter" StatementBodyNode]
+///     ["exit" StatementBodyNode] "}"
+/// ```
 #[derive(Debug)]
 pub struct ContextDefinitionNode {
     line_info: LineInfo,
@@ -30,6 +37,7 @@ pub struct ContextDefinitionNode {
 }
 
 impl ContextDefinitionNode {
+    /// Creates a new [`ContextDefinitionNode`].
     pub fn new(
         line_info: LineInfo,
         name: VariableNode,
@@ -53,38 +61,64 @@ impl ContextDefinitionNode {
         }
     }
 
+    /// The name of the type defined by this node.
     pub fn get_name(&self) -> &VariableNode {
         &self.name
     }
 
+    /// The set of descriptors that are valid for this node.
+    ///
+    /// For more information, see [`DescribableNode::valid_descriptors`].
     pub fn valid_descriptors(&self) -> &'static HashSet<DescriptorNode> {
         &CONTEXT_VALID
     }
 
+    /// Adds the descriptors to the node.
+    ///
+    /// This assumes that there is only one descriptor in the set and that
+    /// descriptor is a valid mutability. For more information, see
+    /// [`DescribableNode::add_descriptors`].
     pub fn add_descriptors(&mut self, descriptors: HashSet<DescriptorNode>) {
         self.descriptors = descriptors;
     }
 
+    /// The set of descriptors attached to this node.
     pub fn get_descriptors(&self) -> &HashSet<DescriptorNode> {
         &self.descriptors
     }
 
+    /// The list of annotations associated with the given node.
+    ///
+    /// For more information, see [`AnnotatableNode::get_annotations`].
     pub fn get_annotations(&self) -> &Vec<NameNode> {
         &self.annotations
     }
 
+    /// Sets this node's annotations to the given list.
+    ///
+    /// For more information, see [`AnnotatableNode::add_annotations`].
     pub fn add_annotations(&mut self, annotations: Vec<NameNode>) {
         self.annotations = annotations;
     }
 
+    /// The list of decorators associated with the given node.
+    ///
+    /// For more information, see [`DecoratableNode::get_decorators`].
     pub fn get_decorators(&self) -> &Vec<NameNode> {
         &self.decorators
     }
 
+    /// Sets this node's annotations to the given list.
+    ///
+    /// For more information, see [`DecoratableNode::add_decorators`].
     pub fn add_decorators(&mut self, decorators: Vec<NameNode>) {
         self.decorators = decorators;
     }
 
+    /// Parses a [`ContextDefinitionNode`] from the given list.
+    ///
+    /// This assumes the first token in the list is the `context` keyword, or
+    /// the method will panic.
     pub fn parse(tokens: &mut TokenList) -> ParseResult<ContextDefinitionNode> {
         let (info, tok) = tokens.next_token()?.deconstruct();
         assert!(matches!(tok, TokenType::Keyword(Keyword::Context)));
