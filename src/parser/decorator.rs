@@ -6,6 +6,12 @@ use super::definition::DefinitionNode;
 use super::error::ParseResult;
 use super::token_list::TokenList;
 
+/// Parses a decorator from the list, followed by the node it is attached to.
+///
+/// # Syntax
+/// ```text
+/// "$" [NameNode]
+/// ```
 pub fn parse_left_decorator(tokens: &mut TokenList) -> ParseResult<DefinitionNode> {
     assert!(matches!(tokens.token_type()?, TokenType::At));
     let mut decorators = Vec::new();
