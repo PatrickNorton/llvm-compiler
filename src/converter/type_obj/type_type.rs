@@ -4,7 +4,7 @@ use std::slice;
 use std::sync::Arc;
 
 use crate::converter::access_handler::AccessLevel;
-use crate::converter::builtins::Builtins;
+use crate::converter::builtins::BuiltinRef;
 use crate::converter::error::CompilerException;
 use crate::converter::fn_info::FunctionInfo;
 use crate::converter::CompileResult;
@@ -135,7 +135,7 @@ impl TypeTypeObject {
         &self,
         o: OpSpTypeNode,
         access: AccessLevel,
-        builtins: &Builtins,
+        builtins: BuiltinRef<'_>,
     ) -> Option<FunctionInfo> {
         self.value.generic.as_ref().and_then(|gen| {
             if o == OpSpTypeNode::Call {

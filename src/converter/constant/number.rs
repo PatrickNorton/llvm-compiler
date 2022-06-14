@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use num::{BigInt, ToPrimitive};
 
-use crate::converter::builtins::Builtins;
+use crate::converter::builtins::BuiltinRef;
 use crate::converter::type_obj::TypeObject;
 use crate::util::{usize_to_bytes, U32_BYTES};
 
@@ -55,7 +55,7 @@ impl BigintConstant {
         self.value.to_string()
     }
 
-    pub fn get_type<'a>(&self, builtins: &'a Builtins) -> &'a TypeObject {
+    pub fn get_type<'a>(&self, builtins: BuiltinRef<'a>) -> &'a TypeObject {
         builtins.int_type()
     }
 
@@ -109,7 +109,7 @@ impl IntConstant {
         self.value.to_string()
     }
 
-    pub fn get_type<'a>(&self, builtins: &'a Builtins) -> &'a TypeObject {
+    pub fn get_type<'a>(&self, builtins: BuiltinRef<'a>) -> &'a TypeObject {
         builtins.int_type()
     }
 

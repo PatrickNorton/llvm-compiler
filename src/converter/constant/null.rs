@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use derive_new::new;
 
-use crate::converter::builtins::Builtins;
+use crate::converter::builtins::BuiltinRef;
 use crate::converter::constant::ConstantBytes;
 use crate::converter::type_obj::TypeObject;
 
@@ -24,7 +24,7 @@ impl NullConstant {
         "null".to_string()
     }
 
-    pub fn get_type<'a>(&self, builtins: &'a Builtins) -> &'a TypeObject {
+    pub fn get_type<'a>(&self, builtins: BuiltinRef<'a>) -> &'a TypeObject {
         builtins.null_type()
     }
 }

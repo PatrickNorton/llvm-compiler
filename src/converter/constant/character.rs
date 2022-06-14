@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::fmt::Display;
 
-use crate::converter::builtins::Builtins;
+use crate::converter::builtins::BuiltinRef;
 use crate::converter::type_obj::TypeObject;
 use crate::util::{string_escape, U32_BYTES};
 
@@ -29,7 +29,7 @@ impl CharConstant {
         Self::name(self.value).into()
     }
 
-    pub fn get_type<'a>(&self, builtins: &'a Builtins) -> &'a TypeObject {
+    pub fn get_type<'a>(&self, builtins: BuiltinRef<'a>) -> &'a TypeObject {
         builtins.char_type()
     }
 

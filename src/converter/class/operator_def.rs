@@ -5,7 +5,7 @@ use derive_new::new;
 use crate::converter::access_handler::AccessLevel;
 use crate::converter::annotation::{self, AnnotatableConverter};
 use crate::converter::argument::ArgumentInfo;
-use crate::converter::builtins::{Builtins, OBJECT};
+use crate::converter::builtins::{BuiltinRef, OBJECT};
 use crate::converter::bytecode_list::BytecodeList;
 use crate::converter::compiler_info::CompilerInfo;
 use crate::converter::default_holder::DefaultHolder;
@@ -24,6 +24,7 @@ use crate::parser::line_info::Lined;
 use crate::parser::operator_def::OperatorDefinitionNode;
 use crate::parser::operator_sp::OpSpTypeNode;
 use crate::parser::stmt_body::StatementBodyNode;
+use crate::util::reborrow_option;
 
 use super::method::{MethodInfo, RawMethod};
 
@@ -36,9 +37,10 @@ pub struct OperatorDefConverter<'a> {
 }
 
 #[derive(Debug, new)]
-struct OperatorConvInner<'a, 'b> {
+struct OperatorConvInner<'a, 'b, 'c> {
     inner: &'a mut OperatorDefConverter<'b>,
     node: &'b OperatorDefinitionNode,
+    defaults: Option<&'c mut DefaultHolder<'b>>,
 }
 
 impl<'a> OperatorDefConverter<'a> {
@@ -71,17 +73,20 @@ impl<'a> OperatorDefConverter<'a> {
         &mut self,
         info: &mut CompilerInfo,
         node: &'a OperatorDefinitionNode,
+        defaults: Option<&mut DefaultHolder<'a>>,
     ) -> CompileResult<()> {
-        annotation::convert_annotatable(&mut OperatorConvInner::new(self, node), info).map(|_| ())
+        annotation::convert_annotatable(&mut OperatorConvInner::new(self, node, defaults), info)
+            .map(|_| ())
     }
 
     pub fn parse_inner(
         &mut self,
         info: &mut CompilerInfo,
         node: &'a OperatorDefinitionNode,
+        defaults: Option<&mut DefaultHolder<'a>>,
     ) -> CompileResult<()> {
         let op = node.get_op_code().get_operator();
-        let args = ArgumentInfo::of(node.get_args(), info, None)?;
+        let args = ArgumentInfo::of(node.get_args(), info, defaults)?;
         let returns = info.types_of(node.get_ret_types())?;
         let line_info = node
             .get_ret_types()
@@ -197,7 +202,7 @@ impl<'a> OperatorDefConverter<'a> {
     }
 }
 
-impl<'a, 'b> AnnotatableConverter<'b> for OperatorConvInner<'a, 'b> {
+impl<'a, 'b, 'c> AnnotatableConverter<'b> for OperatorConvInner<'a, 'b, 'c> {
     fn get_annotatable(&self) -> AnnotatableRef<'b> {
         AnnotatableRef::Operator(self.node)
     }
@@ -206,7 +211,8 @@ impl<'a, 'b> AnnotatableConverter<'b> for OperatorConvInner<'a, 'b> {
         &mut self,
         info: &mut CompilerInfo,
     ) -> CompileResult<(BytecodeList, DivergingInfo)> {
-        self.inner.parse_inner(info, self.node)?;
+        self.inner
+            .parse_inner(info, self.node, reborrow_option(&mut self.defaults))?;
         Ok((BytecodeList::new(), DivergingInfo::new()))
     }
 }
@@ -218,7 +224,7 @@ fn validate_returns(
     op: OpSpTypeNode,
     returns: Vec<TypeObject>,
 ) -> CompileTypes {
-    if let Option::Some(ret_count) = mandatory_returns(op) {
+    if let Option::Some(ret_count) = mandatory_returns(op).filter(|&x| returns.len() < x) {
         if ret_count == 1 {
             Err(CompilerException::of(
                 format!("{} must specify a return value", op.sequence()),
@@ -320,7 +326,7 @@ fn derived_args(op: OpSpTypeNode, line_info: impl Lined) -> CompileResult<Argume
     }
 }
 
-fn derived_rets(op: OpSpTypeNode, line_info: impl Lined, builtins: &Builtins) -> CompileTypes {
+fn derived_rets(op: OpSpTypeNode, line_info: impl Lined, builtins: BuiltinRef<'_>) -> CompileTypes {
     match op {
         OpSpTypeNode::Hash => Ok(vec![builtins.int_type().clone()]),
         OpSpTypeNode::Repr => Ok(vec![builtins.str_type().clone()]),
@@ -343,7 +349,7 @@ fn empty_args_error(op: OpSpTypeNode, node: impl Lined) -> CompilerException {
     )
 }
 
-fn default_return(op: OpSpTypeNode, builtins: &Builtins) -> Option<&TypeObject> {
+fn default_return(op: OpSpTypeNode, builtins: BuiltinRef<'_>) -> Option<&TypeObject> {
     match op {
         OpSpTypeNode::Str => Some(builtins.str_type()),
         OpSpTypeNode::Bool => Some(builtins.bool_type()),

@@ -67,6 +67,7 @@ impl InterfaceType {
         }
     }
 
+    // FIXME: Contract
     pub fn new_operators(
         name: String,
         generics: GenericInfo,
@@ -77,6 +78,34 @@ impl InterfaceType {
             operators
                 .into_iter()
                 .map(|(op, x)| (op, InterfaceFnInfo::new(x, false)))
+                .collect(),
+        );
+        this.seal();
+        this
+    }
+
+    pub fn new_attrs(
+        name: String,
+        generics: GenericInfo,
+        operators: HashMap<OpSpTypeNode, MethodInfo>,
+        op_contract: HashSet<OpSpTypeNode>,
+        attrs: HashMap<String, AttributeInfo>,
+        attr_contract: HashSet<String>,
+    ) -> Self {
+        let this = Self::new(name, generics, Some(Vec::new()));
+        this.set_operators(
+            operators
+                .into_iter()
+                .map(|(op, x)| (op, InterfaceFnInfo::new(x, !op_contract.contains(&op))))
+                .collect(),
+        );
+        this.set_attributes(
+            attrs
+                .into_iter()
+                .map(|(attr, x)| {
+                    let attr_info = InterfaceAttrInfo::new(x, !attr_contract.contains(&attr));
+                    (attr, attr_info)
+                })
                 .collect(),
         );
         this.seal();

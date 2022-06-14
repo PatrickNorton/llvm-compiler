@@ -3,13 +3,15 @@ use std::collections::HashMap;
 use std::iter::zip;
 use std::mem::replace;
 
+use either::Either;
+
 use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::type_node::TypeNode;
 use crate::util::int_allocator::IntAllocator;
 use crate::util::levenshtein;
 
 use super::access_handler::AccessHandler;
-use super::builtins::Builtins;
+use super::builtins::{BuiltinRef, Builtins, ParsedBuiltins};
 use super::constant::{LangConstant, ModuleConstant};
 use super::error::CompilerException;
 use super::import_handler::{get_import_handler, ImportHandler, ImportInfo};
@@ -50,7 +52,7 @@ impl VariableHolder {
     pub fn new() -> Self {
         Self {
             access_handler: AccessHandler::new(),
-            variables: Vec::new(),
+            variables: vec![HashMap::new()],
             type_map: HashMap::new(),
             local_types: Vec::new(),
             var_numbers: IntAllocator::new(),
@@ -359,12 +361,20 @@ impl VariableHolder {
             .map(|x| &x.parent_type)
     }
 
-    pub fn class_of(&self, builtins: Option<&Builtins>, name: &str) -> Option<TypeObject> {
+    pub fn class_of(
+        &self,
+        builtins: Either<&Builtins, &ParsedBuiltins>,
+        name: &str,
+    ) -> Option<TypeObject> {
         self.type_map.get(name).cloned().or_else(|| {
-            builtins.and_then(|builtins| match &builtins.builtin_map()[name] {
+            let builtin_map = match builtins {
+                Either::Left(b) => b.builtin_map(),
+                Either::Right(b) => b.builtin_map(),
+            };
+            match builtin_map.get(name)? {
                 LangObject::Type(ty) => Some(ty.clone()),
                 _ => None,
-            })
+            }
         })
     }
 
@@ -372,7 +382,7 @@ impl VariableHolder {
     pub fn convert_type(
         &self,
         node: &TypeNode,
-        builtins: &Builtins,
+        builtins: BuiltinRef<'_>,
         warnings: &WarningHolder,
     ) -> CompileResult<TypeObject> {
         // FIXME: This string-matching is ugly and I don't like it
@@ -421,7 +431,7 @@ impl VariableHolder {
     fn convert_type_inner(
         &self,
         node: &TypeNode,
-        builtins: &Builtins,
+        builtins: BuiltinRef<'_>,
         warnings: &WarningHolder,
     ) -> CompileResult<TypeObject> {
         let type_name = node.str_names();
@@ -433,34 +443,43 @@ impl VariableHolder {
                     return Ok(wrap(child, node));
                 }
             }
-            let builtin = builtins.get_name(&type_name).unwrap();
+            // FIXME: This is hideous
+            let builtin = match builtins {
+                BuiltinRef::Standard(s) => s.get_name(&type_name),
+                BuiltinRef::Parsed(p) => {
+                    return p
+                        .get_name(&type_name)
+                        .ok_or_else(|| self.unknown_type_err(&type_name, node, builtins).into())
+                        .and_then(|x| self.generify(node, x, builtins, warnings))
+                }
+            }
+            .ok_or_else(|| self.unknown_type_err(&type_name, node, builtins))?;
             match builtin {
                 LangObject::Constant(_) => unreachable!(),
                 LangObject::Type(type_obj) => self.generify(node, type_obj, builtins, warnings),
                 LangObject::Instance(_) => {
-                    let names = self
-                        .type_map
-                        .keys()
-                        .map(|x| &**x)
-                        .chain(self.local_types())
-                        .chain(builtins.builtin_names());
-                    if let Option::Some(suggestion) = levenshtein::closest_name(&type_name, names) {
-                        Err(CompilerException::of(
-                            format!(
-                                "Unknown type '{}'. Did you mean '{}'?",
-                                type_name, suggestion
-                            ),
-                            node,
-                        )
-                        .into())
-                    } else {
-                        Err(
-                            CompilerException::of(format!("Unknown type '{}'", type_name), node)
-                                .into(),
-                        )
-                    }
+                    Err(self.unknown_type_err(&type_name, node, builtins).into())
                 }
             }
+        }
+    }
+
+    fn unknown_type_err(
+        &self,
+        name: &str,
+        node: &TypeNode,
+        builtins: BuiltinRef<'_>,
+    ) -> CompilerException {
+        let names = self.type_map.keys().map(|x| &**x).chain(self.local_types());
+        let builtin_iter = builtins.builtin_names();
+        let names = names.chain(builtin_iter);
+        if let Option::Some(suggestion) = levenshtein::closest_name(name, names) {
+            CompilerException::of(
+                format!("Unknown type '{}'. Did you mean '{}'?", name, suggestion),
+                node,
+            )
+        } else {
+            CompilerException::of(format!("Unknown type '{}'", name), node)
         }
     }
 
@@ -468,7 +487,7 @@ impl VariableHolder {
         &self,
         node: &TypeNode,
         value: &TypeObject,
-        builtins: &Builtins,
+        builtins: BuiltinRef<'_>,
         warnings: &WarningHolder,
     ) -> CompileResult<TypeObject> {
         if node.get_subtypes().is_empty() {
@@ -487,7 +506,7 @@ impl VariableHolder {
     fn types_of(
         &self,
         warnings: &WarningHolder,
-        builtins: &Builtins,
+        builtins: BuiltinRef<'_>,
         subtypes: &[TypeNode],
     ) -> CompileTypes {
         subtypes

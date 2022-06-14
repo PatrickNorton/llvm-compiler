@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use num::{BigInt, One, ToPrimitive};
 
-use crate::converter::builtins::Builtins;
+use crate::converter::builtins::BuiltinRef;
 use crate::converter::constant::BigintConstant;
 use crate::converter::type_obj::TypeObject;
 
@@ -48,7 +48,7 @@ impl RangeConstant {
         self.value.to_string()
     }
 
-    pub fn get_type<'a>(&self, builtins: &'a Builtins) -> &'a TypeObject {
+    pub fn get_type<'a>(&self, builtins: BuiltinRef<'a>) -> &'a TypeObject {
         builtins.range_type()
     }
 

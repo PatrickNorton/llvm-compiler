@@ -7,7 +7,7 @@ use once_cell::sync::OnceCell;
 
 use crate::converter::access_handler::AccessLevel;
 use crate::converter::argument::ArgumentInfo;
-use crate::converter::builtins::{Builtins, NULL_TYPE, OBJECT};
+use crate::converter::builtins::{BuiltinRef, NULL_TYPE, OBJECT};
 use crate::converter::bytecode::Bytecode;
 use crate::converter::bytecode_list::BytecodeList;
 use crate::converter::fn_info::FunctionInfo;
@@ -151,7 +151,7 @@ impl OptionTypeObject {
         &self,
         o: OpSpTypeNode,
         access: AccessLevel,
-        builtins: &Builtins,
+        builtins: BuiltinRef<'_>,
     ) -> Option<Cow<'_, FunctionInfo>> {
         match o {
             OpSpTypeNode::Hash => self.value.option_val.op_info_access(o, access, builtins),

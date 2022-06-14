@@ -7,7 +7,7 @@ use std::sync::Arc;
 use once_cell::sync::OnceCell;
 
 use crate::converter::access_handler::AccessLevel;
-use crate::converter::builtins::{Builtins, OBJECT};
+use crate::converter::builtins::{BuiltinRef, OBJECT};
 use crate::converter::compiler_info::CompilerInfo;
 use crate::converter::fn_info::FunctionInfo;
 use crate::converter::CompileResult;
@@ -187,7 +187,7 @@ impl TemplateParam {
         &self,
         o: OpSpTypeNode,
         access: AccessLevel,
-        builtins: &Builtins,
+        builtins: BuiltinRef<'_>,
     ) -> Option<Cow<'_, FunctionInfo>> {
         self.get_bound().op_info_access(o, access, builtins)
     }

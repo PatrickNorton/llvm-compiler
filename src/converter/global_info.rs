@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::error::Error;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -15,7 +14,7 @@ use crate::parser::line_info::LineInfo;
 use crate::util::error_counter::ErrorCounter;
 use crate::util::int_allocator::SyncIntAllocator;
 
-use super::builtins::{self, Builtins};
+use super::builtins::Builtins;
 use super::bytecode::Bytecode;
 use super::bytecode_list::BytecodeList;
 use super::class::ClassInfo;
@@ -24,7 +23,7 @@ use super::fn_info::FunctionInfo;
 use super::function::Function;
 use super::switch_table::SwitchTable;
 use super::test_fn::convert_test_start;
-use super::type_obj::{BaseType, UserType};
+use super::type_obj::{BaseType, InterfaceType, UserType};
 
 /// A container for compiler information that is shared across all files.
 #[derive(Debug)]
@@ -48,6 +47,8 @@ pub struct GlobalCompilerInfo {
     class_map: DashMap<BaseType, u16>,
     warnings: Arc<ErrorCounter>,
     test_functions: Mutex<Vec<FunctionConstant>>,
+
+    default_interfaces: OnceCell<HashSet<InterfaceType>>,
 }
 
 impl GlobalCompilerInfo {
@@ -65,6 +66,7 @@ impl GlobalCompilerInfo {
             class_map: DashMap::new(),
             warnings: Arc::new(ErrorCounter::new()),
             test_functions: Mutex::new(Vec::new()),
+            default_interfaces: OnceCell::new(),
         }
     }
 
@@ -126,7 +128,9 @@ impl GlobalCompilerInfo {
         class_no
     }
 
-    pub fn get_functions_classes(&mut self) -> (Vec<&Function>, &Vec<Option<ClassInfo>>) {
+    pub fn get_functions_classes(
+        &mut self,
+    ) -> (Vec<&Function>, &Vec<Option<ClassInfo>>, &Builtins) {
         if self.functions.get_mut()[0].is_none() {
             self.init_default_function();
         }
@@ -140,6 +144,9 @@ impl GlobalCompilerInfo {
                 })
                 .collect(),
             self.classes.get_mut(),
+            self.builtins
+                .get()
+                .expect("Builtins should have been written by now"),
         )
     }
 
@@ -252,16 +259,24 @@ impl GlobalCompilerInfo {
         default_functions[index] = Some(bytes);
     }
 
-    pub fn parse_builtins(&self, builtin_path: PathBuf) -> Result<(), Box<dyn Error>> {
-        builtins::parse(&self.builtins, self, builtin_path)
-    }
-
     pub fn clone_errors(&self) -> Arc<ErrorCounter> {
         self.warnings.clone()
     }
 
     pub fn get_test_functions(&mut self) -> &[FunctionConstant] {
         &**self.test_functions.get_mut()
+    }
+
+    pub fn set_default_interfaces(&self, default_interfaces: HashSet<InterfaceType>) {
+        self.default_interfaces
+            .set(default_interfaces)
+            .expect("Cannot set default interfaces twice")
+    }
+
+    pub fn set_builtins(&self, builtins: Builtins) {
+        self.builtins
+            .set(builtins)
+            .expect("Cannot set builtins twice")
     }
 }
 

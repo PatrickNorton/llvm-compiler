@@ -36,7 +36,7 @@ use self::method::{Method, RawMethod};
 
 use super::access_handler::{AccessHandler, AccessLevel};
 use super::base_converter::BaseConverter;
-use super::builtins::{Builtins, FORBIDDEN_NAMES};
+use super::builtins::{BuiltinRef, FORBIDDEN_NAMES};
 use super::compiler_info::CompilerInfo;
 use super::constant::{ClassConstant, LangConstant};
 use super::convertible::ConverterBase;
@@ -170,7 +170,7 @@ trait ClassConverterBase<'a>: ConverterBase {
             ClassStatementNode::Declaration(d) => converter.attrs.parse(info, d),
             ClassStatementNode::DeclaredAssign(d) => converter.attrs.parse_assign(info, d),
             ClassStatementNode::Method(m) => converter.methods.parse(info, m, defaults),
-            ClassStatementNode::Operator(o) => converter.ops.parse(info, o),
+            ClassStatementNode::Operator(o) => converter.ops.parse(info, o, defaults),
             ClassStatementNode::Property(p) => converter.props.parse(info, p),
             _ => Err(CompilerInternalError::of(
                 format!("Unknown class statement {:?}", stmt),
@@ -440,7 +440,7 @@ fn recursively_remove_protected_access(handler: &mut AccessHandler, type_val: &U
 fn ends_without_returning(
     type_val: &UserType,
     fn_info: &FunctionInfo,
-    builtins: &Builtins,
+    builtins: BuiltinRef<'_>,
     returns: bool,
 ) -> CompileResult<bool> {
     if fn_info.is_generator() || fn_returns(fn_info, builtins)?.is_empty() || returns {
@@ -456,7 +456,7 @@ fn ends_without_returning(
     })
 }
 
-fn fn_returns(fn_info: &FunctionInfo, builtins: &Builtins) -> CompileResult<Vec<TypeObject>> {
+fn fn_returns(fn_info: &FunctionInfo, builtins: BuiltinRef<'_>) -> CompileResult<Vec<TypeObject>> {
     if !fn_info.is_generator() {
         Ok(fn_info.get_returns().to_owned())
     } else {
@@ -480,7 +480,7 @@ pub(self) fn check_contract(
     node: impl Lined,
     ty: &UserType,
     supers: &[TypeObject],
-    builtins: &Builtins,
+    builtins: BuiltinRef<'_>,
 ) -> CompileResult<()> {
     let mut_ty = ty.make_mut();
     for sup in supers {
@@ -532,7 +532,11 @@ fn contract_by_ref(ty: &TypeObject) -> Option<&(HashSet<String>, HashSet<OpSpTyp
     }
 }
 
-fn type_type(builtins: &Builtins, lined: &dyn Lined, ty: UserType) -> CompileResult<TypeObject> {
+fn type_type(
+    builtins: BuiltinRef<'_>,
+    lined: &dyn Lined,
+    ty: UserType,
+) -> CompileResult<TypeObject> {
     builtins.type_type().generify(lined, vec![ty.into()])
 }
 

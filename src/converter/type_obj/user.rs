@@ -7,7 +7,7 @@ use itertools::Itertools;
 use once_cell::sync::OnceCell;
 
 use crate::converter::access_handler::AccessLevel;
-use crate::converter::builtins::{Builtins, THROWS_TYPE};
+use crate::converter::builtins::{BuiltinRef, THROWS_TYPE};
 use crate::converter::class::{AttributeInfo, MethodInfo};
 use crate::converter::compiler_info::CompilerInfo;
 use crate::converter::error::CompilerException;
@@ -21,7 +21,7 @@ use super::{InterfaceType, StdTypeObject, TypeObject, UnionTypeObject};
 
 pub(super) use self::private::UserTypeInner;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum UserType {
     Interface(InterfaceType),
     Std(StdTypeObject),
@@ -76,7 +76,7 @@ pub trait UserTypeLike: UserTypeInner + PartialEq<TypeObject> {
         &self,
         o: OpSpTypeNode,
         access: AccessLevel,
-        builtins: &Builtins,
+        builtins: BuiltinRef<'_>,
     ) -> CompileResult<Option<Vec<TypeObject>>> {
         self.get_info().op_ret_with_generics(o, access, builtins)
     }
@@ -85,7 +85,7 @@ pub trait UserTypeLike: UserTypeInner + PartialEq<TypeObject> {
         &self,
         o: OpSpTypeNode,
         access: AccessLevel,
-        builtins: &Builtins,
+        builtins: BuiltinRef<'_>,
     ) -> Option<Cow<'_, FunctionInfo>> {
         let info = self.get_info();
         let operators = info.operators.get();
@@ -109,7 +109,7 @@ pub trait UserTypeLike: UserTypeInner + PartialEq<TypeObject> {
         &self,
         o: OpSpTypeNode,
         access: AccessLevel,
-        builtins: &Builtins,
+        builtins: BuiltinRef<'_>,
     ) -> Option<FunctionInfo> {
         let true_info = self.true_operator_info(o, access, builtins);
         if self.generics().is_empty() {
@@ -236,7 +236,7 @@ impl UserType {
         &self,
         o: OpSpTypeNode,
         access: AccessLevel,
-        builtins: &Builtins,
+        builtins: BuiltinRef<'_>,
     ) -> Option<FunctionInfo> {
         user_match_all!(self: x => x.operator_info(o, access, builtins))
     }
@@ -258,7 +258,7 @@ impl UserType {
         line_info: impl Lined,
         o: OpSpTypeNode,
         access: AccessLevel,
-        builtins: &Builtins,
+        builtins: BuiltinRef<'_>,
     ) -> CompilerException {
         if access != AccessLevel::Private
             && self
@@ -294,7 +294,7 @@ impl UserType {
         &self,
         o: OpSpTypeNode,
         access: AccessLevel,
-        builtins: &Builtins,
+        builtins: BuiltinRef<'_>,
     ) -> CompileResult<Option<Vec<TypeObject>>> {
         let types = self.op_ret_with_generics(o, access, builtins)?;
         Ok(types.map(|x| self.generify_all(&x)))
@@ -304,7 +304,7 @@ impl UserType {
         &self,
         o: OpSpTypeNode,
         access: AccessLevel,
-        builtins: &Builtins,
+        builtins: BuiltinRef<'_>,
     ) -> CompileResult<Option<Vec<TypeObject>>> {
         user_match_all!(self: x => x.get_info().op_ret_with_generics(o, access, builtins))
     }
@@ -421,7 +421,7 @@ mod private {
     use std::ptr;
 
     use crate::converter::access_handler::AccessLevel;
-    use crate::converter::builtins::Builtins;
+    use crate::converter::builtins::BuiltinRef;
     use crate::converter::class::{AttributeInfo, MethodInfo};
     use crate::converter::fn_info::FunctionInfo;
     use crate::converter::mutable::MutableType;
@@ -443,7 +443,7 @@ mod private {
             &self,
             o: OpSpTypeNode,
             access: AccessLevel,
-            builtins: &Builtins,
+            builtins: BuiltinRef<'_>,
         ) -> Option<Cow<'_, FunctionInfo>> {
             let new_access = if access == AccessLevel::Private {
                 AccessLevel::Protected
@@ -625,7 +625,7 @@ impl<O: AsRef<MethodInfo>, A: AsRef<AttributeInfo>> UserInfo<O, A> {
         &self,
         o: OpSpTypeNode,
         access: AccessLevel,
-        builtins: &Builtins,
+        builtins: BuiltinRef<'_>,
     ) -> CompileResult<Option<Vec<TypeObject>>> {
         let operators = self
             .operators

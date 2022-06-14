@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use num::Zero;
 
-use crate::converter::builtins::Builtins;
+use crate::converter::builtins::BuiltinRef;
 use crate::converter::constant::ConstantBytes;
 use crate::converter::type_obj::TypeObject;
 use crate::util::decimal::BigDecimal;
@@ -27,7 +27,7 @@ impl DecimalConstant {
         &self.value
     }
 
-    pub fn get_type<'a>(&self, builtins: &'a Builtins) -> &'a TypeObject {
+    pub fn get_type<'a>(&self, builtins: BuiltinRef<'a>) -> &'a TypeObject {
         builtins.dec_type()
     }
 

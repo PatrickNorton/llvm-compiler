@@ -8,7 +8,7 @@ use itertools::Itertools;
 
 use crate::converter::access_handler::AccessLevel;
 use crate::converter::argument::ArgumentInfo;
-use crate::converter::builtins::Builtins;
+use crate::converter::builtins::BuiltinRef;
 use crate::converter::error::CompilerException;
 use crate::converter::fn_info::FunctionInfo;
 use crate::converter::CompileResult;
@@ -134,7 +134,7 @@ impl TupleType {
             .and_then(|x| self.value.generics.get(x))
     }
 
-    pub fn operator_info(&self, o: OpSpTypeNode, builtins: &Builtins) -> Option<FunctionInfo> {
+    pub fn operator_info(&self, o: OpSpTypeNode, builtins: BuiltinRef<'_>) -> Option<FunctionInfo> {
         match o {
             OpSpTypeNode::Equals => Some(FunctionInfo::with_args(
                 ArgumentInfo::of_types([TupleType::new(self.get_generics().to_vec()).into()]),
@@ -173,7 +173,7 @@ impl TupleType {
         self.base_name().hash(state)
     }
 
-    fn is_hashable(&self, builtins: &Builtins) -> bool {
+    fn is_hashable(&self, builtins: BuiltinRef<'_>) -> bool {
         self.get_generics().iter().all(|x| {
             x.op_info_access(OpSpTypeNode::Hash, AccessLevel::Public, builtins)
                 .is_some()

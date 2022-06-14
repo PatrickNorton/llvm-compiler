@@ -714,9 +714,8 @@ fn add_swap(bytes: &mut BytecodeList, d1: u16, d2: u16) {
 fn get_vararg_pos(arg_positions: &[ArgPosition]) -> Option<u16> {
     arg_positions
         .iter()
-        .enumerate()
-        .find(|(_, x)| x.is_vararg())
-        .map(|(i, _)| i.try_into().unwrap())
+        .position(|x| x.is_vararg())
+        .map(|i| i.try_into().unwrap())
 }
 
 fn count_defaults(start: usize, args: &[ArgPosition]) -> usize {

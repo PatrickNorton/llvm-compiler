@@ -13,7 +13,7 @@ use crate::parser::variable::VariableNode;
 
 use super::access_handler::{AccessHandler, AccessLevel};
 use super::base_converter::BaseConverter;
-use super::builtins::{Builtins, ParsedBuiltins};
+use super::builtins::{BuiltinRef, Builtins, ParsedBuiltins};
 use super::bytecode_list::BytecodeList;
 use super::class::ClassInfo;
 use super::constant::{LangConstant, TempConstant};
@@ -52,7 +52,6 @@ pub struct CompilerInfo<'a> {
 
     compiled: bool,
     linked: bool,
-    dependents_found: bool,
 }
 
 impl<'a> CompilerInfo<'a> {
@@ -61,45 +60,66 @@ impl<'a> CompilerInfo<'a> {
         path: PathBuf,
         builtins: &'a Builtins,
         perms: PermissionLevel,
-    ) -> Self {
-        Self::new_inner(global_info, path, Either::Left(builtins), perms)
+    ) -> CompileResult<Self> {
+        Self::new_inner(
+            global_info,
+            Either::Left(builtins),
+            ImportHandler::new(path, perms),
+            HashMap::new(),
+        )
     }
 
     pub fn new_builtins(
         global_info: &'a GlobalCompilerInfo,
-        path: PathBuf,
         builtins: &'a mut ParsedBuiltins,
-    ) -> Self {
+        handler: ImportHandler,
+        predeclared_types: HashMap<String, (TypeObject, LineInfo)>,
+    ) -> CompileResult<Self> {
         Self::new_inner(
             global_info,
-            path,
             Either::Right(builtins),
-            PermissionLevel::Builtin,
+            handler,
+            predeclared_types,
+        )
+    }
+
+    pub fn with_handler(
+        global_info: &'a GlobalCompilerInfo,
+        handler: ImportHandler,
+        predeclared_types: HashMap<String, (TypeObject, LineInfo)>,
+    ) -> CompileResult<Self> {
+        Self::new_inner(
+            global_info,
+            Either::Left(global_info.global_builtins().unwrap()),
+            handler,
+            predeclared_types,
         )
     }
 
     fn new_inner(
         global_info: &'a GlobalCompilerInfo,
-        path: PathBuf,
         builtins: Either<&'a Builtins, &'a mut ParsedBuiltins>,
-        perms: PermissionLevel,
-    ) -> Self {
-        Self {
+        import_handler: ImportHandler,
+        predeclared_types: HashMap<String, (TypeObject, LineInfo)>,
+    ) -> CompileResult<Self> {
+        let perms = import_handler.permission_level();
+        let mut var_holder = VariableHolder::new();
+        var_holder.add_predeclared_types(predeclared_types)?;
+        Ok(Self {
             global_info,
-            import_handler: ImportHandler::new(path, perms),
+            import_handler,
             static_index: global_info.reserve_static(),
             fn_indices: HashMap::new(),
             loop_manager: LoopManager::new(),
             warnings: WarningHolder::new(global_info.clone_errors()),
             builtins,
             features: HashMap::new(),
-            var_holder: VariableHolder::new(),
+            var_holder,
             fn_returns: FunctionReturnInfo::new(),
             permission_level: perms,
             compiled: false,
             linked: false,
-            dependents_found: false,
-        }
+        })
     }
 
     pub fn global_info(&self) -> &GlobalCompilerInfo {
@@ -135,7 +155,7 @@ impl<'a> CompilerInfo<'a> {
             return Ok(None);
         }
         let mut defaults = DefaultHolder::new();
-        self.load_dependents(node)?;
+        // self.load_dependents(node)?;
         let linker = linker::link(self, node, &mut defaults)?;
         self.import_handler.set_from_linker(linker)?;
         self.linked = true;
@@ -195,10 +215,11 @@ impl<'a> CompilerInfo<'a> {
         self.permission_level
     }
 
-    pub fn builtins(&self) -> &Builtins {
-        self.builtins
-            .as_ref()
-            .expect_left("File expected builtins but didn't get any")
+    pub fn builtins(&self) -> BuiltinRef<'_> {
+        match &self.builtins {
+            Either::Left(b) => BuiltinRef::Standard(b),
+            Either::Right(b) => BuiltinRef::Parsed(b),
+        }
     }
 
     pub fn class_index(&self, ty: &UserType) -> u16 {
@@ -239,21 +260,6 @@ impl<'a> CompilerInfo<'a> {
 
     pub fn fn_index(&self, name: &str) -> Option<u16> {
         self.fn_indices.get(name).copied()
-    }
-
-    pub fn load_dependents(&mut self, node: &TopNode) -> CompileResult<()> {
-        if !self.dependents_found {
-            self.dependents_found = true;
-            self.import_handler.register_dependents(
-                &mut self.var_holder,
-                self.builtins.as_ref().left().copied(),
-                &self.warnings,
-                node,
-                self.global_info.get_arguments(),
-            )
-        } else {
-            Ok(())
-        }
     }
 
     pub fn reserve_class(&mut self, ty: UserType) -> u16 {
@@ -302,8 +308,11 @@ impl<'a> CompilerInfo<'a> {
     }
 
     pub fn class_of(&self, name: &str) -> Option<TypeObject> {
-        self.var_holder
-            .class_of(self.builtins.as_ref().left().copied(), name)
+        let builtins = match &self.builtins {
+            Either::Left(b) => Either::Left(*b),
+            Either::Right(b) => Either::Right(&**b),
+        };
+        self.var_holder.class_of(builtins, name)
     }
 
     pub fn defined_names(&self) -> impl Iterator<Item = &str> {
@@ -502,11 +511,6 @@ impl<'a> CompilerInfo<'a> {
         is_hidden: bool,
         object: LangInstance,
     ) {
-        // Builtin notes:
-        // CompilerInfo has field of type Either<Builtins, GlobalBuiltins>
-        // builtins() method returns Builtins
-        // GlobalCompilerInfo has field of type OnceCell<Builtins>
-        // __builtins__ parse sets values in GlobalBuiltins (rename?), then sets the OnceCell
         self.builtins
             .as_mut()
             .right()

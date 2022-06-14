@@ -3,7 +3,7 @@ use std::hash::{Hash, Hasher};
 use std::ptr;
 use std::sync::Arc;
 
-use super::builtins::Builtins;
+use super::builtins::BuiltinRef;
 use super::constant::LangConstant;
 use super::type_obj::TypeObject;
 
@@ -34,7 +34,7 @@ impl LangInstance {
 }
 
 impl LangObject {
-    pub fn get_type<'a>(&'a self, builtins: &'a Builtins) -> Cow<'a, TypeObject> {
+    pub fn get_type<'a>(&'a self, builtins: BuiltinRef<'a>) -> Cow<'a, TypeObject> {
         match self {
             LangObject::Constant(c) => c.get_type(builtins),
             LangObject::Instance(i) => Cow::Borrowed(&i.value.cls),
@@ -45,7 +45,7 @@ impl LangObject {
     pub fn as_type(&self) -> &TypeObject {
         match self {
             LangObject::Type(x) => x,
-            _ => panic!("Expected a type here"),
+            x => panic!("Expected a type here, got {:?}", x),
         }
     }
 }
@@ -71,5 +71,20 @@ impl PartialEq<TypeObject> for LangObject {
             LangObject::Instance(_) => false,
             LangObject::Type(this) => this == other,
         }
+    }
+}
+
+impl<T> From<T> for LangObject
+where
+    T: Into<TypeObject>,
+{
+    fn from(x: T) -> Self {
+        Self::Type(x.into())
+    }
+}
+
+impl From<LangConstant> for LangObject {
+    fn from(x: LangConstant) -> Self {
+        Self::Constant(x)
     }
 }

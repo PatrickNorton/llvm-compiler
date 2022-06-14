@@ -41,7 +41,7 @@ use std::hash::Hash;
 use derive_new::new;
 use num::Zero;
 
-use super::builtins::Builtins;
+use super::builtins::{BuiltinRef, Builtins};
 use super::file_writer::ConstantSet;
 use super::type_obj::{TypeObject, UserType};
 
@@ -169,7 +169,7 @@ impl LangConstant {
         matches!(self, LangConstant::String(_))
     }
 
-    pub fn get_type<'a>(&'a self, builtins: &'a Builtins) -> Cow<'a, TypeObject> {
+    pub fn get_type<'a>(&'a self, builtins: BuiltinRef<'a>) -> Cow<'a, TypeObject> {
         match self {
             LangConstant::Bigint(b) => Cow::Borrowed(b.get_type(builtins)),
             LangConstant::Bool(b) => Cow::Borrowed(b.get_type(builtins)),

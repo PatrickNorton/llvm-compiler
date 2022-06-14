@@ -90,17 +90,13 @@ use walkdir::WalkDir;
 
 use crate::arguments::{CLArgs, Optimization};
 use crate::parser::line_info::Lined;
-use crate::parser::parse::TopNode;
 use crate::util::{EXPORTS_FILENAME, FILE_EXTENSION};
 
 use self::bytecode_list::BytecodeList;
-use self::compiler_info::CompilerInfo;
 use self::constant::LangConstant;
 use self::error::{CompilerError, CompilerException};
 use self::file_writer::write_to_file;
 use self::global_info::GlobalCompilerInfo;
-use self::import_handler::builtins_file;
-use self::permission::PermissionLevel;
 use self::type_obj::TypeObject;
 
 type CompileResult<T> = Result<T, CompilerError>;
@@ -109,20 +105,15 @@ type CompileBytes = CompileResult<BytecodeList>;
 type CompileTypes = CompileResult<Vec<TypeObject>>;
 type CompileConstant = CompileResult<Option<LangConstant>>;
 
-pub fn convert_to_file(file: PathBuf, node: TopNode, args: CLArgs) -> Result<(), Box<dyn Error>> {
+pub fn convert_to_file(
+    file: PathBuf,
+    start_file: PathBuf,
+    args: CLArgs,
+) -> Result<(), Box<dyn Error>> {
     let start = Instant::now();
     let dest_file = file.parent().expect("File must have parent").to_owned();
-    let builtin_path = builtins_file(&args);
     let mut global_info = GlobalCompilerInfo::new(dest_file, args);
-    global_info.parse_builtins(builtin_path)?;
-    let builtins = global_info.global_builtins().unwrap();
-    let mut info = CompilerInfo::new(
-        &global_info,
-        file.clone(),
-        builtins,
-        PermissionLevel::Normal,
-    );
-    import_handler::compile_all(&mut info, &node)?;
+    import_handler::compile_all(&global_info, start_file)?;
     run_optimization_passes(&mut global_info);
     write_to_file(&mut global_info, file)?;
     let end = Instant::now();
@@ -138,6 +129,8 @@ pub fn convert_to_file(file: PathBuf, node: TopNode, args: CLArgs) -> Result<(),
 }
 
 fn find_path(name: &str, info: &dyn Lined, args: &CLArgs) -> CompileResult<(PathBuf, bool)> {
+    // TODO? Make installed packages local to the project instead of global
+    // (c.f. Python's packaging disaster)
     let path = env::var("NEWLANG_PATH").unwrap();
     for filename in path.split(':') {
         if !filename.is_empty() {
@@ -148,18 +141,14 @@ fn find_path(name: &str, info: &dyn Lined, args: &CLArgs) -> CompileResult<(Path
                 Result::Err(_) => true,
             });
             if let Option::Some(r) = result {
-                return Ok((
-                    get_path(vec![r.unwrap().path().to_owned()], name, info)?,
-                    false,
-                ));
+                return Ok((get_path(r.unwrap().path().to_owned(), name, info)?, false));
             }
         }
     }
     for file in read_dir(stdlib_path(args)).unwrap() {
         let builtin = file.unwrap().path();
-        if is_module(&builtin) {
-            // TODO? name_matches
-            return Ok((get_path(vec![builtin], name, info)?, true));
+        if is_module(&builtin) && builtin.file_stem() == Some(OsStr::new(name)) {
+            return Ok((get_path(builtin, name, info)?, true));
         }
     }
     Err(CompilerException::of(format!("Cannot find module {}", name), info).into())
@@ -173,12 +162,14 @@ fn local_module_path(
     let mut result = Vec::new();
     for file in read_dir(parent_path).unwrap() {
         let path = file.unwrap().path();
-        if is_module(&path) && has_extension(&path, FILE_EXTENSION) || path.ends_with(name) {
+        if is_module(&path) && has_extension(&path, FILE_EXTENSION)
+            || path.file_stem() == Some(OsStr::new(name))
+        {
             result.push(path);
         }
     }
-    if !result.is_empty() {
-        get_path(result, name, line_info)
+    if let Option::Some(path) = result.into_iter().next() {
+        get_path(path, name, line_info)
     } else {
         Err(CompilerException::of(format!("Cannot find module {}", name), line_info).into())
     }
@@ -210,12 +201,13 @@ fn is_module(path: &Path) -> bool {
     }
 }
 
+#[inline]
 fn is_export(file: &DirEntry) -> bool {
-    file.file_name() == "__exports__.newlang"
+    file.file_name() == EXPORTS_FILENAME
 }
 
-fn get_path(result: Vec<PathBuf>, name: &str, line_info: &dyn Lined) -> CompileResult<PathBuf> {
-    let mut end_file = result.into_iter().next().unwrap();
+fn get_path(mut end_file: PathBuf, name: &str, line_info: &dyn Lined) -> CompileResult<PathBuf> {
+    debug_assert!(end_file.exists(), "Passed file should exist");
     if end_file.is_dir() {
         end_file.push(EXPORTS_FILENAME);
         if !end_file.exists() {
@@ -231,6 +223,7 @@ fn get_path(result: Vec<PathBuf>, name: &str, line_info: &dyn Lined) -> CompileR
     }
 }
 
+#[inline]
 fn has_extension(path: &Path, extension: impl AsRef<OsStr>) -> bool {
     path.extension() == Some(extension.as_ref())
 }

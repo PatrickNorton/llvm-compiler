@@ -43,7 +43,7 @@ use crate::parser::operator_sp::OpSpTypeNode;
 use crate::util::levenshtein;
 
 use super::access_handler::AccessLevel;
-use super::builtins::{Builtins, OBJECT};
+use super::builtins::{BuiltinRef, OBJECT};
 use super::compiler_info::CompilerInfo;
 use super::error::CompilerException;
 use super::fn_info::FunctionInfo;
@@ -74,7 +74,7 @@ impl TypeObject {
         Self::union_hash(info.builtins(), values.into_iter().collect())
     }
 
-    fn union_hash(builtins: &Builtins, mut values: HashSet<TypeObject>) -> TypeObject {
+    fn union_hash(builtins: BuiltinRef<'_>, mut values: HashSet<TypeObject>) -> TypeObject {
         if values.len() == 1 {
             values.into_iter().next().unwrap()
         } else {
@@ -408,7 +408,7 @@ impl TypeObject {
         &self,
         o: OpSpTypeNode,
         access: AccessLevel,
-        builtins: &Builtins,
+        builtins: BuiltinRef<'_>,
     ) -> Option<Cow<'_, FunctionInfo>> {
         match self {
             TypeObject::FnInfo(f) => f.operator_info(o).map(Cow::Borrowed),
@@ -440,7 +440,7 @@ impl TypeObject {
         line_info: impl Lined,
         o: OpSpTypeNode,
         access: AccessLevel,
-        builtins: &Builtins,
+        builtins: BuiltinRef<'_>,
     ) -> CompileResult<Cow<'_, FunctionInfo>> {
         self.op_info_access(o, access, builtins).ok_or_else(|| {
             match self.op_info_exception(line_info, o, access, builtins) {
@@ -455,7 +455,7 @@ impl TypeObject {
         line_info: impl Lined,
         o: OpSpTypeNode,
         access: AccessLevel,
-        builtins: &Builtins,
+        builtins: BuiltinRef<'_>,
     ) -> CompileResult<CompilerException> {
         if access != AccessLevel::Private
             && self
@@ -499,7 +499,7 @@ impl TypeObject {
         &self,
         o: OpSpTypeNode,
         access: AccessLevel,
-        builtins: &Builtins,
+        builtins: BuiltinRef<'_>,
     ) -> Option<Vec<TypeObject>> {
         self.op_info_access(o, access, builtins)
             .map(|i| i.get_returns().to_vec())
@@ -519,7 +519,7 @@ impl TypeObject {
         line_info: impl Lined,
         o: OpSpTypeNode,
         access: AccessLevel,
-        builtins: &Builtins,
+        builtins: BuiltinRef<'_>,
     ) -> CompileTypes {
         self.try_op_info_access(line_info, o, access, builtins)
             .map(|x| x.get_returns().to_vec())
@@ -718,7 +718,7 @@ impl TypeObject {
         &self,
         o: OpSpTypeNode,
         access: AccessLevel,
-        builtins: &Builtins,
+        builtins: BuiltinRef<'_>,
     ) -> Option<Cow<'_, FunctionInfo>> {
         match self {
             TypeObject::Interface(i) => i.true_operator_info(o, access, builtins),

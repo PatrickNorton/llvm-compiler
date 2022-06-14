@@ -1,46 +1,40 @@
 use std::collections::hash_map::Entry;
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::fs::File;
+use std::collections::{HashMap, HashSet};
+use std::error::Error;
 use std::iter::zip;
 use std::mem::take;
 use std::path::{Path, PathBuf};
 
-use dashmap::DashMap;
+use derive_new::new;
+use either::Either;
 use indexmap::IndexSet;
-use once_cell::sync::Lazy;
 
 use crate::arguments::CLArgs;
 use crate::converter;
-use crate::parser::base::IndependentNode;
 use crate::parser::definition::BaseClassRef;
 use crate::parser::descriptor::DescriptorNode;
 use crate::parser::import::{ImportExportNode, ImportExportType};
-use crate::parser::interface::InterfaceDefinitionNode;
 use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::parse::TopNode;
-use crate::parser::typedef::TypedefStatementNode;
 use crate::parser::variable::VariableNode;
-use crate::util::levenshtein;
+use crate::parser::Parser;
+use crate::util::{levenshtein, reborrow_option};
 
-use super::builtins::Builtins;
+use super::builtins::{self, ParsedBuiltins};
 use super::compiler_info::CompilerInfo;
 use super::constant::LangConstant;
-use super::error::{CompilerException, CompilerInternalError};
+use super::error::{CompilerError, CompilerException};
 use super::generic::GenericInfo;
+use super::global_info::GlobalCompilerInfo;
 use super::linker::Linker;
 use super::permission::PermissionLevel;
-use super::type_obj::{
-    BaseType, InterfaceType, StdTypeObject, TypeObject, TypeTypeObject, UnionTypeObject, UserType,
-};
-use super::variable_holder::VariableHolder;
-use super::warning::WarningHolder;
-use super::{annotation, stdlib_path, CompileResult};
+use super::type_obj::{InterfaceType, StdTypeObject, TypeObject, UnionTypeObject, UserType};
+use super::{annotation, find_path, local_module_path, stdlib_path, CompileResult};
 
 #[derive(Debug)]
 pub struct ImportHandler {
     path: PathBuf,
     permissions: PermissionLevel,
-    // TODO: Link to CompilerInfo
     exports: HashMap<String, Option<TypeObject>>,
     from_exports: HashMap<String, PathBuf>,
     export_constants: HashMap<String, Option<LangConstant>>,
@@ -58,41 +52,440 @@ pub struct ImportInfo {
     as_names: Option<Vec<String>>,
 }
 
-// TODO: Remove static from this
-static ALL_FILES: Lazy<DashMap<PathBuf, ()>> = Lazy::new(DashMap::new);
+#[derive(Debug)]
+struct FileTypes {
+    path: PathBuf,
+    permissions: PermissionLevel,
+    types: HashMap<String, (TypeObject, LineInfo)>,
+    imports: HashMap<PathBuf, Vec<SingleImportInfo>>,
+    wildcard_imports: HashSet<PathBuf>,
+    exports: HashMap<String, Either<Option<TypeObject>, PathBuf>>,
+    wildcard_exports: HashSet<PathBuf>,
+}
 
-pub fn compile_all(info: &mut CompilerInfo, node: &TopNode) -> CompileResult<()> {
-    // Possible new algorithm:
-    // While there are things to compile,
-    //  Parse all files in compile_all (can be parallelized w/o issue)
-    //  Swap compile_all with empty list
-    //  For each value in next_compile_round:
-    //      Link them (pass ref to compile_all to add child file info to)
-    //      Compile their default interfaces
-    //      Compile them
-    let mut compile_all = Vec::new();
-    load_default_interfaces(&mut compile_all);
-    while !compile_all.is_empty() {
-        let next_compile_round = take(&mut compile_all);
-        // We need to split next_compile_round in order to deal with borrowing
-        // issues: We need to borrow the infos as mutable at the same time as we
-        // borrow the nodes as immutable from the previous pass.
-        let (mut infos, _, nodes) = split_triple(next_compile_round);
-        let mut compile_defaults = Vec::with_capacity(infos.len());
-        let info_defaults = info.link(node)?;
-        for (compiler_info, node) in zip(&mut infos, &nodes) {
-            compile_defaults.push(compiler_info.link(node)?);
-        }
-        info_defaults.map(|x| x.compile(info));
-        for (compiler_info, defaults) in zip(&mut infos, compile_defaults) {
-            defaults.map(|x| x.compile(compiler_info));
-        }
-        info.compile(node)?;
-        for (compiler_info, node) in zip(&mut infos, &nodes) {
-            compiler_info.compile(node)?;
+#[derive(Debug, new)]
+struct SingleImportInfo {
+    line_info: LineInfo,
+    name: String,
+    as_name: Option<String>,
+}
+
+pub fn compile_all(
+    global_info: &GlobalCompilerInfo,
+    root_path: PathBuf,
+) -> Result<(), Box<dyn Error>> {
+    // File-finding algorithm:
+    //   Each file returns list of dependent files
+    //     Push list of required files to HashMap of files->FileTypes (new struct)
+    //   For file in files:
+    //     Create ImportHandler from FileTypes
+    //   For file in files:
+    //     Load default interfaces (use RefCell<ImportHandler>)?
+    //   Turn file->ImportHandler map to file->CompilerInfo
+    //   Link all files
+    //   Compile all files
+    // TODO? Turn PathBufs into Arc<Path>
+    let builtin_path = builtins_file(global_info.get_arguments());
+    let mut default_interfaces = builtins::auto_interfaces();
+    parse_builtins(global_info, builtin_path, &mut default_interfaces)?;
+    let mut all_files = HashMap::new();
+    let mut new_files = FileTypes::find_dependents(
+        root_path,
+        &mut all_files,
+        &mut default_interfaces,
+        global_info.get_arguments(),
+        PermissionLevel::Normal,
+        None,
+    )?;
+    while !new_files.is_empty() {
+        for (file, is_stdlib) in take(&mut new_files) {
+            if !all_files.contains_key(&file) {
+                new_files.extend(FileTypes::find_dependents(
+                    file.clone(),
+                    &mut all_files,
+                    &mut default_interfaces,
+                    global_info.get_arguments(),
+                    if is_stdlib {
+                        PermissionLevel::Stdlib
+                    } else {
+                        PermissionLevel::Normal
+                    },
+                    None,
+                )?);
+            }
         }
     }
+    global_info.set_default_interfaces(default_interfaces);
+    // NOTE: feature(iterator_try_collect) (#94047) would improve this
+    let import_handlers = all_files
+        .iter()
+        .map(|(file, (_, types))| {
+            let handler = ImportHandler::from_file_types(types)?;
+            Ok((file.clone(), handler))
+        })
+        .collect::<CompileResult<HashMap<_, _>>>()?;
+    let mut all_infos = import_handlers
+        .into_iter()
+        .map(|(file, handler)| {
+            // TODO? Remove clone here
+            let predeclared = all_files[&file].1.types.clone();
+            let info = CompilerInfo::with_handler(global_info, handler, predeclared)?;
+            Ok((file, info))
+        })
+        .collect::<CompileResult<HashMap<_, _>>>()?;
+    for (file, info) in &mut all_infos {
+        let defaults = info.link(&all_files[file].0)?;
+        if let Option::Some(defaults) = defaults {
+            defaults.compile(info)?;
+        }
+    }
+    for (file, info) in &mut all_infos {
+        info.compile(&all_files[file].0)?
+    }
     Ok(())
+}
+
+fn parse_builtins(
+    global_info: &GlobalCompilerInfo,
+    path: PathBuf,
+    default_interfaces: &mut HashSet<InterfaceType>,
+) -> Result<(), Box<dyn Error>> {
+    let mut builtins = ParsedBuiltins::new();
+    let mut all_files = HashMap::with_capacity(1);
+    let new_files = FileTypes::find_dependents(
+        path.clone(),
+        &mut all_files,
+        default_interfaces,
+        global_info.get_arguments(),
+        PermissionLevel::Builtin,
+        Some(&mut builtins),
+    )?;
+    assert!(
+        new_files.is_empty(),
+        "Builtins file cannot import other files"
+    );
+    debug_assert_eq!(all_files.len(), 1);
+    let (node, file_types) = all_files.remove(&path).unwrap();
+    drop(all_files); // Should be empty now; this prevents accidental reuse
+    let import_handler = ImportHandler::from_file_types(&file_types)?;
+    let mut info =
+        CompilerInfo::new_builtins(global_info, &mut builtins, import_handler, file_types.types)?;
+    let defaults = info
+        .link(&node)?
+        .expect("Builtins file should not be linked yet");
+    defaults.compile(&mut info)?;
+    global_info.set_builtins(builtins.into());
+    Ok(())
+}
+
+impl FileTypes {
+    fn new(path: PathBuf, permissions: PermissionLevel) -> Self {
+        FileTypes {
+            path,
+            permissions,
+            types: HashMap::new(),
+            imports: HashMap::new(),
+            wildcard_imports: HashSet::new(),
+            exports: HashMap::new(),
+            wildcard_exports: HashSet::new(),
+        }
+    }
+
+    fn find_dependents(
+        path: PathBuf,
+        all_files: &mut HashMap<PathBuf, (TopNode, FileTypes)>,
+        default_interfaces: &mut HashSet<InterfaceType>,
+        args: &CLArgs,
+        permissions: PermissionLevel,
+        mut builtins: Option<&mut ParsedBuiltins>,
+    ) -> Result<Vec<(PathBuf, bool)>, Box<dyn Error>> {
+        if all_files.contains_key(&path) {
+            return Ok(Vec::new());
+        }
+        let mut to_compile = Vec::new();
+        let node = Parser::parse_file(path.clone())??;
+        let mut file_types = FileTypes::new(path.clone(), permissions);
+        for value in &node {
+            if let Result::Ok(ie_node) = <&ImportExportNode>::try_from(value) {
+                match ie_node.get_type() {
+                    ImportExportType::Import | ImportExportType::Typeget => {
+                        to_compile.extend(file_types.add_imports(&path, ie_node, all_files, args)?);
+                    }
+                    ImportExportType::Export => {
+                        to_compile.extend(file_types.add_exports(&path, ie_node, all_files, args)?);
+                    }
+                }
+            } else if let Result::Ok(node) = BaseClassRef::try_from(value) {
+                file_types.register_class(
+                    node,
+                    default_interfaces,
+                    reborrow_option(&mut builtins),
+                )?;
+            }
+        }
+        all_files.insert(path, (node, file_types));
+        Ok(to_compile)
+    }
+
+    fn add_imports(
+        &mut self,
+        path: &Path,
+        node: &ImportExportNode,
+        all_files: &HashMap<PathBuf, (TopNode, FileTypes)>,
+        args: &CLArgs,
+    ) -> CompileResult<Vec<(PathBuf, bool)>> {
+        assert!(matches!(
+            node.get_type(),
+            ImportExportType::Import | ImportExportType::Typeget
+        ));
+        if node.is_wildcard() {
+            self.add_wildcard_import(path, node, all_files, args)
+        } else if node.get_from().is_empty() {
+            check_as(node)?;
+            let mut result = Vec::with_capacity(node.get_values().len());
+            for (i, val) in node.get_values().iter().enumerate() {
+                let pre_dot = <&VariableNode>::try_from(val.get_pre_dot())
+                    .unwrap()
+                    .get_name();
+                assert!(val.get_post_dots().is_empty());
+                let (path, is_stdlib) = load_file(pre_dot, node, args, path)?;
+                let val_str = val.name_string();
+                let as_str = node.get_as().get(i).map(|x| x.name_string());
+                self.imports
+                    .entry(path.clone())
+                    .or_default()
+                    .push(SingleImportInfo::new(
+                        node.line_info().clone(),
+                        val_str,
+                        as_str,
+                    ));
+                if !all_files.contains_key(&path) {
+                    result.push((path, is_stdlib));
+                }
+            }
+            Ok(result)
+        } else {
+            self.add_import_from(path, node, all_files, args)
+        }
+    }
+
+    fn add_wildcard_import(
+        &mut self,
+        path: &Path,
+        node: &ImportExportNode,
+        all_files: &HashMap<PathBuf, (TopNode, FileTypes)>,
+        args: &CLArgs,
+    ) -> CompileResult<Vec<(PathBuf, bool)>> {
+        let module_name = module_name(node, 0);
+        let (path, is_stdlib) = load_file(module_name, node, args, path)?;
+        self.wildcard_imports.insert(path.clone());
+        Ok(if !all_files.contains_key(&path) {
+            vec![(path, is_stdlib)]
+        } else {
+            Vec::new()
+        })
+    }
+
+    fn add_import_from(
+        &mut self,
+        path: &Path,
+        node: &ImportExportNode,
+        all_files: &HashMap<PathBuf, (TopNode, FileTypes)>,
+        args: &CLArgs,
+    ) -> CompileResult<Vec<(PathBuf, bool)>> {
+        let module_name = module_name(node, 0);
+        let (path, is_stdlib) = load_file(module_name, node, args, path)?;
+        for (i, name) in node.get_values().iter().enumerate() {
+            // FIXME? 'as' imports
+            assert!(name.get_post_dots().is_empty());
+            let name = <&VariableNode>::try_from(name.get_pre_dot())
+                .unwrap()
+                .get_name();
+            let as_name = node.get_as().get(i).map(|x| {
+                <&VariableNode>::try_from(x.get_pre_dot())
+                    .unwrap()
+                    .get_name()
+                    .to_string()
+            });
+            let import_info =
+                SingleImportInfo::new(node.line_info().clone(), name.to_string(), as_name);
+            self.imports
+                .entry(path.clone())
+                .or_default()
+                .push(import_info);
+        }
+        Ok(if !all_files.contains_key(&path) {
+            vec![(path, is_stdlib)]
+        } else {
+            Vec::new()
+        })
+    }
+
+    fn add_exports(
+        &mut self,
+        path: &Path,
+        node: &ImportExportNode,
+        all_files: &HashMap<PathBuf, (TopNode, FileTypes)>,
+        args: &CLArgs,
+    ) -> CompileResult<Vec<(PathBuf, bool)>> {
+        let not_renamed = node.get_as().is_empty();
+        let is_from = !node.get_from().is_empty();
+        if node.is_wildcard() {
+            if !is_from {
+                return Err(CompilerException::of(
+                    "Cannot 'export *' without a 'from' clause",
+                    node,
+                )
+                .into());
+            }
+            let module_name = module_name(node, 0);
+            self.add_wildcard_exports(module_name, node, args)
+        } else {
+            let result = if is_from {
+                self.add_from_exports(node, args)?;
+                let (path, is_stdlib) = load_file(module_name(node, 0), node, args, path)?;
+                if !all_files.contains_key(&path) {
+                    vec![(path, is_stdlib)]
+                } else {
+                    Vec::new()
+                }
+            } else {
+                Vec::new()
+            };
+            for (i, value) in node.get_values().iter().enumerate() {
+                let as_stmt = if not_renamed {
+                    value
+                } else {
+                    &node.get_as()[i]
+                };
+                if <&VariableNode>::try_from(value.get_pre_dot()).is_err()
+                    || !value.get_post_dots().is_empty()
+                {
+                    return Err(CompilerException::of(
+                        format!("Illegal export {}", value.name_string()),
+                        node,
+                    )
+                    .into());
+                }
+                let predot = <&VariableNode>::try_from(value.get_pre_dot()).unwrap();
+                let name = predot.get_name();
+                let as_name = if as_stmt.is_empty() {
+                    name
+                } else {
+                    predot.get_name()
+                };
+                if self.exports.contains_key(as_name) {
+                    return Err(CompilerException::of(
+                        format!("Name {} already exported", as_name),
+                        node,
+                    )
+                    .into());
+                } else {
+                    self.exports.insert(
+                        name.to_string(),
+                        if is_from {
+                            // FIXME: Is this necessary?
+                            let (path, _) = load_file(module_name(node, 0), node, args, path)?;
+                            Either::Right(path)
+                        } else {
+                            Either::Left(None)
+                        },
+                    );
+                }
+            }
+            Ok(result)
+        }
+    }
+
+    fn add_wildcard_exports(
+        &mut self,
+        module_name: &str,
+        node: &ImportExportNode,
+        args: &CLArgs,
+    ) -> CompileResult<Vec<(PathBuf, bool)>> {
+        let (path, is_stdlib) = load_file(module_name, node, args, &self.path)?;
+        self.wildcard_exports.insert(path.clone());
+        Ok(vec![(path, is_stdlib)])
+    }
+
+    fn add_from_exports(
+        &mut self,
+        node: &ImportExportNode,
+        args: &CLArgs,
+    ) -> CompileResult<Vec<(PathBuf, bool)>> {
+        let module_name = module_name(node, 0);
+        let (path, is_stdlib) = load_file(module_name, node, args, &self.path)?;
+        for (i, name) in node.get_values().iter().enumerate() {
+            let value = <&VariableNode>::try_from(name.get_pre_dot()).unwrap();
+            let import_info = SingleImportInfo::new(
+                LineInfo::empty(),
+                value.get_name().to_string(),
+                node.get_as().get(i).map(|x| {
+                    <&VariableNode>::try_from(x.get_pre_dot())
+                        .unwrap()
+                        .get_name()
+                        .to_string()
+                }),
+            );
+            self.imports
+                .entry(path.clone())
+                .or_default()
+                .push(import_info);
+            let export = node.get_as().get(i).unwrap_or(name);
+            let export_name = <&VariableNode>::try_from(export.get_pre_dot())
+                .unwrap()
+                .get_name();
+            self.exports
+                .insert(export_name.to_string(), Either::Right(path.clone()));
+        }
+        Ok(vec![(path, is_stdlib)])
+    }
+
+    fn register_class(
+        &mut self,
+        stmt: BaseClassRef<'_>,
+        default_interfaces: &mut HashSet<InterfaceType>,
+        builtins: Option<&mut ParsedBuiltins>,
+    ) -> CompileResult<()> {
+        let str_name = stmt.get_name().str_name();
+        if let Option::Some((_, line_info)) = self.types.get(str_name) {
+            return Err(
+                CompilerException::double_def(str_name, stmt.line_info(), line_info).into(),
+            );
+        }
+        let generics = GenericInfo::parse_no_types(stmt.get_name().get_subtypes())?;
+        let type_val: UserType = match stmt {
+            BaseClassRef::Class(_) | BaseClassRef::Enum(_) => {
+                StdTypeObject::new_predefined(str_name.to_string(), generics).into()
+            }
+            BaseClassRef::Union(_) => {
+                UnionTypeObject::new_predefined(str_name.to_string(), generics).into()
+            }
+            BaseClassRef::Interface(i) => {
+                let ty = InterfaceType::new_predefined(str_name.to_string(), generics);
+                if i.get_descriptors().contains(&DescriptorNode::Auto) {
+                    default_interfaces.insert(ty.clone());
+                }
+                ty.into()
+            }
+        };
+        if let Option::Some(builtin) =
+            annotation::is_builtin(stmt, self.permissions, stmt.get_annotations())?
+        {
+            let builtins = builtins.expect("Cannot set builtins with no builtins passed");
+            builtins.set_builtin(
+                builtin.name,
+                builtin.index,
+                builtin.hidden,
+                type_val.clone().into(),
+            );
+        }
+        self.types.insert(
+            str_name.to_string(),
+            (type_val.into(), stmt.line_info().clone()),
+        );
+        Ok(())
+    }
 }
 
 impl ImportHandler {
@@ -109,6 +502,72 @@ impl ImportHandler {
         }
     }
 
+    pub fn permission_level(&self) -> PermissionLevel {
+        self.permissions
+    }
+
+    pub fn get_path(&self) -> &Path {
+        &self.path
+    }
+
+    fn from_file_types(file_types: &FileTypes) -> CompileResult<Self> {
+        // FIXME: Get export types
+        let mut imports = HashMap::with_capacity(file_types.imports.len());
+        let mut import_strings = IndexSet::new();
+        for (path, import) in &file_types.imports {
+            let mut names = Vec::with_capacity(import.len());
+            let mut as_names: Option<Vec<_>> = None;
+            let mut import_info = None;
+            // TODO: Double-definition check
+            for info in import {
+                if import_info.is_none() {
+                    import_info = Some(info.line_info().clone())
+                }
+                match (&mut as_names, &info.as_name) {
+                    (Some(as_names), Some(as_name)) => as_names.push(as_name.clone()),
+                    (Some(as_names), None) => as_names.push(info.name.clone()),
+                    (None, Some(as_name)) => {
+                        let as_names = as_names.insert(names.clone());
+                        as_names.push(as_name.clone());
+                    }
+                    (None, None) => {}
+                }
+                names.push(info.name.clone());
+                import_strings.insert(info.name.clone());
+            }
+            let info = ImportInfo::new(
+                import_info.unwrap_or_default(),
+                String::new(),
+                0,
+                names,
+                as_names,
+            );
+            imports.insert(path.clone(), info);
+        }
+        let mut exports = HashMap::new();
+        let mut from_exports = HashMap::new();
+        for (name, info) in &file_types.exports {
+            match info {
+                Either::Left(ty) => {
+                    exports.insert(name.clone(), ty.clone());
+                }
+                Either::Right(path) => {
+                    from_exports.insert(name.clone(), path.clone());
+                }
+            };
+        }
+        Ok(Self {
+            path: file_types.path.clone(),
+            permissions: file_types.permissions,
+            exports,
+            from_exports,
+            export_constants: HashMap::new(),
+            imports,
+            import_strings,
+            wildcard_exports: file_types.wildcard_exports.clone(),
+        })
+    }
+
     pub fn get_exports(&self) -> &HashMap<String, Option<TypeObject>> {
         &self.exports
     }
@@ -119,86 +578,6 @@ impl ImportHandler {
 
     pub fn import_infos(&self) -> &HashMap<PathBuf, ImportInfo> {
         &self.imports
-    }
-
-    pub fn register_dependents(
-        &mut self,
-        var_holder: &mut VariableHolder,
-        builtins: Option<&Builtins>,
-        warnings: &WarningHolder,
-        node: &TopNode,
-        args: &CLArgs,
-    ) -> CompileResult<()> {
-        let mut types = HashMap::new();
-        let mut line_infos = HashMap::new();
-        let mut defined_in_file = HashSet::new();
-        let mut is_module = false;
-        let mut has_auto = Option::None;
-        let mut typedefs = VecDeque::new();
-        self.load_info(
-            builtins_file(args),
-            "__builtins__",
-            PermissionLevel::Builtin,
-        );
-        for statement in node {
-            if let Result::Ok(ie_node) = <&ImportExportNode>::try_from(statement) {
-                match ie_node.get_type() {
-                    ImportExportType::Import | ImportExportType::Typeget => {
-                        self.register_imports(ie_node)?
-                    }
-                    ImportExportType::Export => {
-                        is_module = true;
-                        self.register_exports(ie_node, args)?
-                    }
-                }
-            } else if let Result::Ok(cls) = <&InterfaceDefinitionNode>::try_from(statement) {
-                let interface = self.register_class(
-                    &mut types,
-                    &mut line_infos,
-                    &mut defined_in_file,
-                    statement,
-                )?;
-                if cls.get_descriptors().contains(&DescriptorNode::Auto) {
-                    // TODO: Put in default interfaces
-                    has_auto = Some(cls.line_info().clone())
-                }
-            } else if BaseClassRef::try_from(statement).is_ok() {
-                self.register_class(&mut types, &mut line_infos, &mut defined_in_file, statement)?;
-            } else if let Result::Ok(stmt) = <&TypedefStatementNode>::try_from(statement) {
-                typedefs.push_back(stmt);
-            }
-        }
-        // When stabilized, #[feature(if_let_chains)] (#53667) would be nice here
-        // `if !is_module && let Option::Some(has_auto) = has_auto { ... }`
-        match has_auto {
-            Option::Some(has_auto) if !is_module => {
-                return Err(CompilerException::of(
-                    "Cannot (yet?) have 'auto' interfaces in non-module file",
-                    has_auto,
-                )
-                .into())
-            }
-            _ => {}
-        }
-        for stmt in typedefs {
-            let ty = stmt.get_type();
-            let name = stmt.get_name();
-            // NOTE: The builtins file doesn't have typedefs, so this shouldn't be an issue (yet)
-            let cls = var_holder
-                .convert_type(ty, builtins.unwrap(), warnings)?
-                .typedef_as(name.str_name().to_string());
-            types.insert(name.str_name().to_string(), (cls, stmt.line_info().clone()));
-        }
-        for (name, type_value) in &mut self.exports {
-            if types.contains_key(name) {
-                *type_value = Some(TypeTypeObject::new(types[name].0.clone()).into())
-            }
-        }
-        var_holder.add_predeclared_types(types)?;
-        var_holder
-            .access_handler_mut()
-            .set_defined_in_file(defined_in_file.into_iter().map(BaseType::new).collect());
-        Ok(())
     }
 
     pub fn add_import(&mut self, node: &ImportExportNode) -> CompileResult<HashMap<String, u16>> {
@@ -378,248 +757,6 @@ impl ImportHandler {
         }
     }
 
-    fn load_info(&mut self, path: PathBuf, module_name: &str, level: PermissionLevel) {
-        todo!()
-    }
-
-    fn register_imports(&mut self, node: &ImportExportNode) -> CompileResult<()> {
-        assert!(matches!(
-            node.get_type(),
-            ImportExportType::Import | ImportExportType::Typeget
-        ));
-        if node.is_wildcard() {
-            self.register_wildcard_import(module_name(node, 0).to_string(), node)
-        } else if node.get_from().is_empty() {
-            check_as(node)?;
-            for val in node.get_values() {
-                let pre_dot = <&VariableNode>::try_from(val.get_pre_dot())
-                    .unwrap()
-                    .get_name();
-                assert!(val.get_post_dots().is_empty());
-                let path = load_file(pre_dot, node)?;
-                let val_str = val.name_string();
-                self.imports.insert(
-                    path,
-                    ImportInfo::new(
-                        node.line_info().clone(),
-                        module_name(node, 0).to_string(),
-                        self.imports.len() as u32,
-                        Vec::new(),
-                        None,
-                    ),
-                );
-                self.import_strings.insert(val_str);
-            }
-            Ok(())
-        } else {
-            self.register_from(node)
-        }
-    }
-
-    fn register_from(&mut self, node: &ImportExportNode) -> CompileResult<()> {
-        check_as(node)?;
-        let from = node.get_from();
-        let mut values = Vec::new();
-        for value in node.get_values() {
-            let value_str = value.name_string();
-            let val_str = format!("{}.{}", from.name_string(), value_str);
-            values.push(value_str);
-            self.import_strings.insert(val_str);
-        }
-        let as_names = if !node.get_as().is_empty() {
-            Option::Some(
-                node.get_as()
-                    .iter()
-                    .map(|x| {
-                        <&VariableNode>::try_from(x.get_pre_dot())
-                            .unwrap()
-                            .get_name()
-                            .to_string()
-                    })
-                    .collect(),
-            )
-        } else {
-            Option::None
-        };
-        let module_name = from.name_string();
-        let path = load_file(&module_name, node)?;
-        let import_len = self.imports.len() as u32;
-        match self.imports.entry(path) {
-            Entry::Vacant(v) => {
-                v.insert(ImportInfo::new(
-                    node.line_info().clone(),
-                    module_name,
-                    import_len,
-                    values,
-                    as_names,
-                ));
-            }
-            Entry::Occupied(mut o) => o.get_mut().merge(values, as_names),
-        };
-        Ok(())
-    }
-
-    fn register_from_exports(&mut self, node: &ImportExportNode) -> CompileResult<()> {
-        assert!(matches!(node.get_type(), ImportExportType::Export) && !node.get_from().is_empty());
-        self.register_from(node)
-    }
-
-    fn register_wildcard_import(
-        &mut self,
-        module_name: String,
-        node: &ImportExportNode,
-    ) -> CompileResult<()> {
-        let path = load_file(&module_name, node)?;
-        self.imports.insert(
-            path,
-            ImportInfo::new(
-                node.line_info().clone(),
-                module_name,
-                self.imports.len() as u32,
-                vec!["*".to_owned()],
-                None,
-            ),
-        );
-        Ok(())
-    }
-
-    fn register_exports(&mut self, node: &ImportExportNode, args: &CLArgs) -> CompileResult<()> {
-        assert!(matches!(node.get_type(), ImportExportType::Export));
-        let not_renamed = node.get_as().is_empty();
-        let is_from = !node.get_from().is_empty();
-        if node.is_wildcard() {
-            if node.get_from().is_empty() {
-                return Err(CompilerException::of(
-                    "Cannot 'export *' without a 'from' clause",
-                    node,
-                )
-                .into());
-            }
-            let module_name = module_name(node, 0);
-            self.register_wildcard_export(module_name, node, args)?;
-        } else {
-            for (i, value) in node.get_values().iter().enumerate() {
-                if is_from {
-                    self.register_from_exports(node)?;
-                }
-                let as_stmt = if not_renamed {
-                    value
-                } else {
-                    &node.get_as()[i]
-                };
-                if <&VariableNode>::try_from(value.get_pre_dot()).is_err()
-                    || !value.get_post_dots().is_empty()
-                {
-                    return Err(CompilerException::of(
-                        format!("Illegal export {}", value.name_string()),
-                        node,
-                    )
-                    .into());
-                }
-                let predot = <&VariableNode>::try_from(value.get_pre_dot()).unwrap();
-                let name = predot.get_name();
-                let as_name = if as_stmt.is_empty() {
-                    name
-                } else {
-                    predot.get_name()
-                };
-                if self.exports.contains_key(as_name) {
-                    return Err(CompilerException::of(
-                        format!("Name {} already exported", as_name),
-                        node,
-                    )
-                    .into());
-                } else {
-                    self.exports.insert(name.to_string(), None);
-                    if is_from {
-                        let path = load_file(module_name(node, 0), node)?;
-                        self.from_exports.insert(name.to_string(), path);
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn register_wildcard_export(
-        &mut self,
-        module_name: &str,
-        node: &ImportExportNode,
-        args: &CLArgs,
-    ) -> CompileResult<()> {
-        if node.get_pre_dots() > 0 {
-            let path =
-                converter::local_module_path(self.path.parent().unwrap(), module_name, node)?;
-            self.load_info(path.clone(), module_name, self.permissions);
-            self.wildcard_exports.insert(path);
-        } else {
-            let (path, is_stdlib) = converter::find_path(module_name, node, args)?;
-            self.load_info(
-                path.clone(),
-                module_name,
-                if is_stdlib {
-                    PermissionLevel::Stdlib
-                } else {
-                    self.permissions
-                },
-            );
-            self.wildcard_exports.insert(path);
-        }
-        Ok(())
-    }
-
-    fn register_class(
-        &mut self,
-        types: &mut HashMap<String, (TypeObject, LineInfo)>,
-        line_infos: &mut HashMap<String, LineInfo>,
-        defined_in_file: &mut HashSet<TypeObject>,
-        stmt: &IndependentNode,
-    ) -> CompileResult<UserType> {
-        let cls = BaseClassRef::try_from(stmt).unwrap();
-        let str_name = cls.get_name().str_name();
-        if types.contains_key(str_name) {
-            return Err(CompilerException::double_def(
-                str_name,
-                stmt.line_info(),
-                &line_infos[str_name],
-            )
-            .into());
-        }
-        let generics = GenericInfo::parse_no_types(cls.get_name().get_subtypes())?;
-        let type_val: UserType = match stmt {
-            IndependentNode::ClassDef(_) | IndependentNode::Enum(_) => {
-                StdTypeObject::new_predefined(str_name.to_string(), generics).into()
-            }
-            IndependentNode::Union(_) => {
-                UnionTypeObject::new_predefined(str_name.to_string(), generics).into()
-            }
-            IndependentNode::Interface(_) => {
-                InterfaceType::new_predefined(str_name.to_string(), generics).into()
-            }
-            _ => {
-                return Err(CompilerInternalError::of(
-                    format!("Unknown class type {:?}", stmt),
-                    stmt,
-                )
-                .into())
-            }
-        };
-        type_val.set_generic_parent();
-        if let Option::Some(builtin) =
-            annotation::is_builtin(cls, self.permissions, cls.get_annotations())?
-        {
-            todo!()
-        } else {
-            types.insert(
-                str_name.to_string(),
-                (type_val.clone().into(), cls.line_info().clone()),
-            );
-            line_infos.insert(str_name.to_string(), cls.line_info().clone());
-            defined_in_file.insert(type_val.clone().into());
-        }
-        Ok(type_val)
-    }
-
     fn export_error(&self, line_info: impl Lined, name: &str) -> CompilerException {
         if let Option::Some(closest) = self.closest_exported_name(name, &mut HashSet::new()) {
             CompilerException::of(
@@ -648,9 +785,7 @@ impl ImportHandler {
         name: &str,
         previous_files: &mut HashSet<&'a Path>,
     ) -> Option<&'a str> {
-        if let Option::Some(export) =
-            levenshtein::closest_name(name, self.exports.keys().map(|x| x.as_str()))
-        {
+        if let Option::Some(export) = levenshtein::closest_name(name, self.exports.keys()) {
             return Some(export);
         }
         for path in &self.wildcard_exports {
@@ -725,10 +860,6 @@ impl ImportInfo {
     }
 }
 
-fn load_default_interfaces(to_compile: &mut Vec<(CompilerInfo, File, TopNode)>) {
-    todo!()
-}
-
 fn check_as(node: &ImportExportNode) -> CompileResult<()> {
     if !node.get_as().is_empty() && node.get_as().len() != node.get_values().len() {
         Err(
@@ -763,29 +894,37 @@ fn module_name(node: &ImportExportNode, i: usize) -> &str {
     }
 }
 
-fn load_file(module_name: &str, node: &ImportExportNode) -> CompileResult<PathBuf> {
-    todo!()
+fn load_file(
+    module_name: &str,
+    node: &ImportExportNode,
+    args: &CLArgs,
+    current_path: &Path,
+) -> CompileResult<(PathBuf, bool)> {
+    let (path, is_stdlib) = if node.get_pre_dots() > 0 {
+        let mut parent_path = current_path;
+        for _ in 0..node.get_pre_dots() {
+            // FIXME: Error message here
+            parent_path = parent_path.parent().unwrap();
+        }
+        let local_path = local_module_path(parent_path, module_name, node.line_info())?;
+        (local_path, false)
+    } else {
+        find_path(module_name, node, args)?
+    };
+    Ok((path, is_stdlib))
 }
 
 pub fn get_import_handler(path: &Path) -> &ImportHandler {
     todo!()
 }
 
-fn split_triple<T, U, V>(val: Vec<(T, U, V)>) -> (Vec<T>, Vec<U>, Vec<V>) {
-    let (mut x, mut y, mut z) = (
-        Vec::with_capacity(val.len()),
-        Vec::with_capacity(val.len()),
-        Vec::with_capacity(val.len()),
-    );
-    for (a, b, c) in val {
-        x.push(a);
-        y.push(b);
-        z.push(c);
+impl Lined for ImportInfo {
+    fn line_info(&self) -> &LineInfo {
+        &self.line_info
     }
-    (x, y, z)
 }
 
-impl Lined for ImportInfo {
+impl Lined for SingleImportInfo {
     fn line_info(&self) -> &LineInfo {
         &self.line_info
     }

@@ -5,7 +5,7 @@ use std::sync::Arc;
 use once_cell::sync::OnceCell;
 
 use crate::converter::argument::ArgumentInfo;
-use crate::converter::builtins::{Builtins, OBJECT};
+use crate::converter::builtins::{BuiltinRef, OBJECT};
 use crate::converter::fn_info::FunctionInfo;
 use crate::parser::operator_sp::OpSpTypeNode;
 
@@ -30,7 +30,11 @@ impl ObjectType {
         "object".into()
     }
 
-    pub fn operator_info(&self, o: OpSpTypeNode, builtins: &Builtins) -> Option<&FunctionInfo> {
+    pub fn operator_info(
+        &self,
+        o: OpSpTypeNode,
+        builtins: BuiltinRef<'_>,
+    ) -> Option<&FunctionInfo> {
         match o {
             OpSpTypeNode::Equals => Some(equals_info(builtins)),
             OpSpTypeNode::Str | OpSpTypeNode::Repr => Some(str_info(builtins)),
@@ -62,7 +66,7 @@ impl ObjectType {
     }
 }
 
-fn equals_info<'a, 'b>(builtins: &'a Builtins) -> &'b FunctionInfo {
+fn equals_info<'a, 'b>(builtins: BuiltinRef<'a>) -> &'b FunctionInfo {
     static EQUALS_INFO: OnceCell<FunctionInfo> = OnceCell::new();
     EQUALS_INFO.get_or_init(|| {
         FunctionInfo::with_args(
@@ -72,12 +76,12 @@ fn equals_info<'a, 'b>(builtins: &'a Builtins) -> &'b FunctionInfo {
     })
 }
 
-fn str_info<'a, 'b>(builtins: &'a Builtins) -> &'b FunctionInfo {
+fn str_info<'a, 'b>(builtins: BuiltinRef<'a>) -> &'b FunctionInfo {
     static STR_INFO: OnceCell<FunctionInfo> = OnceCell::new();
     STR_INFO.get_or_init(|| FunctionInfo::from_returns(vec![builtins.str_type().clone()]))
 }
 
-fn bool_info<'a, 'b>(builtins: &'a Builtins) -> &'b FunctionInfo {
+fn bool_info<'a, 'b>(builtins: BuiltinRef<'a>) -> &'b FunctionInfo {
     static STR_INFO: OnceCell<FunctionInfo> = OnceCell::new();
     STR_INFO.get_or_init(|| FunctionInfo::from_returns(vec![builtins.bool_type().clone()]))
 }

@@ -33,9 +33,9 @@ pub fn link<'a>(
     defaults: &mut DefaultHolder<'a>,
 ) -> CompileResult<Linker> {
     let mut linker = Linker::new();
-    info.load_dependents(node)?;
-    let imported_types = info.import_handler_mut().imported_types()?;
-    info.add_predeclared_types(imported_types)?;
+    // info.load_dependents(node)?;
+    // let imported_types = info.import_handler_mut().imported_types()?;
+    // info.add_predeclared_types(imported_types)?;
     // Needed for variable-declaration constant-folding
     info.add_stack_frame();
     // Filters out auto interfaces, which are registered earlier

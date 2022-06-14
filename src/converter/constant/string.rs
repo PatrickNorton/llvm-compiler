@@ -1,7 +1,7 @@
 use std::fmt::Display;
 use std::sync::Arc;
 
-use crate::converter::builtins::Builtins;
+use crate::converter::builtins::BuiltinRef;
 use crate::converter::type_obj::TypeObject;
 use crate::util::{string_escape, usize_to_bytes, U32_BYTES};
 
@@ -31,7 +31,7 @@ impl StringConstant {
         self.to_string()
     }
 
-    pub fn get_type<'a>(&self, builtins: &'a Builtins) -> &'a TypeObject {
+    pub fn get_type<'a>(&self, builtins: BuiltinRef<'a>) -> &'a TypeObject {
         builtins.str_type()
     }
 

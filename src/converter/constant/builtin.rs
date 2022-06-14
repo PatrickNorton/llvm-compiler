@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::fmt::Display;
 
-use crate::converter::builtins::Builtins;
+use crate::converter::builtins::{BuiltinRef, Builtins};
 use crate::converter::type_obj::TypeObject;
 use crate::util::U32_BYTES;
 
@@ -28,7 +28,7 @@ impl BuiltinConstant {
             .fmt(f)
     }
 
-    pub fn get_type<'a>(&self, builtins: &'a Builtins) -> Cow<'a, TypeObject> {
+    pub fn get_type<'a>(&self, builtins: BuiltinRef<'a>) -> Cow<'a, TypeObject> {
         builtins.constant_no(self.value).unwrap().get_type(builtins)
     }
 

@@ -86,6 +86,21 @@ impl FunctionInfo {
         )
     }
 
+    pub fn named_with_args(
+        name: impl ToString,
+        args: ArgumentInfo,
+        returns: Vec<TypeObject>,
+    ) -> Self {
+        Self::new(
+            LineInfo::empty(),
+            name.to_string(),
+            false,
+            GenericInfo::empty(),
+            args,
+            returns,
+        )
+    }
+
     pub fn matches(&self, args: &[Argument]) -> bool {
         self.value.arguments.matches(self, args)
     }

@@ -91,7 +91,7 @@ fn write_bytes(
     for constant in constants {
         writer.write_all(&constant.to_bytes(constants))?;
     }
-    let (functions, classes) = info.get_functions_classes();
+    let (functions, classes, _) = info.get_functions_classes();
     writer.write_all(&usize_to_bytes(functions.len()))?;
     for function in &*functions {
         let bytes = function.get_bytes().convert_to_bytes(constants);
@@ -124,15 +124,17 @@ fn print_disassembly<W: Write>(
 ) -> std::io::Result<()> {
     writeln!(stream, "{}", info.dest_file().display())?;
     writeln!(stream, "Constants:")?;
-    let builtins = &*info.global_builtins().unwrap();
+    let builtins = info.global_builtins().unwrap();
     for (i, constant) in constants.iter().enumerate() {
         writeln!(stream, "{}: {}", i, constant.display(builtins))?;
     }
     writeln!(stream)?;
-    let (functions, classes) = info.get_functions_classes();
+    let (functions, classes, builtins) = info.get_functions_classes();
     for function in &functions {
         writeln!(stream, "{}:", function.get_name())?;
-        function.get_bytes().disassemble_to(&functions, stream)?;
+        function
+            .get_bytes()
+            .disassemble_to(&functions, constants, builtins, stream)?;
     }
     for cls in classes {
         let cls = cls
@@ -141,21 +143,31 @@ fn print_disassembly<W: Write>(
         let cls_name = cls.get_type().name();
         for (name, method) in cls.get_method_defs() {
             writeln!(stream, "{}.{}:", cls_name, name)?;
-            method.get_bytes().disassemble_to(&functions, stream)?;
+            method
+                .get_bytes()
+                .disassemble_to(&functions, constants, builtins, stream)?;
         }
         for (name, method) in cls.get_static_methods() {
             writeln!(stream, "{}.{}:", cls_name, name)?;
-            method.get_bytes().disassemble_to(&functions, stream)?;
+            method
+                .get_bytes()
+                .disassemble_to(&functions, constants, builtins, stream)?;
         }
         for (op, method) in cls.get_operator_defs() {
             writeln!(stream, "{}.{}:", cls_name, op)?;
-            method.get_bytes().disassemble_to(&functions, stream)?;
+            method
+                .get_bytes()
+                .disassemble_to(&functions, constants, builtins, stream)?;
         }
         for (name, (getter, setter)) in cls.get_properties() {
             writeln!(stream, "{}.{}.get:", cls_name, name)?;
-            getter.get_bytes().disassemble_to(&functions, stream)?;
+            getter
+                .get_bytes()
+                .disassemble_to(&functions, constants, builtins, stream)?;
             writeln!(stream, "{}.{}.set:", cls_name, name)?;
-            setter.get_bytes().disassemble_to(&functions, stream)?;
+            setter
+                .get_bytes()
+                .disassemble_to(&functions, constants, builtins, stream)?;
         }
     }
     for (i, table) in info.get_tables().iter().enumerate() {
