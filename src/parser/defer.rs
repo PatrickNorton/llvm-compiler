@@ -7,6 +7,12 @@ use crate::parser::stmt_body::StatementBodyNode;
 use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
 
+/// The node representing a `defer` statement.
+///
+/// # Syntax
+/// ```text
+/// "defer" ([ReturnStatementNode] | [StatementBodyNode])
+/// ```
 #[derive(Debug)]
 pub struct DeferStatementNode {
     line_info: LineInfo,
@@ -14,10 +20,15 @@ pub struct DeferStatementNode {
 }
 
 impl DeferStatementNode {
+    /// Creates a new  [`DeferStatementNode`].
+    ///
+    /// A `defer return` statement is represented by a `StatementBodyNode` with
+    /// only the `return` statement in it.
     pub fn new(line_info: LineInfo, body: StatementBodyNode) -> Self {
         Self { line_info, body }
     }
 
+    /// Parses a [`DeferStatementNode`] from the given list of tokens.
     pub fn parse(tokens: &mut TokenList) -> ParseResult<DeferStatementNode> {
         let (line_info, token_type) = tokens.next_token()?.deconstruct();
         assert!(matches!(token_type, TokenType::Keyword(Keyword::Defer)));
