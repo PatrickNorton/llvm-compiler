@@ -214,7 +214,7 @@ impl TemplateParam {
         if self == other {
             Some(HashMap::new())
         } else if self.get_parent().same_base_type(parent) {
-            if self.get_bound().is_superclass(other) {
+            if self.is_vararg() || self.get_bound().is_superclass(other) {
                 Some(hash_map!(self.value.index.try_into().unwrap() => other.clone()))
             } else {
                 None

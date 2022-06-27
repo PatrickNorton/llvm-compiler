@@ -34,6 +34,7 @@ pub fn link<'a>(
 ) -> CompileResult<Linker> {
     let mut linker = Linker::new();
     // info.load_dependents(node)?;
+    // FIXME: Ensure imported types are fully set before this
     // let imported_types = info.import_handler_mut().imported_types()?;
     // info.add_predeclared_types(imported_types)?;
     // Needed for variable-declaration constant-folding
@@ -178,7 +179,10 @@ impl Linker {
                     let constant =
                         ClassConstant::new(str_name, index, predeclared_type.clone().into());
                     self.constants.insert(str_name.to_string(), constant.into());
-                } else {
+                } else if !interface_node
+                    .get_descriptors()
+                    .contains(&DescriptorNode::Auto)
+                {
                     interface_node.base_converter().complete_without_reserving(
                         info,
                         &predeclared_type,

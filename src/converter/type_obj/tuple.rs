@@ -108,7 +108,6 @@ impl TupleType {
             for (gen, other_gen) in zip(generics, other_generics) {
                 let map = gen.generify_as(parent, other_gen)?;
                 if !TypeObject::add_generics_to_map(map.clone(), &mut result) {
-                    println!("{:?} <== {:?}", result, map);
                     return None;
                 }
             }

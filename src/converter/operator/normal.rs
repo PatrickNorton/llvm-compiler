@@ -60,7 +60,6 @@ impl<'a> NormalOperatorConverter<'a> {
     }
 
     fn convert_inner(&self, info: &mut CompilerInfo) -> CompileBytes {
-        assert!(self.args.len() > 2);
         assert_ne!(self.op, OperatorTypeNode::BoolNot);
         let op_count = self.args.len();
         let mut first_converter = self.args[0].get_argument().test_converter(1);
@@ -70,7 +69,7 @@ impl<'a> NormalOperatorConverter<'a> {
         for arg in args {
             let ret_type = first(TestConverter::return_type(info, arg.get_argument(), 1)?);
             let op = OpSpTypeNode::translate(self.op);
-            if op_type.operator_return_type(op, info).is_some() {
+            if op_type.operator_return_type(op, info).is_none() {
                 return Err(CompilerException::of(
                     format!(
                         "'{}' returns type '{}', which has no overloaded '{}'",
@@ -81,7 +80,7 @@ impl<'a> NormalOperatorConverter<'a> {
                     previous_arg,
                 )
                 .into());
-            } else if op_type
+            } else if !op_type
                 .operator_info(op, info)
                 .unwrap()
                 .matches(&[Argument::new(String::new(), ret_type.clone())])

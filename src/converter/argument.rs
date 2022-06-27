@@ -232,7 +232,7 @@ impl ArgumentInfo {
         let non_keyword_count = new_args.len() - kw_positions.len();
         // The number of positional arguments which will be given a default
         // parameter
-        let defaults_used = max(unused - non_keyword_count + 1, 0);
+        let defaults_used = (unused + 1).saturating_sub(non_keyword_count);
         // The number of default arguments which will take a positional
         // parameter in the argument list
         let mut defaults_unused = default_count - defaults_used - defaulted_kwargs;
@@ -414,7 +414,10 @@ impl ArgumentInfo {
             }
             _ => (),
         }
-        let mut defaults_unused = default_count - defaults_used.unwrap();
+        let mut defaults_unused = match defaults_used {
+            Option::Some(def) => default_count - def,
+            Option::None => default_count + non_keyword_count - unused,
+        };
         let mut next_arg = self.next_eligible_arg(0, &keyword_map, defaults_unused > 0);
         for arg in &new_args {
             if keyword_map.contains_key(&*arg.name) {
@@ -547,7 +550,7 @@ impl ArgumentInfo {
 
     fn vararg_is_valid(&self) -> bool {
         match self.normal_args.last() {
-            Option::Some(normal) => self.iter().all(|x| ptr::eq(x, normal) || x.is_vararg),
+            Option::Some(normal) => self.iter().all(|x| ptr::eq(x, normal) || !x.is_vararg),
             Option::None => true,
         }
     }

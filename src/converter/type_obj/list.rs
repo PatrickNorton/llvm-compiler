@@ -52,13 +52,19 @@ impl ListTypeObject {
 
     pub fn is_superclass(&self, other: &TypeObject) -> bool {
         if let TypeObject::List(list) = other {
-            if self.get_values().len() != list.get_values().len() {
+            if self.value.values.is_empty() {
+                true
+            } else if self.get_values().len() != list.get_values().len() {
                 false
             } else {
                 zip(self.get_values(), list.get_values()).all(|(x, y)| x.is_superclass(y))
             }
         } else {
-            panic!("Should not be instancing list types")
+            panic!(
+                "Should not be instancing list types: {} and {}",
+                self.name(),
+                other.name()
+            )
         }
     }
 

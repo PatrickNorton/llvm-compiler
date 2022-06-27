@@ -28,7 +28,7 @@ impl<'a> ConverterTest for TernaryConverter<'a> {
                 && (self.ret_count as usize) <= if_false.len()
         );
         Ok(zip(if_true, if_false)
-            .map(|(x, y)| TypeObject::union(info, [x, y]))
+            .map(|(x, y)| TypeObject::union(info.builtins(), [x, y]))
             .collect())
     }
 }

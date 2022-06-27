@@ -226,7 +226,7 @@ impl Factory {
     add_method!(set_type, type_val, UserType);
     add_method!(set_super_constants, super_constants, Vec<LangConstant>);
     add_method!(set_variables, variables, HashMap<String, u16>);
-    add_method!(set_static_vars, variables, HashMap<String, u16>);
+    add_method!(set_static_vars, static_variables, HashMap<String, u16>);
     add_method!(set_operator_defs, operator_defs, HashMap<OpSpTypeNode, Method>);
     add_method!(set_static_ops, static_operators, HashMap<OpSpTypeNode, Method>);
     add_method!(set_method_defs, method_defs, HashMap<String, Method>);

@@ -283,14 +283,14 @@ fn increment(input: &str) -> Option<(TokenType, usize)> {
 fn assign(input: &str) -> Option<(TokenType, usize)> {
     if input.starts_with('=') {
         Option::Some((TokenType::Assign(false), 1))
-    } else if input.starts_with("?=") {
+    } else if input.starts_with(":=") {
         Option::Some((TokenType::Assign(true), 2))
     } else {
         Option::None
     }
 }
 
-const STRING_PREFIXES: &str = "refbcy";
+pub const STRING_PREFIXES: &str = "refbcy";
 
 fn string(input: &str) -> Option<(TokenType, usize)> {
     let mut cursor = input.char_indices().peekable();

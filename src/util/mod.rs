@@ -9,8 +9,8 @@ pub mod version;
 
 pub const MAGIC_NO: u32 = 0x0ABADE66;
 pub const MAGIC_NUMBER: &[u8] = &MAGIC_NO.to_be_bytes();
-pub const FILE_EXTENSION: &str = ".newlang";
-pub const BYTECODE_EXTENSION: &str = ".nbyte";
+pub const FILE_EXTENSION: &str = "newlang";
+pub const BYTECODE_EXTENSION: &str = "nbyte";
 pub const EXPORTS_FILENAME: &str = "__exports__.newlang";
 
 pub const U32_BYTES: usize = u32::BITS as usize / u8::BITS as usize;

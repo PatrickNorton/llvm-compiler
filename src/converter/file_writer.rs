@@ -61,7 +61,6 @@ pub fn write_to_file<P: AsRef<Path>>(
 ) -> std::io::Result<()> {
     let constants = ConstantSet::new(info.calculate_constants());
     if info.get_arguments().should_print_bytecode() {
-        // NOTE: This could be improved by #[feature(stdio_locked)] (#86845)
         print_disassembly(info, &mut stdout().lock(), &constants)?;
     }
     let args = info.get_arguments();
@@ -72,7 +71,7 @@ pub fn write_to_file<P: AsRef<Path>>(
     }
     let file = file.as_ref();
     let parent = file.parent().unwrap();
-    if parent.exists() {
+    if !parent.exists() {
         create_dir(parent)?;
     }
     write_bytes(info, file, &constants)

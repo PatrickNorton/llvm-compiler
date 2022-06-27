@@ -205,7 +205,7 @@ impl<'a> MethodConverter<'a> {
             (&EMPTY).into(),
             node.line_info().clone(),
         );
-        if descriptors.contains(&DescriptorNode::Static) {
+        if !descriptors.contains(&DescriptorNode::Static) {
             self.methods.insert(name, m_info);
         } else {
             self.static_methods.insert(name.into(), m_info);

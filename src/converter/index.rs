@@ -12,7 +12,7 @@ use super::bytecode::Bytecode;
 use super::bytecode_list::BytecodeList;
 use super::compiler_info::CompilerInfo;
 use super::constant::{LangConstant, RangeConstant};
-use super::convertible::{test_convertible, ConverterBase, ConverterTest};
+use super::convertible::{test_convertible, ConverterBase, ConverterTest, TestConvertible};
 use super::error::CompilerException;
 use super::test_converter::TestConverter;
 use super::{int_arithmetic, CompileBytes, CompileConstant, CompileResult, CompileTypes};
@@ -67,6 +67,14 @@ impl<'a> ConverterTest for IndexConverter<'a> {
             _ => Ok(None),
         }
     }
+
+    fn try_convert_slice(&mut self, info: &mut CompilerInfo) -> CompileBytes {
+        if self.node_is_slice() {
+            self.convert_iter_slice(info)
+        } else {
+            self.convert(info)
+        }
+    }
 }
 
 impl<'a> IndexConverter<'a> {
@@ -75,6 +83,10 @@ impl<'a> IndexConverter<'a> {
             [TestNode::Slice(s)] => Some(s),
             _ => None,
         }
+    }
+
+    pub fn node_is_slice(&self) -> bool {
+        Self::is_slice(self.node.get_indices()).is_some()
     }
 
     pub fn convert_indices(
@@ -109,6 +121,23 @@ impl<'a> IndexConverter<'a> {
             bytes.add(Bytecode::DupTopN(((indices.len() + 1) as u16).into()));
         }
         bytes.add(Bytecode::LoadSubscript(argc.into()));
+        Ok(bytes)
+    }
+
+    fn convert_iter_slice(&self, info: &mut CompilerInfo) -> CompileBytes {
+        let slice = Self::is_slice(self.node.get_indices()).unwrap();
+        let mut converter = self.node.get_var().test_converter(1);
+        let ret = first(converter.return_type(info)?);
+        let has_iter = ret.operator_info(OpSpTypeNode::IterSlice, info).is_some();
+        let mut bytes = converter.convert(info)?;
+        self.check_slice_type(info)?;
+        bytes.extend(TestConverter::bytes(slice, info, 1)?);
+        let operator = if has_iter {
+            OpSpTypeNode::IterSlice
+        } else {
+            OpSpTypeNode::GetSlice
+        };
+        bytes.add(Bytecode::CallOp(operator.into(), 1.into()));
         Ok(bytes)
     }
 

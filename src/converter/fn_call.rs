@@ -223,6 +223,7 @@ impl<'a> FunctionCallConverter<'a> {
                                 bytes.add(Bytecode::MakeOption());
                             }
                         }
+                        i += gen_count - 1;
                     }
                     ret_type => {
                         if ret_type.operator_info(OpSpTypeNode::Iter, info).is_some() {
@@ -251,10 +252,12 @@ impl<'a> FunctionCallConverter<'a> {
             // FIXME: Doesn't work for unpacked tuples
             match arg_pos {
                 ArgPosition::Vararg(var, _) if place_in_vararg != var.len() - 1 => {
+                    place_in_vararg += 1;
+                }
+                _ => {
                     place_in_vararg = 0;
                     i += 1;
                 }
-                _ => place_in_vararg += 1,
             }
         }
         Self::add_swaps(bytes, params.len().try_into().unwrap(), arg_positions, info)?;
@@ -624,13 +627,13 @@ fn turn_map_to_list(values: HashMap<u16, TypeObject>) -> Vec<TypeObject> {
     for (index, value) in values {
         let index = index as usize;
         match index.cmp(&result.len()) {
-            Ordering::Less => result.push(Some(value)),
-            Ordering::Equal => {
+            Ordering::Equal => result.push(Some(value)),
+            Ordering::Less => {
                 assert_eq!(result[index], None);
                 result[index] = Some(value);
             }
             Ordering::Greater => {
-                result.resize_with(index, || None);
+                result.resize_with(index + 1, || None);
                 result[index] = Some(value);
             }
         }

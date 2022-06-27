@@ -311,7 +311,6 @@ impl TestNode {
                         let slice = TestNode::Slice(SliceNode::parse(tokens)?);
                         TestNode::Name(NameNode::Index(IndexNode::new(temp, vec![slice])))
                     } else {
-                        let temp = replace(&mut pre, TestNode::empty());
                         let literal = LiteralNode::parse(tokens)?.into_builders();
                         let builders = literal.into_iter().map(|(_, x)| x).collect();
                         TestNode::Name(NameNode::Index(IndexNode::new(temp, builders)))

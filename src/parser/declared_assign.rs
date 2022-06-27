@@ -1,14 +1,13 @@
+use std::collections::HashSet;
+
 use crate::parser::descriptor::{DescriptorNode, DECLARATION_VALID};
+use crate::parser::error::ParseResult;
 use crate::parser::line_info::{LineInfo, Lined};
-use crate::parser::macros::expect_matches;
 use crate::parser::name::NameNode;
 use crate::parser::test_list::TestListNode;
 use crate::parser::token::TokenType;
-use crate::parser::typed_var::TypedVariableNode;
-use std::collections::HashSet;
-
-use crate::parser::error::ParseResult;
 use crate::parser::token_list::TokenList;
+use crate::parser::typed_var::TypedVariableNode;
 
 #[derive(Debug)]
 pub struct DeclaredAssignmentNode {
@@ -60,8 +59,13 @@ impl DeclaredAssignmentNode {
     pub fn parse(tokens: &mut TokenList) -> ParseResult<DeclaredAssignmentNode> {
         let info = tokens.line_info()?.clone();
         let assigned = TypedVariableNode::parse_list(tokens)?;
-        let is_colon = tokens.token_equals(":=")?;
-        expect_matches!(tokens, TokenType::Assign(_), "assignment operator")?;
+        let is_colon = match tokens.token_type()? {
+            &TokenType::Assign(x) => {
+                tokens.next_token()?;
+                x
+            }
+            _ => return Err(tokens.error_expected("assignment operator")),
+        };
         let value = TestListNode::parse(tokens, false)?;
         Ok(DeclaredAssignmentNode::new(info, is_colon, assigned, value))
     }

@@ -233,6 +233,7 @@ impl TypedArgumentListNode {
                 if let Option::Some(n) = next {
                     let is_decided = n.type_val.is_decided();
                     current_arg_list.push(n);
+                    current_arg_list = &mut kw_args;
                     if !untyped_decided {
                         allow_untyped = !is_decided;
                     }

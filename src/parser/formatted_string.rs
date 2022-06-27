@@ -7,6 +7,7 @@ use crate::parser::tokenizer::Tokenizer;
 use std::collections::HashSet;
 use std::fmt::{Display, Write};
 use std::iter::Peekable;
+use std::mem::take;
 use std::str::Chars;
 
 #[derive(Debug)]
@@ -79,11 +80,12 @@ impl FormattedStringNode {
             }
             current += pre;
             strings.push(if is_raw {
-                current.clone()
+                take(&mut current)
             } else {
-                StringLikeNode::process_escapes(inside, &info)?
+                let text = StringLikeNode::process_escapes(&current, &info)?;
+                current.clear();
+                text
             });
-            current.clear();
             let new_end = match size_of_brace(post, is_raw) {
                 Option::Some(x) => new_start + x,
                 Option::None => {
@@ -101,7 +103,7 @@ impl FormattedStringNode {
         }
         if !inside.is_empty() {
             strings.push(if is_raw {
-                current.clone()
+                inside.to_string()
             } else {
                 StringLikeNode::process_escapes(inside, &info)?
             });
@@ -198,7 +200,7 @@ impl FormatInfo {
                 fmt_type,
                 line_info,
             },
-            bang_place,
+            text.len() - bang_place,
         ))
     }
 

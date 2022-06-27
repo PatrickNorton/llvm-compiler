@@ -76,7 +76,7 @@ impl TypeLoader {
     pub fn type_constant(
         line_info: impl Lined,
         value: &TypeObject,
-        info: &mut CompilerInfo,
+        info: &CompilerInfo,
     ) -> CompileConstant {
         if let TypeObject::Option(opt) = value {
             return Self::option_constant(line_info, opt, info);
@@ -114,7 +114,7 @@ impl TypeLoader {
     fn option_constant(
         line_info: impl Lined,
         value: &OptionTypeObject,
-        info: &mut CompilerInfo,
+        info: &CompilerInfo,
     ) -> CompileConstant {
         let interior_type = value.get_option_val();
         let type_const = Self::type_constant(line_info, interior_type, info)?;

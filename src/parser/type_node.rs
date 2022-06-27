@@ -94,6 +94,9 @@ impl TypeNode {
 
     // FIXME: This is hideous and should be redone--types should get a special type for their names
     pub fn str_names(&self) -> String {
+        if self.name.is_empty() {
+            return String::new();
+        }
         let post_dots = self.name.get_post_dots();
         if post_dots.is_empty() {
             self.str_name().to_owned()

@@ -41,14 +41,14 @@ impl Tokenizer {
         Ok(tokenizer.next_token().map(|_| tokenizer))
     }
 
-    fn from_str(str: &str, path: PathBuf, _line_no: usize) -> ParseResult<Tokenizer> {
+    fn from_str(str: &str, path: PathBuf, line_number: usize) -> ParseResult<Tokenizer> {
         let mut tokenizer = Tokenizer {
             reader: Reader::String(Cursor::new(str.as_bytes().to_vec())),
             file_name: path.into(),
             next: String::new(),
             full_line: Arc::from(""),
             lb_indices: BTreeSet::new(),
-            line_number: 0,
+            line_number,
         };
         // Get rid of leading newline
         tokenizer.next_token()?;
@@ -108,6 +108,7 @@ impl Tokenizer {
 
     fn empty_line(&mut self) -> ParseResult<Token> {
         assert!(self.next.is_empty());
+        // FIXME: Files ending with a newline don't return the newline
         ParseResult::Ok(match self.read_line()? {
             Option::None => Token::epsilon(self.line_info()),
             Option::Some(next_line) => {
@@ -215,7 +216,7 @@ impl Tokenizer {
 
     fn append_escaped_lines(&mut self) -> ParseResult<()> {
         while self.next.ends_with('\\') {
-            self.next.truncate(self.next.len() - 1);
+            self.next.pop();
             let next_line = self.read_line()?.unwrap();
             self.next.push_str(&next_line);
             self.full_line = (&*self.next).into();

@@ -66,8 +66,8 @@ pub enum TypeObject {
 }
 
 impl TypeObject {
-    pub fn union<const N: usize>(info: &CompilerInfo, values: [TypeObject; N]) -> TypeObject {
-        Self::union_hash(info.builtins(), values.into_iter().collect())
+    pub fn union<const N: usize>(builtins: BuiltinRef<'_>, values: [TypeObject; N]) -> TypeObject {
+        Self::union_hash(builtins, values.into_iter().collect())
     }
 
     pub fn union_of(info: &CompilerInfo, values: Vec<TypeObject>) -> TypeObject {
@@ -533,9 +533,10 @@ impl TypeObject {
     ) -> CompileResult<Cow<'_, TypeObject>> {
         match self {
             TypeObject::Type(t) => t.try_attr_type(line_info, value, info.access_level(self)),
-            _ => Err(self
-                .attr_exception(line_info, value, info.access_level(self))
-                .into()),
+            t => t.attr_type(value, info).ok_or_else(|| {
+                self.attr_exception(line_info, value, info.access_level(self))
+                    .into()
+            }),
         }
     }
 

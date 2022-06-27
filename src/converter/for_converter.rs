@@ -279,8 +279,8 @@ pub fn add_iter(
     Ok(())
 }
 
-fn convert_iter(_info: &mut CompilerInfo, _converter: &mut impl ConverterTest) -> CompileBytes {
-    todo!("convert_iter needs to deal with convert_iter_slice")
+fn convert_iter(info: &mut CompilerInfo, converter: &mut impl ConverterTest) -> CompileBytes {
+    converter.try_convert_slice(info)
 }
 
 fn variable_exception<'a>(

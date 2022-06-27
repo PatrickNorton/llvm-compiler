@@ -27,6 +27,11 @@ pub trait ConverterTest: ConverterBase {
     fn constant_return(&mut self, info: &mut CompilerInfo) -> CompileConstant {
         Ok(None)
     }
+
+    // Required for ForConverter::convert_iter
+    fn try_convert_slice(&mut self, info: &mut CompilerInfo) -> CompileBytes {
+        self.convert(info)
+    }
 }
 
 pub trait BaseConvertible<'a> {

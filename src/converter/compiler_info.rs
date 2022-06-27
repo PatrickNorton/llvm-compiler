@@ -226,7 +226,7 @@ impl<'a> CompilerInfo<'a> {
         self.global_info.class_index(ty)
     }
 
-    pub fn convert_type(&mut self, type_node: &TypeNode) -> CompileResult<TypeObject> {
+    pub fn convert_type(&self, type_node: &TypeNode) -> CompileResult<TypeObject> {
         self.var_holder
             .convert_type(type_node, self.builtins(), &self.warnings)
     }
@@ -290,11 +290,11 @@ impl<'a> CompilerInfo<'a> {
         self.var_holder.remove_local_types()
     }
 
-    pub fn get_type_obj(&mut self, type_name: &str) -> Option<&TypeObject> {
+    pub fn get_type_obj(&self, type_name: &str) -> Option<&TypeObject> {
         self.var_holder.get_type_obj(type_name)
     }
 
-    pub fn get_type(&mut self, variable: &str) -> Option<Cow<'_, TypeObject>> {
+    pub fn get_type(&self, variable: &str) -> Option<Cow<'_, TypeObject>> {
         let info = self.var_holder.var_info(variable);
         // FIXME? Remove partially-unnecessary into_owned
         info.map(VariableInfo::get_type)
@@ -417,7 +417,7 @@ impl<'a> CompilerInfo<'a> {
         self.var_holder
             .var_info(var)
             .map(|x| x.is_static())
-            .unwrap_or(true)
+            .unwrap_or(false)
     }
 
     pub fn var_index(&self, node: &VariableNode) -> CompileResult<u16> {

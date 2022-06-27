@@ -233,6 +233,9 @@ impl GlobalCompilerInfo {
 
     pub fn calculate_constants(&mut self) -> IndexSet<LangConstant> {
         let mut constants = IndexSet::new();
+        if self.functions.get_mut()[0].is_none() {
+            self.init_default_function();
+        }
         for function in self.functions.get_mut() {
             function
                 .as_ref()

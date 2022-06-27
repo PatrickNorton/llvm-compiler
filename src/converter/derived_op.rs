@@ -12,6 +12,7 @@ use super::bytecode::{Bytecode, Label};
 use super::bytecode_list::BytecodeList;
 use super::compiler_info::CompilerInfo;
 use super::convertible::{base_convertible, ConverterBase};
+use super::diverge::DivergingInfo;
 use super::error::{CompilerException, CompilerInternalError};
 use super::type_obj::UserType;
 use super::{CompileBytes, CompileResult};
@@ -33,6 +34,15 @@ impl<'a> ConverterBase for DerivedOperatorConverter<'a> {
                     .into(),
             ),
         }
+    }
+
+    fn convert_with_return(
+        &mut self,
+        info: &mut CompilerInfo,
+    ) -> CompileResult<(BytecodeList, DivergingInfo)> {
+        let mut diverging_info = DivergingInfo::new();
+        diverging_info.known_return();
+        self.convert(info).map(|x| (x, diverging_info))
     }
 }
 

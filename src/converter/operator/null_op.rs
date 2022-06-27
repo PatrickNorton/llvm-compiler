@@ -180,7 +180,7 @@ impl<'a> NullOpConverter<'a> {
         Ok(vec![if &ret0 == info.builtins().null_type() {
             ret1
         } else {
-            TypeObject::union(info, [ret0.strip_null(), ret1])
+            TypeObject::union(info.builtins(), [ret0.strip_null(), ret1])
         }])
     }
 

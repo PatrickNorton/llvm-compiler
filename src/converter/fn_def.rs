@@ -389,7 +389,7 @@ impl<'a> FunctionDefConverter<'a> {
             .node
             .get_descriptors()
             .contains(&DescriptorNode::Generator)
-            && !self.node.get_ret_val().is_empty()
+            && self.node.get_ret_val().is_empty()
         {
             Err(CompilerException::of(
                 "Generator functions must have at least one return",
