@@ -116,7 +116,7 @@ impl<'a> ClassConverter<'a> {
             // TODO: Remove cloning
             let supers = obj
                 .get_supers()
-                .iter()
+                .into_iter()
                 .map(|x| UserType::try_from(x.clone()).unwrap())
                 .collect_vec();
             self.check_const_supers(obj, &supers)?;
@@ -188,7 +188,7 @@ impl<'a> ClassConverter<'a> {
         converter.check_attributes()?;
         obj.set_attributes(converter.all_attrs());
         obj.set_static_attributes(converter.static_attrs());
-        obj.seal();
+        obj.seal(Some(info.global_info()), Some(info.builtins()));
         Ok(())
     }
 }

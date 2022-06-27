@@ -10,8 +10,8 @@ use crate::converter::constant::BoolConstant;
 use crate::converter::fn_info::FunctionInfo;
 use crate::converter::generic::GenericInfo;
 use crate::converter::type_obj::{
-    InterfaceType, ListTypeObject, ObjectType, StdTypeObject, TemplateParam, TupleType, TypeObject,
-    TypeTypeObject, UserTypeLike,
+    InterfaceFnInfo, InterfaceType, ListTypeObject, ObjectType, StdTypeObject, TemplateParam,
+    TupleType, TypeObject, TypeTypeObject, UserTypeLike,
 };
 use crate::macros::{hash_map, hash_set};
 use crate::parser::line_info::LineInfo;
@@ -40,7 +40,7 @@ pub const STABLE_FEATURES: &[&str] = &[];
 pub static NULL_TYPE: Lazy<TypeObject> = Lazy::new(|| {
     let ty = StdTypeObject::new("null".into(), Some(Vec::new()), GenericInfo::empty(), true);
     ty.is_const_class();
-    ty.seal();
+    ty.seal(None, None);
     ty.into()
 });
 pub static THROWS_TYPE: Lazy<TypeObject> = Lazy::new(|| {
@@ -96,17 +96,22 @@ static CONTEXT: Lazy<TypeObject> = Lazy::new(|| {
 });
 pub static ITERABLE: Lazy<TypeObject> = Lazy::new(|| {
     let param = TemplateParam::new_vararg("K".into(), 0);
+    let iterable = InterfaceType::new(
+        "Iterable".to_string(),
+        GenericInfo::new(vec![param.clone()]),
+        Some(Vec::new()),
+    );
     let iter_info = MethodInfo::new(
         LineInfo::empty(),
         AccessLevel::Public,
         false,
-        FunctionInfo::with_args(ArgumentInfo::of_types([param.clone().into()]), Vec::new()),
+        FunctionInfo::from_returns(vec![iterable
+            .generify(LineInfo::empty(), vec![param.into()])
+            .unwrap()]),
     );
-    let iterable = InterfaceType::new_operators(
-        "Iterable".into(),
-        GenericInfo::new(vec![param]),
-        hash_map!(OpSpTypeNode::Iter => iter_info),
-    );
+    let iter_fn_info = InterfaceFnInfo::new(iter_info, false);
+    iterable.set_operators(hash_map!(OpSpTypeNode::Iter => iter_fn_info));
+    iterable.seal(None, None);
     iterable.set_generic_parent();
     iterable.into()
 });
@@ -128,7 +133,10 @@ pub static ITERATOR: Lazy<TypeObject> = Lazy::new(|| {
     );
     let iterator = InterfaceType::new_attrs(
         "Iterator".into(),
-        GenericInfo::new(vec![param]),
+        GenericInfo::new(vec![param.clone()]),
+        Some(vec![ITERABLE
+            .generify(LineInfo::empty_ref(), vec![param.into()])
+            .unwrap()]),
         hash_map!(OpSpTypeNode::Iter => iter_info),
         hash_set!(),
         hash_map!("next".into() => next_info, "peek".into() => peek_info),

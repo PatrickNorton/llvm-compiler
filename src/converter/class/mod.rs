@@ -44,7 +44,7 @@ use super::default_holder::DefaultHolder;
 use super::error::{CompilerException, CompilerInternalError};
 use super::fn_info::FunctionInfo;
 use super::type_loader::TypeLoader;
-use super::type_obj::{TypeObject, UserType};
+use super::type_obj::{SuperRef, TypeObject, UserType};
 use super::warning::{self, WarningType};
 use super::{annotation, CompileResult};
 
@@ -183,7 +183,7 @@ trait ClassConverterBase<'a>: ConverterBase {
     fn get_super_constants(
         &self,
         info: &mut CompilerInfo,
-        supers: &[TypeObject],
+        supers: SuperRef<'_>,
     ) -> CompileResult<Vec<LangConstant>> {
         zip(supers, self.get_node().get_superclasses())
             .map(|(ty, node)| {
@@ -479,7 +479,7 @@ fn merge<T: Eq + Hash, U>(a: HashMap<T, U>, mut b: HashMap<T, U>) -> HashMap<T, 
 pub(self) fn check_contract(
     node: impl Lined,
     ty: &UserType,
-    supers: &[TypeObject],
+    supers: SuperRef<'_>,
     builtins: BuiltinRef<'_>,
 ) -> CompileResult<()> {
     let mut_ty = ty.make_mut();

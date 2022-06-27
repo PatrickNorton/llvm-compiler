@@ -6,6 +6,7 @@ use derive_new::new;
 use crate::converter::access_handler::AccessLevel;
 use crate::converter::compiler_info::CompilerInfo;
 use crate::converter::error::CompilerException;
+use crate::converter::fn_info::FunctionInfo;
 use crate::converter::mutable::MutableType;
 use crate::converter::type_obj::{StdTypeObject, TypeObject};
 use crate::converter::CompileResult;
@@ -165,6 +166,16 @@ impl<'a> AttributeConverter<'a> {
 }
 
 impl AttributeInfo {
+    pub fn method(info: FunctionInfo) -> Self {
+        Self::new(
+            true,
+            AccessLevel::Public,
+            MutableType::Standard,
+            info.to_callable(),
+            LineInfo::empty(),
+        )
+    }
+
     pub fn get_access_level(&self) -> AccessLevel {
         self.access_level
     }

@@ -1,9 +1,10 @@
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 use itertools::Itertools;
 
 use crate::converter::access_handler::AccessLevel;
-use crate::converter::annotation::{impl_annotatable, AnnotatableConverter};
+use crate::converter::annotation::{self, impl_annotatable, AnnotatableConverter};
 use crate::converter::argument::{Argument, ArgumentInfo};
 use crate::converter::bytecode_list::BytecodeList;
 use crate::converter::compiler_info::CompilerInfo;
@@ -16,8 +17,10 @@ use crate::converter::generic::GenericInfo;
 use crate::converter::mutable::MutableType;
 use crate::converter::type_obj::{TypeObject, UnionTypeObject, UserType, UserTypeLike};
 use crate::converter::{CompileBytes, CompileResult};
-use crate::parser::annotation::AnnotatableRef;
+use crate::parser::annotation::{AnnotatableNode, AnnotatableRef};
 use crate::parser::base::IndependentNode;
+use crate::parser::class_def::ClassStatementNode;
+use crate::parser::declaration::DeclarationNode;
 use crate::parser::definition::BaseClassRef;
 use crate::parser::descriptor::DescriptorNode;
 use crate::parser::line_info::{LineInfo, Lined};
@@ -29,6 +32,7 @@ use crate::parser::test_node::TestNode;
 use crate::parser::union_def::UnionDefinitionNode;
 use crate::parser::variable::VariableNode;
 use crate::parser::variant::VariantCreationNode;
+use crate::util::reborrow_option;
 
 use super::attribute::AttributeInfo;
 use super::converter_holder::ConverterHolder;
@@ -98,7 +102,7 @@ impl<'a> AnnotatableConverter<'a> for UnionConverter<'a> {
             let type_obj = TypeObject::from(type_val.clone());
             info.access_handler_mut().add_cls(type_obj.clone());
             info.add_local_types(type_obj, type_val.get_generic_info().get_param_map());
-            let result = self.parse_statements(info, &mut converter, None);
+            let result = self.parse_stmts(info, &mut converter, None);
             info.remove_local_types();
             info.access_handler_mut().remove_cls();
             result?
@@ -138,7 +142,7 @@ impl_annotatable!(UnionConverter<'a>);
 
 impl<'a> UnionConverter<'a> {
     pub fn complete_type(
-        &self,
+        &mut self,
         info: &mut CompilerInfo,
         obj: &UnionTypeObject,
         reserve: bool,
@@ -165,8 +169,83 @@ impl<'a> UnionConverter<'a> {
         })
     }
 
+    // TODO: Deduplicate
+    fn parse_stmts(
+        &mut self,
+        info: &mut CompilerInfo,
+        converter: &mut ConverterHolder<'a>,
+        mut defaults: Option<&mut DefaultHolder<'a>>,
+    ) -> CompileResult<()> {
+        let op_converter = &mut converter.ops;
+        let operators = annotation::derive_operators(self.get_node().get_annotations())?;
+        for op in operators {
+            op_converter.parse_derived(info, op, &self.get_node().get_annotations()[0])?;
+        }
+        for stmt in self.get_node().get_body() {
+            if let Option::Some(annotations) = AnnotatableNode::try_get_annotations(stmt) {
+                if annotation::should_compile(stmt, info, annotations)? {
+                    self.parse_stmt(info, stmt, converter, reborrow_option(&mut defaults))?
+                }
+            } else {
+                self.parse_stmt(info, stmt, converter, reborrow_option(&mut defaults))?
+            }
+        }
+        Ok(())
+    }
+
+    fn parse_stmt(
+        &mut self,
+        info: &mut CompilerInfo,
+        stmt: &'a ClassStatementNode,
+        converter: &mut ConverterHolder<'a>,
+        defaults: Option<&mut DefaultHolder<'a>>,
+    ) -> CompileResult<()> {
+        match stmt {
+            ClassStatementNode::Declaration(decl) => {
+                if decl.get_descriptors().contains(&DescriptorNode::Static) {
+                    converter.attrs.parse(info, decl)
+                } else {
+                    self.add_variant(info, decl)
+                }
+            }
+            ClassStatementNode::DeclaredAssign(decl) => {
+                if decl.get_descriptors().contains(&DescriptorNode::Static) {
+                    converter.attrs.parse_assign(info, decl)
+                } else {
+                    Err(
+                        CompilerException::of("Non-static variables not allowed in unions", decl)
+                            .into(),
+                    )
+                }
+            }
+            _ => self.parse_statement(info, stmt, converter, defaults),
+        }
+    }
+
+    fn add_variant(&mut self, info: &CompilerInfo, decl: &DeclarationNode) -> CompileResult<()> {
+        let name = decl.get_name().get_name();
+        let ty = info.convert_type(decl.get_type().as_type())?;
+        let variant_count = self.variants.len();
+        match self.variants.entry(name.to_string()) {
+            Entry::Occupied(o) => Err(CompilerException::double_def(name, &o.get().1, decl).into()),
+            Entry::Vacant(v) => {
+                v.insert((
+                    variant_count as u16,
+                    AttributeInfo::new(
+                        false,
+                        AccessLevel::Public,
+                        MutableType::Standard,
+                        ty,
+                        decl.line_info().clone(),
+                    ),
+                ));
+                Ok(())
+            }
+        }
+    }
+
     fn parse_into_object(
-        &self,
+        &mut self,
         info: &mut CompilerInfo,
         converter: &mut ConverterHolder<'a>,
         obj: &UnionTypeObject,
@@ -174,17 +253,15 @@ impl<'a> UnionConverter<'a> {
         defaults: Option<&mut DefaultHolder<'a>>,
     ) -> CompileResult<()> {
         info.add_local_types(obj.clone().into(), obj.get_generic_info().get_param_map());
-        if is_const {
-            if !class_is_constant(converter) {
-                return Err(CompilerException::of(
-                    format!("Cannot make union '{}' const", obj.name()),
-                    self.node,
-                )
-                .into());
-            }
-            obj.is_const_class();
+        if is_const && !class_is_constant(converter) {
+            return Err(CompilerException::of(
+                format!("Cannot make union '{}' const", obj.name()),
+                self.node,
+            )
+            .into());
         }
-        self.parse_statements(info, converter, defaults)?;
+        obj.is_const_class(is_const);
+        self.parse_stmts(info, converter, defaults)?;
         converter
             .methods
             .add_union_methods(self.variant_methods(info, obj))?;
@@ -194,7 +271,7 @@ impl<'a> UnionConverter<'a> {
         obj.set_attributes(self.with_variant_infos(converter.all_attrs()));
         obj.set_static_attributes(self.with_static_variants(info, converter.static_attrs(), obj));
         obj.set_variants(self.get_variants());
-        obj.seal();
+        obj.seal(Some(info.global_info()), Some(info.builtins()));
         Ok(())
     }
 

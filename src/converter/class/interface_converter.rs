@@ -176,7 +176,7 @@ impl<'a> InterfaceConverter<'a> {
         ));
         obj.set_attributes(attr_infos(converter.all_attrs(), &self.generic_attrs));
         obj.set_static_attributes(attr_infos(converter.static_attrs(), &HashSet::new()));
-        obj.seal();
+        obj.seal(Some(info.global_info()), Some(info.builtins()));
         Ok(())
     }
 
@@ -218,11 +218,11 @@ impl<'a> InterfaceConverter<'a> {
             InterfaceStatementNode::Generic(gen) => match gen {
                 GenericDefinitionNode::Function(func) => {
                     self.generic_attrs.insert(func.get_name().get_name());
-                    converter.methods.parse_generic(info, func, None)
+                    converter.methods.parse_generic(info, func, defaults)
                 }
                 GenericDefinitionNode::Operator(op) => {
                     self.generic_ops.insert(op.get_op_code().get_operator());
-                    converter.ops.parse_generic(info, op, None)
+                    converter.ops.parse_generic(info, op, defaults)
                 }
             },
         }

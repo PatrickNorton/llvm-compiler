@@ -13,10 +13,12 @@ use crate::converter::compiler_info::CompilerInfo;
 use crate::converter::error::CompilerException;
 use crate::converter::fn_info::FunctionInfo;
 use crate::converter::generic::GenericInfo;
+use crate::converter::global_info::GlobalCompilerInfo;
 use crate::converter::CompileResult;
 use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::operator_sp::OpSpTypeNode;
 
+use super::supers::{SuperHolder, SuperRef};
 use super::{InterfaceType, StdTypeObject, TypeObject, UnionTypeObject};
 
 pub(super) use self::private::UserTypeInner;
@@ -31,7 +33,7 @@ pub enum UserType {
 #[derive(Debug)]
 pub struct UserInfo<O, A> {
     pub(super) name: String,
-    pub(super) supers: OnceCell<Vec<TypeObject>>,
+    pub(super) supers: SuperHolder,
     pub(super) operators: OnceCell<HashMap<OpSpTypeNode, O>>,
     pub(super) static_operators: OnceCell<HashMap<OpSpTypeNode, O>>,
     pub(super) info: GenericInfo,
@@ -45,13 +47,13 @@ pub trait UserTypeLike: UserTypeInner + PartialEq<TypeObject> {
     fn const_semantics(&self) -> bool;
     fn make_const(&self) -> Self;
     fn make_mut(&self) -> Self;
-    fn get_supers(&self) -> &[TypeObject];
+    fn get_supers(&self) -> SuperRef<'_>;
 
     fn is_subclass(&self, other: &TypeObject) -> bool {
         if self == other || self.same_base_type(&*THROWS_TYPE) {
             true
         } else if other.is_user_type() && self.same_base_type(other) {
-            if !self.const_semantics() && user_is_const(other) && self.is_const() {
+            if !self.const_semantics() && !user_is_const(other) && self.is_const() {
                 false
             } else if user_generics(other).is_empty() {
                 self.const_semantics() || user_is_const(other) || !self.is_const()
@@ -63,7 +65,9 @@ pub trait UserTypeLike: UserTypeInner + PartialEq<TypeObject> {
         } else if !self.is_const() && self.make_const() == *other {
             true
         } else {
-            self.get_supers().iter().any(|x| other.is_superclass(x))
+            self.get_supers()
+                .into_iter()
+                .any(|x| other.is_superclass(x))
         }
     }
 
@@ -176,7 +180,10 @@ pub trait UserTypeLike: UserTypeInner + PartialEq<TypeObject> {
         self.get_info().info.set_parent(self.clone().into())
     }
 
-    fn seal(&self) {
+    fn seal(&self, global_info: Option<&GlobalCompilerInfo>, builtins: Option<BuiltinRef<'_>>) {
+        if let (Option::Some(global_info), Option::Some(builtins)) = (global_info, builtins) {
+            self.add_fulfilled_interfaces(global_info, builtins);
+        }
         self.get_info().seal();
     }
 
@@ -206,6 +213,18 @@ pub trait UserTypeLike: UserTypeInner + PartialEq<TypeObject> {
             .static_attributes
             .set(attributes)
             .expect("Should only set static attributes once")
+    }
+
+    fn add_fulfilled_interfaces(&self, global_info: &GlobalCompilerInfo, builtins: BuiltinRef<'_>) {
+        assert!(!self.get_info().is_sealed.load(Ordering::Relaxed));
+        let fulfilled = private::fulfilled_interfaces(self, global_info, builtins).unwrap();
+        if !fulfilled.is_empty() {
+            self.get_info()
+                .supers
+                .fulfilled_interfaces
+                .set(fulfilled)
+                .expect("Fulfilled interfaces should only be set once")
+        }
     }
 }
 
@@ -325,7 +344,7 @@ impl UserType {
         user_match_all!(self: x => x.is_final())
     }
 
-    pub fn get_supers(&self) -> &[TypeObject] {
+    pub fn get_supers(&self) -> SuperRef {
         user_match_all!(self: x => x.get_supers())
     }
 
@@ -421,14 +440,17 @@ mod private {
     use std::ptr;
 
     use crate::converter::access_handler::AccessLevel;
-    use crate::converter::builtins::BuiltinRef;
+    use crate::converter::builtins::{self, BuiltinRef};
     use crate::converter::class::{AttributeInfo, MethodInfo};
     use crate::converter::fn_info::FunctionInfo;
+    use crate::converter::global_info::GlobalCompilerInfo;
     use crate::converter::mutable::MutableType;
-    use crate::converter::type_obj::{ObjectType, TypeObject};
+    use crate::converter::type_obj::{InterfaceType, ObjectType, TypeObject};
+    use crate::converter::CompileResult;
+    use crate::parser::line_info::LineInfo;
     use crate::parser::operator_sp::OpSpTypeNode;
 
-    use super::UserInfo;
+    use super::{UserInfo, UserTypeLike};
 
     pub trait UserTypeInner: Into<TypeObject> + Clone {
         type Operator: AsRef<MethodInfo> + Debug;
@@ -450,7 +472,7 @@ mod private {
             } else {
                 access
             };
-            for super_cls in self.get_info().supers.get().unwrap() {
+            for super_cls in self.get_info().supers.iter() {
                 if let Option::Some(sup_attr) =
                     super_cls.true_operator_info(o, new_access, builtins)
                 {
@@ -484,7 +506,7 @@ mod private {
                     } else {
                         access
                     };
-                    for super_cls in info.supers.get().unwrap() {
+                    for super_cls in info.supers.iter() {
                         let sup_attr = super_cls.attr_type_with_generics(value, new_access);
                         if let Option::Some(sup_attr) = sup_attr {
                             if attr_has_impl(value, super_cls) {
@@ -553,6 +575,95 @@ mod private {
         }
     }
 
+    pub(super) fn fulfilled_interfaces(
+        cls: &impl UserTypeLike,
+        global_info: &GlobalCompilerInfo,
+        builtins: BuiltinRef<'_>,
+    ) -> CompileResult<Vec<TypeObject>> {
+        let auto_interfaces;
+        // If the default interfaces haven't been set yet (occurrs when parsing
+        // builtins), get only the global default interfaces
+        let default_interfaces = match global_info.get_default_interfaces() {
+            Option::Some(x) => x,
+            Option::None => {
+                auto_interfaces = builtins::auto_interfaces();
+                &auto_interfaces
+            }
+        };
+        default_interfaces
+            .iter()
+            .filter(|&ty| {
+                !cls.is_subclass(&ty.clone().into()) && fulfills_contract(cls, ty, builtins)
+            })
+            .map(|ty| ty.generify(LineInfo::empty(), generified_params(cls, ty, builtins)))
+            .collect()
+    }
+
+    fn fulfills_contract(
+        cls: &impl UserTypeLike,
+        contractor: &InterfaceType,
+        builtins: BuiltinRef<'_>,
+    ) -> bool {
+        let (names, ops) = contractor.contract();
+        names
+            .iter()
+            .all(|attr| cls.attr_type(attr, AccessLevel::Public).is_some())
+            && ops.iter().all(|&op| {
+                cls.operator_info(op, AccessLevel::Public, builtins)
+                    .is_some()
+            })
+    }
+
+    fn generified_params(
+        cls: &impl UserTypeLike,
+        contractor: &InterfaceType,
+        builtins: BuiltinRef<'_>,
+    ) -> Vec<TypeObject> {
+        let generic_count = contractor.get_info().info.len();
+        if generic_count == 0 {
+            return Vec::new();
+        }
+        let contractor_t = contractor.clone().into();
+        let mut result = vec![None; generic_count];
+        let (names, ops) = contractor.contract();
+        for attr in names {
+            let attr_t = cls
+                .attr_type_with_generics(attr, AccessLevel::Public)
+                .unwrap();
+            let contractor_attr = contractor
+                .attr_type_with_generics(attr, AccessLevel::Public)
+                .unwrap();
+            for (index, val) in contractor_attr.generify_as(&contractor_t, &attr_t).unwrap() {
+                let index = index as usize;
+                if let Option::Some(ty) = result[index].take() {
+                    result[index] = Some(TypeObject::union(builtins, [ty, val]));
+                } else {
+                    result[index] = Some(val);
+                }
+            }
+        }
+        for &op in ops {
+            let attr_t = cls
+                .true_operator_info(op, AccessLevel::Public, builtins)
+                .unwrap();
+            let contractor_attr = contractor
+                .true_operator_info(op, AccessLevel::Public, builtins)
+                .unwrap();
+            let attr = contractor_attr
+                .to_callable()
+                .generify_as(&contractor_t, &attr_t.to_callable());
+            for (index, val) in attr.unwrap() {
+                let index = index as usize;
+                if let Option::Some(ty) = result[index].take() {
+                    result[index] = Some(TypeObject::union(builtins, [ty, val]));
+                } else {
+                    result[index] = Some(val);
+                }
+            }
+        }
+        result.into_iter().map(|x| x.unwrap()).collect()
+    }
+
     fn type_from_attr(
         is_const: bool,
         attr: &AttributeInfo,
@@ -611,7 +722,7 @@ impl<O: AsRef<MethodInfo>, A: AsRef<AttributeInfo>> UserInfo<O, A> {
     pub fn new(name: String, supers: Option<Vec<TypeObject>>, info: GenericInfo) -> Self {
         Self {
             name,
-            supers: supers.map_or_else(OnceCell::new, |x| x.into()),
+            supers: SuperHolder::new(supers.map_or_else(OnceCell::new, |x| x.into())),
             operators: OnceCell::new(),
             static_operators: OnceCell::new(),
             info,
@@ -636,7 +747,7 @@ impl<O: AsRef<MethodInfo>, A: AsRef<AttributeInfo>> UserInfo<O, A> {
             return Ok(AccessLevel::can_access(op.access_level, access)
                 .then(|| op.function_info.get_returns().to_vec()));
         }
-        for sup in self.supers.get().unwrap() {
+        for sup in self.supers.iter() {
             if let Option::Some(op_ret) = sup.op_ret_access(o, access, builtins) {
                 return Ok(Some(op_ret));
             }
@@ -648,7 +759,7 @@ impl<O: AsRef<MethodInfo>, A: AsRef<AttributeInfo>> UserInfo<O, A> {
         self.is_sealed
             .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
             .unwrap_or_else(|_| panic!("Class {} sealed twice", self.name));
-        self.supers.get_or_init(Vec::new);
+        self.supers.supers.get_or_init(Vec::new);
         self.operators.get_or_init(|| HashMap::new());
         self.static_operators.get_or_init(|| HashMap::new());
         self.attributes.get_or_init(|| HashMap::new());
@@ -741,7 +852,7 @@ struct RecursiveSuperIter<'a> {
 impl<'a> RecursiveSuperIter<'a> {
     pub fn new(val: &'a UserType) -> Self {
         Self {
-            values: val.get_supers().iter().collect(),
+            values: val.get_supers().into_iter().collect(),
         }
     }
 }

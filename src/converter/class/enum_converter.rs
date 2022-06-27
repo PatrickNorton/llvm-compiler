@@ -163,7 +163,7 @@ impl<'a> EnumConverter<'a> {
         obj.set_static_operators(converter.ops.static_operator_infos());
         obj.set_attributes(converter.all_attrs());
         obj.set_static_attributes(converter.static_attrs());
-        obj.seal();
+        obj.seal(Some(info.global_info()), Some(info.builtins()));
         Ok(())
     }
 

@@ -6,9 +6,11 @@ use itertools::Itertools;
 use once_cell::race::OnceBool;
 use once_cell::sync::{Lazy, OnceCell};
 
+use crate::converter::builtins::BuiltinRef;
 use crate::converter::class::{AttributeInfo, MethodInfo};
 use crate::converter::error::CompilerException;
 use crate::converter::generic::GenericInfo;
+use crate::converter::global_info::GlobalCompilerInfo;
 use crate::converter::CompileResult;
 use crate::parser::line_info::Lined;
 use crate::parser::operator_sp::OpSpTypeNode;
@@ -18,7 +20,7 @@ use super::macros::{
     user_type_from,
 };
 use super::user::{UserInfo, UserTypeInner, UserTypeLike};
-use super::{TypeObject, UserType};
+use super::{SuperRef, TypeObject, UserType};
 
 #[derive(Debug, Clone)]
 pub struct UnionTypeObject {
@@ -82,6 +84,7 @@ impl UnionTypeObject {
     pub fn set_supers(&self, supers: Vec<TypeObject>) {
         self.get_info()
             .supers
+            .supers
             .set(supers)
             .expect("Supers should only be set once")
     }
@@ -112,8 +115,8 @@ impl UnionTypeObject {
         }
     }
 
-    pub fn is_const_class(&self) {
-        self.value.info.is_const_class.set(true).unwrap();
+    pub fn is_const_class(&self, is_const: bool) {
+        self.value.info.is_const_class.set(is_const).unwrap();
     }
 
     pub fn variant_count(&self) -> u16 {
@@ -257,12 +260,14 @@ impl UserTypeLike for UnionTypeObject {
         }
     }
 
-    fn get_supers(&self) -> &[TypeObject] {
-        self.get_info().supers.get().unwrap()
+    fn get_supers(&self) -> SuperRef<'_> {
+        self.get_info().supers.reference()
     }
 
-    fn seal(&self) {
-        // FIXME: addFulfilledInterfaces
+    fn seal(&self, global_info: Option<&GlobalCompilerInfo>, builtins: Option<BuiltinRef<'_>>) {
+        if let (Option::Some(global_info), Option::Some(builtins)) = (global_info, builtins) {
+            self.add_fulfilled_interfaces(global_info, builtins);
+        }
         self.value.info.is_const_class.get_or_init(|| true);
         self.get_info().seal();
     }
@@ -311,7 +316,7 @@ mod tests {
     #[test]
     fn simple_name() {
         let ty = UnionTypeObject::new("test".to_string(), Some(Vec::new()), GenericInfo::empty());
-        ty.seal();
+        ty.seal(None, None);
         assert_eq!(ty.name(), "test");
         let typedefed = ty.typedef_as("test2".to_string());
         assert_eq!(typedefed.name(), "test2");
@@ -321,7 +326,7 @@ mod tests {
     fn generic_name() {
         let generic = GenericInfo::new(vec![TemplateParam::new("T".to_string(), 0, OBJECT.into())]);
         let ty = UnionTypeObject::new("test".to_string(), Some(Vec::new()), generic);
-        ty.seal();
+        ty.seal(None, None);
         assert_eq!(ty.name(), "test");
         let typedefed = ty.typedef_as("test2".to_string());
         assert_eq!(typedefed.name(), "test2");
@@ -339,7 +344,7 @@ mod tests {
             TypeTypeObject::new_empty().into(),
         )]);
         let ty = UnionTypeObject::new("test".to_string(), Some(Vec::new()), generic);
-        ty.seal();
+        ty.seal(None, None);
         assert!(ty
             .generify(
                 LineInfo::empty(),
@@ -366,7 +371,7 @@ mod tests {
         let generics =
             GenericInfo::new(vec![TemplateParam::new("T".to_string(), 0, OBJECT.into())]);
         let ty = UnionTypeObject::new("test".to_string(), Some(Vec::new()), generics);
-        ty.seal();
+        ty.seal(None, None);
         assert_eq!(ty.get_generics(), Vec::<TypeObject>::new());
         let generified = ty.generify(LineInfo::empty(), vec![OBJECT.into()]).unwrap();
         assert_eq!(generified.get_generics(), &[OBJECT]);
@@ -376,7 +381,7 @@ mod tests {
     fn same_base_type() {
         let generic = GenericInfo::new(vec![TemplateParam::new("T".to_string(), 0, OBJECT.into())]);
         let ty = UnionTypeObject::new("test".to_string(), Some(Vec::new()), generic);
-        ty.seal();
+        ty.seal(None, None);
         let ty_obj = ty.clone().into();
         assert!(ty.same_base_type(&ty_obj));
         let typedefed = ty.typedef_as("test2".to_string());

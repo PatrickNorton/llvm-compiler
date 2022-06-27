@@ -19,7 +19,7 @@ use super::macros::{
     user_type_from,
 };
 use super::user::{UserInfo, UserTypeInner, UserTypeLike};
-use super::TypeObject;
+use super::{SuperRef, TypeObject};
 
 #[derive(Debug, Clone)]
 pub struct InterfaceType {
@@ -80,19 +80,20 @@ impl InterfaceType {
                 .map(|(op, x)| (op, InterfaceFnInfo::new(x, false)))
                 .collect(),
         );
-        this.seal();
+        this.seal(None, None);
         this
     }
 
     pub fn new_attrs(
         name: String,
         generics: GenericInfo,
+        supers: Option<Vec<TypeObject>>,
         operators: HashMap<OpSpTypeNode, MethodInfo>,
         op_contract: HashSet<OpSpTypeNode>,
         attrs: HashMap<String, AttributeInfo>,
         attr_contract: HashSet<String>,
     ) -> Self {
-        let this = Self::new(name, generics, Some(Vec::new()));
+        let this = Self::new(name, generics, supers);
         this.set_operators(
             operators
                 .into_iter()
@@ -108,7 +109,7 @@ impl InterfaceType {
                 })
                 .collect(),
         );
-        this.seal();
+        this.seal(None, None);
         this
     }
 
@@ -238,7 +239,7 @@ impl InterfaceType {
             .filter(|(_, x)| !x.has_impl)
             .map(|(&x, _)| x)
             .collect::<HashSet<_>>();
-        for sup in info.supers.get().unwrap() {
+        for sup in info.supers.iter() {
             // Interfaces are the only classes with contracts
             if let TypeObject::Interface(i) = sup {
                 let (contract_methods, contract_ops) = i.contract();
@@ -297,8 +298,8 @@ impl UserTypeLike for InterfaceType {
         }
     }
 
-    fn get_supers(&self) -> &[TypeObject] {
-        self.get_info().supers.get().unwrap()
+    fn get_supers(&self) -> SuperRef<'_> {
+        self.get_info().supers.reference()
     }
 }
 
@@ -468,7 +469,7 @@ mod tests {
     #[test]
     fn simple_contract() {
         let ty = InterfaceType::new("test".to_string(), GenericInfo::empty(), Some(Vec::new()));
-        ty.seal();
+        ty.seal(None, None);
         let (methods, ops) = ty.get_contract();
         assert!(
             methods.is_empty(),
@@ -485,7 +486,7 @@ mod tests {
         ty.set_attributes(hash_map!("foo".to_string() => attr_info));
         let op_info = InterfaceFnInfo::new(sample_method_info(), true);
         ty.set_operators(hash_map!(OpSpTypeNode::New => op_info));
-        ty.seal();
+        ty.seal(None, None);
         let (methods, ops) = ty.get_contract();
         assert!(
             methods.is_empty(),
@@ -502,7 +503,7 @@ mod tests {
         ty.set_attributes(hash_map!("foo".to_string() => attr_info));
         let op_info = InterfaceFnInfo::new(sample_method_info(), false);
         ty.set_operators(hash_map!(OpSpTypeNode::New => op_info));
-        ty.seal();
+        ty.seal(None, None);
         let (methods, ops) = ty.get_contract();
         assert_eq!(methods, hash_set!("foo".to_string()));
         assert_eq!(ops, hash_set!(OpSpTypeNode::New));

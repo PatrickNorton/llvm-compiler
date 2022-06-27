@@ -135,7 +135,11 @@ impl Builtins {
                 _ => panic!(),
             }
         } else {
-            assert!(self.iterable().is_superclass(val));
+            assert!(
+                self.iterable().is_superclass(val),
+                "{} is not an iterable",
+                val.name()
+            );
             let rets = val.try_op_ret_access(
                 LineInfo::empty(),
                 OpSpTypeNode::Iter,
@@ -322,7 +326,7 @@ fn simple_test_type() -> TypeObject {
         GenericInfo::empty(),
         true,
     );
-    ty.seal();
+    ty.seal(None, None);
     ty.into()
 }
 
