@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -21,6 +21,7 @@ use super::class::ClassInfo;
 use super::constant::{FunctionConstant, LangConstant};
 use super::fn_info::FunctionInfo;
 use super::function::Function;
+use super::import_handler::ExportInfo;
 use super::switch_table::SwitchTable;
 use super::test_fn::convert_test_start;
 use super::type_obj::{BaseType, InterfaceType, UserType};
@@ -49,6 +50,7 @@ pub struct GlobalCompilerInfo {
     test_functions: Mutex<Vec<FunctionConstant>>,
 
     default_interfaces: OnceCell<HashSet<InterfaceType>>,
+    export_infos: OnceCell<HashMap<PathBuf, ExportInfo>>,
 }
 
 impl GlobalCompilerInfo {
@@ -67,6 +69,7 @@ impl GlobalCompilerInfo {
             warnings: Arc::new(ErrorCounter::new()),
             test_functions: Mutex::new(Vec::new()),
             default_interfaces: OnceCell::new(),
+            export_infos: OnceCell::new(),
         }
     }
 
@@ -243,6 +246,22 @@ impl GlobalCompilerInfo {
                 .get_bytes()
                 .find_constants(&mut constants);
         }
+        for cls in self.classes.get_mut() {
+            let cls = cls.as_ref().unwrap();
+            for method in cls.get_method_defs().values() {
+                method.get_bytes().find_constants(&mut constants);
+            }
+            for static_method in cls.get_static_methods().values() {
+                static_method.get_bytes().find_constants(&mut constants);
+            }
+            for op in cls.get_operator_defs().values() {
+                op.get_bytes().find_constants(&mut constants);
+            }
+            for (get, set) in cls.get_properties().values() {
+                get.get_bytes().find_constants(&mut constants);
+                set.get_bytes().find_constants(&mut constants);
+            }
+        }
         constants
     }
 
@@ -270,6 +289,10 @@ impl GlobalCompilerInfo {
         &**self.test_functions.get_mut()
     }
 
+    pub fn get_default_interfaces(&self) -> Option<&HashSet<InterfaceType>> {
+        self.default_interfaces.get()
+    }
+
     pub fn set_default_interfaces(&self, default_interfaces: HashSet<InterfaceType>) {
         self.default_interfaces
             .set(default_interfaces)
@@ -280,6 +303,16 @@ impl GlobalCompilerInfo {
         self.builtins
             .set(builtins)
             .expect("Cannot set builtins twice")
+    }
+
+    pub fn set_export_infos(&self, infos: HashMap<PathBuf, ExportInfo>) {
+        self.export_infos
+            .set(infos)
+            .expect("Cannot set export infos twice")
+    }
+
+    pub fn export_info(&self, path: &Path) -> &ExportInfo {
+        &self.export_infos.get().expect("Export infos should be set")[path]
     }
 }
 

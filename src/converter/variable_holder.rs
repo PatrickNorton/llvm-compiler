@@ -14,7 +14,8 @@ use super::access_handler::AccessHandler;
 use super::builtins::{BuiltinRef, Builtins, ParsedBuiltins};
 use super::constant::{LangConstant, ModuleConstant};
 use super::error::CompilerException;
-use super::import_handler::{get_import_handler, ImportHandler, ImportInfo};
+use super::global_info::GlobalCompilerInfo;
+use super::import_handler::{ImportHandler, ImportInfo};
 use super::lang_obj::LangObject;
 use super::mutable::MutableType;
 use super::type_obj::{ModuleType, TypeObject};
@@ -119,15 +120,17 @@ impl VariableHolder {
         &mut self,
         import_handler: &ImportHandler,
         warnings: &WarningHolder,
+        global_info: &GlobalCompilerInfo,
     ) -> CompileResult<()> {
         for (path, info) in import_handler.import_infos() {
             let var_map = &mut self.variables[0];
             if info.get_names().is_empty() {
-                let handler = get_import_handler(path);
+                let handler = global_info.export_info(path);
                 let mut export_map = HashMap::with_capacity(handler.get_exports().len());
                 let mut export_indices = HashMap::with_capacity(handler.get_exports().len());
                 for (name, ty) in handler.get_exports() {
-                    let constant = import_handler.imported_constant(info, path, name)?;
+                    let constant =
+                        import_handler.imported_constant(info, path, name, global_info)?;
                     export_map.insert(name.clone(), ty.clone().unwrap());
                     export_indices.insert(name.clone(), constant.unwrap());
                 }
@@ -148,8 +151,9 @@ impl VariableHolder {
             } else if let Option::Some(as_names) = info.get_as_names() {
                 for (name, as_name) in zip(info.get_names(), as_names) {
                     if !var_map.contains_key(as_name) {
-                        let ty = import_handler.imported_type(info, path, name)?;
-                        let const_index = import_handler.imported_constant(info, path, name)?;
+                        let ty = import_handler.imported_type(info, path, name, global_info)?;
+                        let const_index =
+                            import_handler.imported_constant(info, path, name, global_info)?;
                         var_map.insert(
                             as_name.clone(),
                             Self::get_variable_info(
@@ -164,8 +168,9 @@ impl VariableHolder {
                 }
             } else if info.get_names()[0] != "*" {
                 for name in info.get_names() {
-                    let ty = import_handler.imported_type(info, path, name)?;
-                    let const_index = import_handler.imported_constant(info, path, name)?;
+                    let ty = import_handler.imported_type(info, path, name, global_info)?;
+                    let const_index =
+                        import_handler.imported_constant(info, path, name, global_info)?;
                     var_map.insert(
                         name.clone(),
                         Self::get_variable_info(
@@ -178,9 +183,10 @@ impl VariableHolder {
                     );
                 }
             } else {
-                let handler = get_import_handler(path);
+                let handler = global_info.export_info(path);
                 for (name, ty) in handler.get_exports() {
-                    let const_index = import_handler.imported_constant(info, path, name)?;
+                    let const_index =
+                        import_handler.imported_constant(info, path, name, global_info)?;
                     var_map.insert(
                         name.clone(),
                         Self::get_variable_info(
@@ -210,7 +216,7 @@ impl VariableHolder {
                 true,
                 false,
                 constant,
-                var_numbers.next().try_into().unwrap(),
+                u16::MAX,
                 info.line_info().clone(),
             ))
         } else {

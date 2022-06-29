@@ -127,14 +127,11 @@ impl<'a> CompilerInfo<'a> {
     }
 
     pub fn compile(&mut self, node: &TopNode) -> CompileResult<()> {
+        assert!(self.linked);
         if self.compiled {
             return Ok(());
         }
-        let defaults = self.link(node)?;
         self.add_locals()?;
-        if let Option::Some(def) = defaults {
-            def.compile(self)?;
-        }
         self.add_stack_frame();
         let mut bytes = BytecodeList::new();
         for stmt in node {
@@ -149,17 +146,16 @@ impl<'a> CompilerInfo<'a> {
         Ok(())
     }
 
-    #[must_use = "Default holder must be compiled"]
-    pub fn link<'b>(&mut self, node: &'b TopNode) -> CompileResult<Option<DefaultHolder<'b>>> {
-        if self.linked {
-            return Ok(None);
-        }
-        let mut defaults = DefaultHolder::new();
-        // self.load_dependents(node)?;
-        let linker = linker::link(self, node, &mut defaults)?;
+    pub fn link<'b>(
+        &mut self,
+        node: &'b TopNode,
+        defaults: &mut DefaultHolder<'b>,
+    ) -> CompileResult<()> {
+        assert!(!self.linked);
+        let linker = linker::link(self, node, defaults)?;
         self.import_handler.set_from_linker(linker)?;
         self.linked = true;
-        Ok(Some(defaults))
+        Ok(())
     }
 
     pub fn add_globals(
@@ -172,7 +168,7 @@ impl<'a> CompilerInfo<'a> {
 
     fn add_locals(&mut self) -> CompileResult<()> {
         self.var_holder
-            .add_locals(&self.import_handler, &self.warnings)
+            .add_locals(&self.import_handler, &self.warnings, self.global_info)
     }
 
     pub fn loop_manager(&mut self) -> &mut LoopManager {
