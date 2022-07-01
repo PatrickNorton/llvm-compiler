@@ -1,8 +1,7 @@
 use crate::converter::file_writer::ConstantSet;
-use crate::converter::function::Function;
 use crate::parser::operator_sp::OpSpTypeNode;
 
-use super::BytecodeType;
+use super::{BytecodeFmt, BytecodeType};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct OperatorBytecode {
@@ -21,7 +20,7 @@ impl BytecodeType for OperatorBytecode {
     fn write_str(
         &self,
         f: &mut std::fmt::Formatter<'_>,
-        _functions: &[&Function],
+        _info: BytecodeFmt<'_>,
     ) -> std::fmt::Result {
         write!(f, "{} ({})", self.value as u16, self.value)
     }

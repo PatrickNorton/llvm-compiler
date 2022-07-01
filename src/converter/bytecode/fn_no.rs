@@ -1,7 +1,6 @@
 use crate::converter::file_writer::ConstantSet;
-use crate::converter::function::Function;
 
-use super::BytecodeType;
+use super::{BytecodeFmt, BytecodeType};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FunctionNoBytecode {
@@ -20,13 +19,13 @@ impl BytecodeType for FunctionNoBytecode {
     fn write_str(
         &self,
         f: &mut std::fmt::Formatter<'_>,
-        functions: &[&Function],
+        info: BytecodeFmt<'_>,
     ) -> std::fmt::Result {
         write!(
             f,
             "{} ({})",
             self.value,
-            functions[self.value as usize].get_name()
+            info.functions[self.value as usize].get_name()
         )
     }
 

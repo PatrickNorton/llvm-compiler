@@ -1,9 +1,8 @@
 use std::fmt::Display;
 
 use crate::converter::file_writer::ConstantSet;
-use crate::converter::function::Function;
 
-use super::BytecodeType;
+use super::{BytecodeFmt, BytecodeType};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct StackPosBytecode {
@@ -22,7 +21,7 @@ impl BytecodeType for StackPosBytecode {
     fn write_str(
         &self,
         f: &mut std::fmt::Formatter<'_>,
-        _functions: &[&Function],
+        _info: BytecodeFmt<'_>,
     ) -> std::fmt::Result {
         Display::fmt(&self.position, f)
     }

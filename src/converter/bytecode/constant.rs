@@ -1,9 +1,8 @@
 use crate::converter::constant::LangConstant;
 use crate::converter::file_writer::ConstantSet;
-use crate::converter::function::Function;
 use crate::util::usize_to_short_bytes;
 
-use super::BytecodeType;
+use super::{BytecodeFmt, BytecodeType};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ConstantBytecode {
@@ -25,10 +24,11 @@ impl BytecodeType for ConstantBytecode {
 
     fn write_str(
         &self,
-        _f: &mut std::fmt::Formatter<'_>,
-        _functions: &[&Function],
+        f: &mut std::fmt::Formatter<'_>,
+        info: BytecodeFmt<'_>,
     ) -> std::fmt::Result {
-        todo!("Needs set of constants")
+        let index = info.constants.get_index_of(&self.value).unwrap();
+        write!(f, "{} ({})", index, self.value.display(info.builtins))
     }
 
     fn assemble(&self, buffer: &mut Vec<u8>, constants: &ConstantSet) {

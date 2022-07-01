@@ -4,10 +4,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use crate::converter::file_writer::ConstantSet;
-use crate::converter::function::Function;
 use crate::util::usize_to_bytes;
 
-use super::BytecodeType;
+use super::{BytecodeFmt, BytecodeType};
 
 #[derive(Debug, Clone)]
 pub struct Label {
@@ -57,7 +56,7 @@ impl BytecodeType for LocationBytecode {
     fn write_str(
         &self,
         f: &mut std::fmt::Formatter<'_>,
-        _functions: &[&Function],
+        _info: BytecodeFmt<'_>,
     ) -> std::fmt::Result {
         Display::fmt(&self.value.get_value(), f)
     }

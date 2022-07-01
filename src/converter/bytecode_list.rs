@@ -3,6 +3,7 @@ use std::io::Write;
 
 use indexmap::IndexSet;
 
+use super::builtins::Builtins;
 use super::bytecode::{Bytecode, Label};
 use super::constant::LangConstant;
 use super::file_writer::ConstantSet;
@@ -37,7 +38,7 @@ pub enum BytecodeValue {
 /// ```
 /// let list = BytecodeList::of(Bytecode::Null());
 /// let first_index = list.enumerate().next().unwrap().0;
-/// assert!(matches!())
+/// assert!(matches!(first_index, Bytecode::Null()));
 /// ```
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Index {
@@ -114,13 +115,20 @@ impl BytecodeList {
     pub fn disassemble_to<W: Write>(
         &self,
         functions: &[&Function],
+        constants: &ConstantSet,
+        builtins: &Builtins,
         stream: &mut W,
     ) -> std::io::Result<()> {
         self.set_labels();
         let mut i = 0;
         for value in &self.values {
             if let BytecodeValue::Bytecode(by) = value {
-                writeln!(stream, "{:<7}{}", i, by.display(functions))?;
+                writeln!(
+                    stream,
+                    "{:<7}{}",
+                    i,
+                    by.display(functions, constants, builtins)
+                )?;
                 i += by.size();
             }
         }
@@ -198,7 +206,9 @@ pub(super) use bytecode_list;
 
 #[cfg(test)]
 mod tests {
+    use crate::converter::builtins::Builtins;
     use crate::converter::bytecode::{Bytecode, Label};
+    use crate::converter::file_writer::ConstantSet;
 
     use super::BytecodeList;
 
@@ -206,7 +216,13 @@ mod tests {
     fn empty_disassemble() {
         let list = BytecodeList::new();
         let mut text = Vec::new();
-        list.disassemble_to(&[], &mut text).unwrap();
+        list.disassemble_to(
+            &[],
+            &ConstantSet::default(),
+            &Builtins::test_builtins(),
+            &mut text,
+        )
+        .unwrap();
         assert_eq!(text, &[]);
     }
 
@@ -214,7 +230,13 @@ mod tests {
     fn of_disassemble() {
         let list = BytecodeList::of(Bytecode::Nop());
         let mut text = Vec::new();
-        list.disassemble_to(&[], &mut text).unwrap();
+        list.disassemble_to(
+            &[],
+            &ConstantSet::default(),
+            &Builtins::test_builtins(),
+            &mut text,
+        )
+        .unwrap();
         assert_eq!(text, "0      NOP\n".as_bytes());
     }
 
@@ -223,7 +245,13 @@ mod tests {
         let mut list = BytecodeList::new();
         list.add(Bytecode::Nop());
         let mut text = Vec::new();
-        list.disassemble_to(&[], &mut text).unwrap();
+        list.disassemble_to(
+            &[],
+            &ConstantSet::default(),
+            &Builtins::test_builtins(),
+            &mut text,
+        )
+        .unwrap();
         assert_eq!(text, "0      NOP\n".as_bytes());
     }
 
@@ -231,7 +259,13 @@ mod tests {
     fn two_disassemble() {
         let list = bytecode_list!(Bytecode::Nop(), Bytecode::LoadNull());
         let mut text = Vec::new();
-        list.disassemble_to(&[], &mut text).unwrap();
+        list.disassemble_to(
+            &[],
+            &ConstantSet::default(),
+            &Builtins::test_builtins(),
+            &mut text,
+        )
+        .unwrap();
         assert_eq!(text, "0      NOP\n1      LOAD_NULL\n".as_bytes());
     }
 
@@ -254,7 +288,13 @@ mod tests {
         list.add(Bytecode::LoadNull());
         list.add_label(label);
         let mut text = Vec::new();
-        list.disassemble_to(&[], &mut text).unwrap();
+        list.disassemble_to(
+            &[],
+            &ConstantSet::default(),
+            &Builtins::test_builtins(),
+            &mut text,
+        )
+        .unwrap();
         assert_eq!(
             text,
             "0      JUMP            6\n5      LOAD_NULL\n".as_bytes()

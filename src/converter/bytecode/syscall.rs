@@ -1,8 +1,7 @@
 use crate::converter::file_writer::ConstantSet;
-use crate::converter::function::Function;
 use crate::converter::syscalls::syscall_name;
 
-use super::BytecodeType;
+use super::{BytecodeFmt, BytecodeType};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SyscallBytecode {
@@ -21,7 +20,7 @@ impl BytecodeType for SyscallBytecode {
     fn write_str(
         &self,
         f: &mut std::fmt::Formatter<'_>,
-        _functions: &[&Function],
+        _info: BytecodeFmt<'_>,
     ) -> std::fmt::Result {
         write!(f, "{} ({})", self.syscall, syscall_name(self.syscall))
     }
