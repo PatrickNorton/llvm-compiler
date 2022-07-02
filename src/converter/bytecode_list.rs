@@ -150,10 +150,17 @@ impl BytecodeList {
         for value in &self.values {
             if let BytecodeValue::Bytecode(by) = value {
                 if let Option::Some(constant) = by.get_constant() {
-                    constants.insert(constant.clone());
+                    Self::add_recursive_constants(constant.clone(), constants);
                 }
             }
         }
+    }
+
+    fn add_recursive_constants(constant: LangConstant, constants: &mut IndexSet<LangConstant>) {
+        for c in constant.constituent_values() {
+            Self::add_recursive_constants(c.clone(), constants);
+        }
+        constants.insert(constant);
     }
 
     pub fn next_label(&self, start: Index) -> Option<Index> {

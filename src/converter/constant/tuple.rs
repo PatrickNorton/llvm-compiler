@@ -58,6 +58,10 @@ impl TupleConstant {
         }
         bytes
     }
+
+    pub fn constituent_values(&self) -> Vec<&LangConstant> {
+        self.value.iter().collect_vec()
+    }
 }
 
 impl From<TupleConstant> for LangConstant {

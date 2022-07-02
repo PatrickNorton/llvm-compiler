@@ -245,6 +245,16 @@ impl LangConstant {
         }
     }
 
+    pub fn constituent_values(&self) -> Vec<&LangConstant> {
+        match self {
+            LangConstant::Option(o) => o.constituent_values(),
+            LangConstant::OptionType(o) => o.constituent_values(),
+            LangConstant::Temp(t) => t.constituent_values(),
+            LangConstant::Tuple(t) => t.constituent_values(),
+            _ => vec![],
+        }
+    }
+
     pub fn display<'a>(&'a self, builtins: &'a Builtins) -> impl Display + 'a {
         ConstantNamer::new(self, builtins)
     }

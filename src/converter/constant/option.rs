@@ -48,6 +48,10 @@ impl OptionConstant {
         bytes.extend(usize_to_short_bytes(const_index));
         bytes
     }
+
+    pub fn constituent_values(&self) -> Vec<&LangConstant> {
+        vec![&self.value]
+    }
 }
 
 impl OptionTypeConstant {
@@ -75,6 +79,10 @@ impl OptionTypeConstant {
         let const_index = constants.get_index_of(&self.value.inner).unwrap();
         bytes.extend(usize_to_bytes(const_index));
         bytes
+    }
+
+    pub fn constituent_values(&self) -> Vec<&LangConstant> {
+        vec![&self.value.inner]
     }
 }
 

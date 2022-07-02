@@ -68,6 +68,13 @@ impl TempConstant {
     pub fn to_bytes(&self) -> Vec<u8> {
         panic!("All temporary constants should be written out during instantiation")
     }
+
+    pub fn constituent_values(&self) -> Vec<&LangConstant> {
+        match self.value.value.get() {
+            Option::Some(x) => vec![x],
+            Option::None => vec![],
+        }
+    }
 }
 
 impl From<TempConstant> for LangConstant {
