@@ -134,6 +134,7 @@ fn print_disassembly<W: Write>(
         function
             .get_bytes()
             .disassemble_to(&functions, constants, builtins, stream)?;
+        writeln!(stream)?;
     }
     for cls in classes {
         let cls = cls
@@ -145,33 +146,39 @@ fn print_disassembly<W: Write>(
             method
                 .get_bytes()
                 .disassemble_to(&functions, constants, builtins, stream)?;
+            writeln!(stream)?;
         }
         for (name, method) in cls.get_static_methods() {
             writeln!(stream, "{}.{}:", cls_name, name)?;
             method
                 .get_bytes()
                 .disassemble_to(&functions, constants, builtins, stream)?;
+            writeln!(stream)?;
         }
         for (op, method) in cls.get_operator_defs() {
             writeln!(stream, "{}.{}:", cls_name, op)?;
             method
                 .get_bytes()
                 .disassemble_to(&functions, constants, builtins, stream)?;
+            writeln!(stream)?;
         }
         for (name, (getter, setter)) in cls.get_properties() {
             writeln!(stream, "{}.{}.get:", cls_name, name)?;
             getter
                 .get_bytes()
                 .disassemble_to(&functions, constants, builtins, stream)?;
+            writeln!(stream)?;
             writeln!(stream, "{}.{}.set:", cls_name, name)?;
             setter
                 .get_bytes()
                 .disassemble_to(&functions, constants, builtins, stream)?;
+            writeln!(stream)?;
         }
     }
     for (i, table) in info.get_tables().iter().enumerate() {
         writeln!(stream, "Table {}:", i)?;
         table.disassemble_to(stream)?;
+        writeln!(stream)?;
     }
     stream.flush()
 }
