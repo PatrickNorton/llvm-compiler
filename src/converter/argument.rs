@@ -617,9 +617,8 @@ impl ArgumentInfo {
     fn next_eligible_param(&self, next_unused: usize, params: &[Argument]) -> usize {
         params[next_unused..]
             .iter()
-            .enumerate()
-            .find(|(_, param)| param.name.is_empty())
-            .map_or_else(|| params.len(), |x| x.0)
+            .position(|param| param.name.is_empty())
+            .map_or_else(|| params.len(), |x| x + next_unused)
     }
 
     fn kwargs_with_defaults<T>(&self, to_exclude: &HashMap<&str, T>) -> usize {
@@ -631,8 +630,12 @@ impl ArgumentInfo {
 }
 
 impl<'a> ArgPosition<'a> {
-    pub fn is_vararg(&self) -> bool {
-        matches!(self, ArgPosition::Vararg(_, _))
+    #[inline]
+    pub fn as_vararg(&self) -> Option<(&[u16], &TypeObject)> {
+        match self {
+            ArgPosition::Vararg(x, y) => Some((x, y)),
+            _ => None,
+        }
     }
 }
 

@@ -1,5 +1,4 @@
 use std::borrow::Cow;
-use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::iter::repeat_with;
 
@@ -272,18 +271,20 @@ impl<'a> FunctionCallConverter<'a> {
     ) -> CompileResult<()> {
         assert!(arg_positions.len() <= u16::MAX.into());
         let arg_len = arg_positions.len() as u16;
-        let swaps = if let Option::Some(vararg_pos) = get_vararg_pos(arg_positions) {
+        let swaps = if let Some((vararg_pos, varargs, vararg_ty)) = get_varargs(arg_positions) {
             // Phases of argument-repositioning:
             // 1. Move all variadic arguments to top of stack
             // 2. Load type of list
             // 3. Pack arguments into list
             // 4. Do standard swapping from there
-            let (varargs, vararg_ty) = match &arg_positions[vararg_pos as usize] {
-                ArgPosition::Vararg(x, y) => (x, y),
-                _ => panic!("get_vararg_pos didn't work correctly"),
-            };
             assert!(varargs.len() <= u16::MAX.into());
             let vararg_len: u16 = varargs.len().try_into().unwrap();
+            // NOTE: This will be improved by feature(is_sorted) (#53485)
+            assert!(
+                varargs.iter().tuple_windows().all(|(x, y)| x < y),
+                "{}",
+                varargs.iter().join(", ")
+            );
             for (i, &location) in varargs.iter().enumerate() {
                 // FIXME? This assumes the list is sorted (values which are
                 //  unsorted won't "pass" the next ones)
@@ -292,7 +293,7 @@ impl<'a> FunctionCallConverter<'a> {
                 // and the + i is there to compensate for the fact that each
                 // value that is brought up "passes" all the others on the
                 // stack, and thus shifts them 1 further away from the top.
-                let default_count = count_defaults(vararg_pos.into(), arg_positions) as u16;
+                let default_count = count_defaults(vararg_pos, arg_positions) as u16;
                 let stack_loc = param_len - location + default_count + i as u16;
                 AssignConverter::bring_to_top(bytes, stack_loc - 1);
             }
@@ -313,14 +314,14 @@ impl<'a> FunctionCallConverter<'a> {
                             // If the vararg is supposed to be below the default value,
                             // it's been "passed up" past this value in order to be
                             // packed, so we need to adjust our parameter accordingly.
-                            // NOTE: This doesn't need the Util.countLessThan call
-                            // because `i` is based on the *final* position of the
-                            // argument (we can assume it was placed correctly in that
-                            // regard, thanks to convertInnerArgs), therefore it doesn't
-                            // need adjusting for any of the pre-vararg positions.
-                            let i = i as u16;
-                            let adjust_for_vararg = if i > vararg_pos { 1 } else { 0 };
-                            i - adjust_for_vararg
+                            // NOTE: This doesn't need the argument adjustment like in
+                            // ArgPosition::Standard() because `i` is based on the *final*
+                            // position of the argument (we can assume it was placed
+                            // correctly in that regard, thanks to convert_inner_args),
+                            // therefore it doesn't need adjusting for any of the pre-
+                            // vararg positions.
+                            let adjust_for_vararg = (i > vararg_pos) as u16;
+                            (i as u16) - adjust_for_vararg
                         }
                         ArgPosition::Vararg(_, _) => arg_positions.len() as u16 - 1,
                     }
@@ -623,20 +624,11 @@ fn get_args(info: &mut CompilerInfo, args: &[ArgumentNode]) -> CompileResult<Vec
 }
 
 fn turn_map_to_list(values: HashMap<u16, TypeObject>) -> Vec<TypeObject> {
-    let mut result = Vec::new();
+    let mut result = vec![None; values.len()];
     for (index, value) in values {
         let index = index as usize;
-        match index.cmp(&result.len()) {
-            Ordering::Equal => result.push(Some(value)),
-            Ordering::Less => {
-                assert_eq!(result[index], None);
-                result[index] = Some(value);
-            }
-            Ordering::Greater => {
-                result.resize_with(index + 1, || None);
-                result[index] = Some(value);
-            }
-        }
+        assert_eq!(result[index], None);
+        result[index] = Some(value);
     }
     result.into_iter().map(|x| x.unwrap()).collect()
 }
@@ -714,11 +706,13 @@ fn add_swap(bytes: &mut BytecodeList, d1: u16, d2: u16) {
     }
 }
 
-fn get_vararg_pos(arg_positions: &[ArgPosition]) -> Option<u16> {
+fn get_varargs<'a>(
+    arg_positions: &'a [ArgPosition<'_>],
+) -> Option<(usize, &'a [u16], &'a TypeObject)> {
     arg_positions
         .iter()
-        .position(|x| x.is_vararg())
-        .map(|i| i.try_into().unwrap())
+        .enumerate()
+        .find_map(|(i, x)| x.as_vararg().map(|(a, b)| (i, a, b)))
 }
 
 fn count_defaults(start: usize, args: &[ArgPosition]) -> usize {
