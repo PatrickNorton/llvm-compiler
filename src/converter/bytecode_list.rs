@@ -105,7 +105,7 @@ impl BytecodeList {
         self.values.retain(|_| {
             let old_i = i;
             i += 1;
-            indices.iter().any(|(start, end)| match end {
+            !indices.iter().any(|(start, end)| match end {
                 Option::Some(end) => old_i >= start.value && old_i < end.value,
                 Option::None => old_i >= start.value,
             })
@@ -166,9 +166,8 @@ impl BytecodeList {
     pub fn next_label(&self, start: Index) -> Option<Index> {
         self.values[start.value..]
             .iter()
-            .enumerate()
-            .find(|(_, x)| matches!(x, BytecodeValue::Label(_)))
-            .map(|(i, _)| Index::new(i + start.value))
+            .position(|x| matches!(x, BytecodeValue::Label(_)))
+            .map(|i| Index::new(i + start.value))
     }
 
     pub fn enumerate(&self) -> impl Iterator<Item = (Index, &Bytecode)> {
@@ -176,6 +175,10 @@ impl BytecodeList {
             BytecodeValue::Label(_) => None,
             BytecodeValue::Bytecode(b) => Some((Index::new(i), b)),
         })
+    }
+
+    pub fn retain(&mut self, predicate: impl FnMut(&mut BytecodeValue) -> bool) {
+        self.values.retain_mut(predicate)
     }
 
     pub(super) fn set_labels(&self) {

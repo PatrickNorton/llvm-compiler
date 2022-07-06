@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use super::bytecode::{Bytecode, BytecodeRef};
-use super::bytecode_list::BytecodeList;
+use super::bytecode_list::{BytecodeList, BytecodeValue};
 use super::global_info::GlobalCompilerInfo;
 
 /// The function that implements `-fdce`.
@@ -71,15 +71,16 @@ fn eliminate_jumps(bytes: &mut BytecodeList) {
 ///     (more code)
 /// ```
 fn eliminate_post_jump(bytes: &mut BytecodeList) {
-    // It would be nice to be able to do this without all the excess iteration,
-    // but that doesn't seem to be possible
-    let mut to_remove = Vec::new();
-    for (index, bytecode) in bytes.enumerate() {
-        if let Bytecode::Jump(_) | Bytecode::Return(_) = bytecode {
-            to_remove.push((index.next(), bytes.next_label(index)));
+    let mut unconditional_jump = false;
+    bytes.retain(|bytecode| match bytecode {
+        BytecodeValue::Bytecode(Bytecode::Jump(_) | Bytecode::Return(_)) => {
+            unconditional_jump = true;
+            true
         }
-    }
-    if !to_remove.is_empty() {
-        bytes.remove_all_ranges(&to_remove);
-    }
+        BytecodeValue::Label(_) => {
+            unconditional_jump = false;
+            true
+        }
+        _ => !unconditional_jump,
+    });
 }
