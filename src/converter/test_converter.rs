@@ -1,3 +1,5 @@
+use core::slice;
+
 use crate::parser::name::NameNode;
 use crate::parser::test_node::TestNode;
 use crate::util::first;
@@ -107,13 +109,13 @@ impl<'a> TestConverter<'a> {
         node: impl TestConvertible<'a>,
         info: &mut CompilerInfo,
         ret_count: u16,
-        end_type: TypeObject,
+        end_type: &'a TypeObject,
     ) -> CompileBytes {
         if let TypeObject::Option(_) = end_type {
             bytes_maybe_option(node.test_converter(ret_count), info, end_type)
         } else {
             bytes_maybe_option(
-                node.test_conv_expected(ret_count, vec![end_type.clone()]),
+                node.test_conv_expected(ret_count, slice::from_ref(end_type)),
                 info,
                 end_type,
             )
@@ -124,10 +126,10 @@ impl<'a> TestConverter<'a> {
 fn bytes_maybe_option(
     mut converter: impl ConverterTest,
     info: &mut CompilerInfo,
-    end_type: TypeObject,
+    end_type: &TypeObject,
 ) -> CompileBytes {
     let ret_type = first(converter.return_type(info)?);
-    if OptionTypeObject::needs_make_option(&end_type, &ret_type) {
+    if OptionTypeObject::needs_make_option(end_type, &ret_type) {
         let mut bytes = converter.convert(info)?;
         bytes.add(Bytecode::MakeOption());
         Ok(bytes)
@@ -197,7 +199,7 @@ impl<'a> TestConvertible<'a> for &'a TestNode {
         }
     }
 
-    fn test_conv_expected(self, ret_count: u16, expected: Vec<TypeObject>) -> Self::Converter {
+    fn test_conv_expected(self, ret_count: u16, expected: &'a [TypeObject]) -> Self::Converter {
         match self {
             TestNode::Comprehension(c) => {
                 TestConverter::Comprehension(c.test_conv_expected(ret_count, expected))

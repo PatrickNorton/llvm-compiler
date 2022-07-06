@@ -3,8 +3,8 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::ops::{Deref, Index};
-use std::ptr;
 use std::sync::Arc;
+use std::{ptr, slice};
 
 use derive_new::new;
 use itertools::Itertools;
@@ -650,7 +650,7 @@ impl DefaultValue {
 
     pub fn compile(&self, info: &mut CompilerInfo, node: &TestNode) -> CompileResult<()> {
         self.value.get_or_try_init(|| {
-            let mut converter = node.test_conv_expected(1, vec![self.parent_type.clone()]);
+            let mut converter = node.test_conv_expected(1, slice::from_ref(&self.parent_type));
             let return_type = first(converter.return_type(info)?);
             if !self.parent_type.is_superclass(&return_type) {
                 if OptionTypeObject::needs_make_option(&self.parent_type, &return_type) {

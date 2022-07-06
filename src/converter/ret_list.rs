@@ -1,3 +1,4 @@
+use core::slice;
 use std::iter::zip;
 
 use derive_new::new;
@@ -68,11 +69,11 @@ impl<'a> ReturnListConverter<'a> {
                 &self.values[0],
                 info,
                 1,
-                self.ret_types[0].clone(),
+                &self.ret_types[0],
             )?)
         } else if !self.values.is_empty() {
             for (ret_type, (vararg, val)) in zip(&self.ret_types, self.values.pairs()) {
-                bytes.extend(self.convert_inner(info, val, *vararg, ret_type.clone())?)
+                bytes.extend(self.convert_inner(info, val, *vararg, ret_type)?)
             }
         }
         bytes.add(self.value.bytecode((self.ret_types.len() as u16).into()));
@@ -84,7 +85,7 @@ impl<'a> ReturnListConverter<'a> {
         info: &mut CompilerInfo,
         stmt: &TestNode,
         vararg: VarargType,
-        ret_type: TypeObject,
+        ret_type: &TypeObject,
     ) -> CompileBytes {
         match vararg {
             VarargType::None => TestConverter::bytes_maybe_option(stmt, info, 1, ret_type),
@@ -173,7 +174,7 @@ impl<'a> ReturnListConverter<'a> {
             .into());
         }
         for (i, (node, expected)) in zip(self.values, &self.ret_types).enumerate() {
-            let mut converter = node.test_conv_expected(1, vec![expected.clone()]);
+            let mut converter = node.test_conv_expected(1, slice::from_ref(expected));
             let ret_type = first(converter.return_type(info)?);
             if bad_type(expected, &ret_type) {
                 return Err(self.type_error(node, i, &ret_type, expected).into());

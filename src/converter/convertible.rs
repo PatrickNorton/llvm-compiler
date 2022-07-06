@@ -46,7 +46,7 @@ pub trait TestConvertible<'a> {
     fn test_converter(self, ret_count: u16) -> Self::Converter;
 
     #[allow(unused_variables)]
-    fn test_conv_expected(self, ret_count: u16, expected: Vec<TypeObject>) -> Self::Converter
+    fn test_conv_expected(self, ret_count: u16, expected: &'a [TypeObject]) -> Self::Converter
     where
         Self: Sized,
     {
@@ -113,7 +113,7 @@ macro_rules! test_convertible_expected {
                 $($conv)::+::new(self, ret_count, None)
             }
 
-            fn test_conv_expected(self, ret_count: u16, expected: Vec<TypeObject>) -> Self::Converter
+            fn test_conv_expected(self, ret_count: u16, expected: &'a [TypeObject]) -> Self::Converter
             where
                 Self: Sized,
             {

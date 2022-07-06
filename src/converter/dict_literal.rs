@@ -19,7 +19,7 @@ use super::{CompileBytes, CompileResult, CompileTypes};
 pub struct DictLiteralConverter<'a> {
     node: &'a DictLiteralNode,
     ret_count: u16,
-    expected: Option<Vec<TypeObject>>,
+    expected: Option<&'a [TypeObject]>,
 }
 
 impl<'a> ConverterTest for DictLiteralConverter<'a> {
@@ -77,18 +77,8 @@ impl<'a> ConverterBase for DictLiteralConverter<'a> {
             let key_type = return_types(info, self.node.get_values().iter().map(|x| &x.0))?;
             let val_type = return_types(info, self.node.get_values().iter().map(|x| &x.1))?;
             for (key, val) in self.node.get_values() {
-                bytes.extend(TestConverter::bytes_maybe_option(
-                    key,
-                    info,
-                    1,
-                    key_type.clone(),
-                )?);
-                bytes.extend(TestConverter::bytes_maybe_option(
-                    val,
-                    info,
-                    1,
-                    val_type.clone(),
-                )?);
+                bytes.extend(TestConverter::bytes_maybe_option(key, info, 1, &key_type)?);
+                bytes.extend(TestConverter::bytes_maybe_option(val, info, 1, &val_type)?);
             }
             bytes.add(Bytecode::DictCreate((self.node.len() as u16).into()))
         }

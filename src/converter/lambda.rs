@@ -25,7 +25,7 @@ use super::{CompileBytes, CompileResult, CompileTypes};
 pub struct LambdaConverter<'a> {
     node: &'a LambdaNode,
     ret_count: u16,
-    expected_returns: Option<Vec<TypeObject>>,
+    expected_returns: Option<&'a [TypeObject]>,
 }
 
 impl<'a> ConverterTest for LambdaConverter<'a> {

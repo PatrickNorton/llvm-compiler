@@ -28,7 +28,7 @@ use super::{CompileBytes, CompileConstant, CompileResult, CompileTypes};
 pub struct LiteralConverter<'a> {
     node: &'a LiteralNode,
     ret_count: u16,
-    expected: Option<Vec<TypeObject>>,
+    expected: Option<&'a [TypeObject]>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -216,12 +216,7 @@ impl<'a> LiteralConverter<'a> {
     ) -> CompileResult<u16> {
         match splat {
             "" => {
-                bytes.extend(TestConverter::bytes_maybe_option(
-                    value,
-                    info,
-                    1,
-                    ret_type.clone(),
-                )?);
+                bytes.extend(TestConverter::bytes_maybe_option(value, info, 1, ret_type)?);
                 if !unknowns.is_empty() {
                     bytes.add(Bytecode::Swap2()); // Keep unknown length on top
                 }
@@ -366,7 +361,6 @@ impl<'a> LiteralConverter<'a> {
         let args = self.node.get_builders();
         let expected_val = self
             .expected
-            .as_deref()
             .filter(|x| self.expected_type_works(info, x))
             .map(|x| x[0].clone());
         let mut result = Vec::with_capacity(args.len());
@@ -405,10 +399,7 @@ impl<'a> LiteralConverter<'a> {
 
     fn tuple_return_types(&self, info: &mut CompilerInfo) -> CompileTypes {
         let mut originals = self.original_return_types(info)?;
-        if let Option::Some(expected) = self
-            .expected
-            .as_deref()
-            .filter(|x| self.expected_type_works(info, x))
+        if let Option::Some(expected) = self.expected.filter(|x| self.expected_type_works(info, x))
         {
             let generics = expected[0].get_generics();
             if generics.len() == originals.len() {

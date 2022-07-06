@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::iter::zip;
+use std::slice;
 
 use derive_new::new;
 
@@ -119,7 +120,7 @@ impl<'a> AssignConverter<'a> {
                         .get_type(var.get_name())
                         .map(Cow::into_owned)
                         .ok_or_else(|| def_error(info, var))?;
-                    let val_converter = value.test_conv_expected(1, vec![var_type]);
+                    let val_converter = value.test_conv_expected(1, slice::from_ref(&var_type));
                     self.assign_to_variable(
                         info,
                         &mut assign_bytes,
@@ -434,7 +435,7 @@ impl<'a> AssignConverter<'a> {
     ) -> CompileResult<()> {
         let (mut pre_dot, name) = DotConverter::except_last(variable, 1)?;
         let assigned_type = assign_type(info, &mut pre_dot, name, variable)?;
-        let mut value_converter = variable.test_conv_expected(1, vec![assigned_type]);
+        let mut value_converter = variable.test_conv_expected(1, slice::from_ref(&assigned_type));
         let value_type = first(value_converter.return_type(info)?);
         let needs_make_option =
             self.check_assign(info, &mut pre_dot, name, &value_type, variable)?;

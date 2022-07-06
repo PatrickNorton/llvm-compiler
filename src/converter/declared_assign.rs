@@ -1,4 +1,5 @@
 use std::iter::zip;
+use std::slice;
 
 use derive_new::new;
 
@@ -24,7 +25,6 @@ use super::convertible::{base_convertible, ConverterBase, ConverterTest, TestCon
 use super::diverge::DivergingInfo;
 use super::error::CompilerException;
 use super::mutable::MutableType;
-use super::test_converter::TestConverter;
 use super::type_obj::{OptionTypeObject, TypeObject};
 use super::{CompileBytes, CompileResult, CompileTypes};
 
@@ -182,7 +182,14 @@ impl<'a> DeclaredAssignConverter<'a> {
     ) -> CompileResult<()> {
         let is_const = mutability.is_const_ref();
         let raw_type = assigned.get_type();
-        let mut converter = get_converter(info, value, raw_type)?;
+        let converted_ty; // Needed for lifetime reasons
+        let mut converter = match raw_type {
+            TypeLikeNode::Type(ty) => {
+                converted_ty = info.convert_type(ty)?;
+                value.test_conv_expected(1, slice::from_ref(&converted_ty))
+            }
+            TypeLikeNode::Var(_) => value.test_converter(1),
+        };
         let value_type = first(converter.return_type(info)?);
         let assigned_type = get_assigned(info, &value_type, raw_type, mutability)?;
         let assigned_name = assigned.get_variable().get_name();
@@ -384,17 +391,6 @@ fn add_static(bytes: &mut BytecodeList, is_static: bool) -> Option<Label> {
         bytes.add(Bytecode::DoStatic(label.clone().into()));
         label
     })
-}
-
-fn get_converter<'a>(
-    info: &mut CompilerInfo,
-    value: &'a TestNode,
-    raw_type: &TypeLikeNode,
-) -> CompileResult<TestConverter<'a>> {
-    match raw_type {
-        TypeLikeNode::Type(ty) => Ok(value.test_conv_expected(1, vec![info.convert_type(ty)?])),
-        TypeLikeNode::Var(_) => Ok(value.test_converter(1)),
-    }
 }
 
 fn get_assigned(
