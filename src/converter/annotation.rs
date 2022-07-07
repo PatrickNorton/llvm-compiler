@@ -672,13 +672,12 @@ pub fn is_builtin(
 ) -> CompileResult<Option<BuiltinInfo>> {
     match annotations {
         [] => Ok(None),
-        [annotation] => builtin_values(line_info, permissions, annotation),
+        [annotation] => builtin_values(permissions, annotation),
         _ => Err(CompilerTodoError::of("Multiple annotations on one statement", line_info).into()),
     }
 }
 
 fn builtin_values(
-    line_info: impl Lined,
     permissions: PermissionLevel,
     annotation: &NameNode,
 ) -> CompileResult<Option<BuiltinInfo>> {
@@ -691,13 +690,13 @@ fn builtin_values(
     }
     if !permissions.is_builtin() {
         return Err(
-            CompilerException::of("'builtin' is an internal-only annotation", line_info).into(),
+            CompilerException::of("'builtin' is an internal-only annotation", annotation).into(),
         );
     }
     match &*map_arguments(func.get_parameters()) {
         [] => Err(CompilerException::of(
             "'builtin' annotation must have at least 1 parameter",
-            line_info,
+            annotation,
         )
         .into()),
         [TestNode::String(s)] => Ok(Some(BuiltinInfo::new(
@@ -718,7 +717,7 @@ fn builtin_values(
                 true,
             )))
         }
-        _ => Err(CompilerException::of("Ill-formed 'builtin' annotation", line_info).into()),
+        _ => Err(CompilerException::of("Ill-formed 'builtin' annotation", annotation).into()),
     }
 }
 
