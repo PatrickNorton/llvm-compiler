@@ -153,8 +153,7 @@ impl<'a> LambdaConverter<'a> {
                     if expected.same_base_type(info.builtins().callable()) {
                         let generics = expected.get_generics();
                         assert_eq!(generics.len(), 2);
-                        // TODO: Remove clones here
-                        let expected_args = ListTypeObject::try_from(generics[0].clone()).unwrap();
+                        let expected_args = <&ListTypeObject>::try_from(&generics[0]).unwrap();
                         Ok(Argument::new_full(
                             arg.get_name().get_name().to_string(),
                             expected_args[i].clone(),
