@@ -201,8 +201,7 @@ impl<'a> ForConverter<'a> {
             )
             .into())
         } else {
-            // FIXME: Destructuring index w/o clone
-            Ok(op_type[i].clone())
+            Ok(op_type.into_iter().nth(i).unwrap())
         }
     }
 

@@ -35,11 +35,7 @@ impl FunctionReturnInfo {
     }
 
     pub fn current_fn_returns(&self) -> &[TypeObject] {
-        &self
-            .levels
-            .first()
-            .expect("Should be in a function")
-            .returns
+        &self.levels.last().expect("Should be in a function").returns
     }
 
     pub fn not_in_function(&self) -> bool {
