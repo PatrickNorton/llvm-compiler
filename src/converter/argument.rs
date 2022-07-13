@@ -22,7 +22,7 @@ use super::compiler_info::CompilerInfo;
 use super::constant::{LangConstant, OptionConstant};
 use super::convertible::{ConverterBase, ConverterTest, TestConvertible};
 use super::default_holder::DefaultHolder;
-use super::error::{CompilerException, CompilerInternalError, CompilerTodoError};
+use super::error::{CompilerError, CompilerException, CompilerInternalError, CompilerTodoError};
 use super::fn_info::FunctionInfo;
 use super::function::Function;
 use super::type_obj::{OptionTypeObject, TypeObject};
@@ -228,7 +228,7 @@ impl ArgumentInfo {
         // The total number of positionally-passable arguments in the
         // declaration which do not have a matched value yet
         let unused = self.len() - kw_positions.len() - defaulted_kwargs;
-        // The total number of non-keywoed arguments in the invocation
+        // The total number of non-keyword arguments in the invocation
         let non_keyword_count = new_args.len() - kw_positions.len();
         // The number of positional arguments which will be given a default
         // parameter
@@ -380,7 +380,6 @@ impl ArgumentInfo {
         let default_count = self.args_with_defaults(&keyword_map);
         let non_keyword_count = new_args.len() - keyword_map.len();
         let unused = self.len() - keyword_map.len();
-        // FIXME: This should be signed subtraction
         let defaults_used = unused.checked_sub(non_keyword_count);
         if self.has_vararg() && keyword_map.contains_key(&*self.normal_args.last().unwrap().name) {
             return Err(CompilerException::of(
@@ -409,7 +408,7 @@ impl ArgumentInfo {
             }
             Option::Some(defaults_used) if defaults_used > default_count => {
                 if !self.has_vararg() || defaults_used != default_count + 1 {
-                    return Err(self.not_enough_args(&new_args, &keyword_map).into());
+                    return Err(self.not_enough_args(&new_args, &keyword_map));
                 }
             }
             _ => (),
@@ -443,7 +442,7 @@ impl ArgumentInfo {
                 return Err(CompilerInternalError::of(
                     format!(
                         "Argument mismatch: Argument is of type '{}', \
-                     which is not assignable to type '{}'",
+                         which is not assignable to type '{}'",
                         arg.type_val.name(),
                         arg_value.get_type().name()
                     ),
@@ -572,7 +571,7 @@ impl ArgumentInfo {
         &self,
         new_args: &[T],
         keyword_map: &HashMap<&str, &TypeObject>,
-    ) -> CompilerException {
+    ) -> CompilerError {
         let unmatched = self
             .iter_rev()
             .map(|x| &*x.name)
@@ -581,19 +580,25 @@ impl ArgumentInfo {
         let arg_line_info = new_args
             .first()
             .map_or_else(LineInfo::empty, |x| x.line_info().clone());
-        if unmatched.len() == 1 {
-            CompilerException::of(
-                format!("Missing value for positional argument {}", unmatched[0]),
+        match *unmatched {
+            [] => CompilerInternalError::of(
+                "`Argument::not_enough_args` was called with no unmatched arguments",
                 arg_line_info,
             )
-        } else {
-            CompilerException::of(
+            .into(),
+            [value] => CompilerException::of(
+                format!("Missing value for positional argument {}", value),
+                arg_line_info,
+            )
+            .into(),
+            _ => CompilerException::of(
                 format!(
                     "Missing value for positional arguments {}",
                     unmatched.iter().format(", ")
                 ),
                 arg_line_info,
             )
+            .into(),
         }
     }
 
@@ -733,7 +738,7 @@ where
     T: Deref<Target = Argument>,
 {
     args.iter()
-        .find(|x| &*x.name == name)
+        .find(|x| x.name == name)
         .map(|x| &**x)
         .ok_or_else(|| {
             CompilerInternalError::of(format!("Unknown name {}", name), LineInfo::empty()).into()
