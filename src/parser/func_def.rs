@@ -12,6 +12,8 @@ use crate::parser::type_node::TypeNode;
 use crate::parser::typed_arg::TypedArgumentListNode;
 use crate::parser::variable::VariableNode;
 
+use super::generalizable::Generalizable;
+
 #[derive(Debug)]
 pub struct FunctionDefinitionNode {
     line_info: LineInfo,
@@ -90,14 +92,6 @@ impl FunctionDefinitionNode {
         self.decorators = decorators;
     }
 
-    pub fn add_generics(&mut self, generics: Vec<TypeNode>) {
-        self.generics = generics;
-    }
-
-    pub fn get_generics(&self) -> &[TypeNode] {
-        &self.generics
-    }
-
     pub fn parse(tokens: &mut TokenList) -> ParseResult<FunctionDefinitionNode> {
         let (info, tok) = tokens.next_token()?.deconstruct();
         assert!(matches!(tok, TokenType::Keyword(Keyword::Func)));
@@ -106,6 +100,16 @@ impl FunctionDefinitionNode {
         let ret_val = TypeNode::parse_ret_val(tokens, false)?;
         let body = StatementBodyNode::parse(tokens)?;
         Ok(FunctionDefinitionNode::new(info, name, args, ret_val, body))
+    }
+}
+
+impl Generalizable for FunctionDefinitionNode {
+    fn get_generics(&self) -> &[TypeNode] {
+        &self.generics
+    }
+
+    fn add_generics(&mut self, generics: Vec<TypeNode>) {
+        self.generics = generics;
     }
 }
 

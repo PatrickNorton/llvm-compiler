@@ -13,7 +13,7 @@ use crate::parser::enum_def::EnumDefinitionNode;
 use crate::parser::error::ParseResult;
 use crate::parser::for_loop::ForStatementNode;
 use crate::parser::func_def::FunctionDefinitionNode;
-use crate::parser::generalizable::GeneralizableNode;
+use crate::parser::generalizable::parse_generalizable;
 use crate::parser::if_stmt::IfStatementNode;
 use crate::parser::import::ImportExportNode;
 use crate::parser::interface::InterfaceDefinitionNode;
@@ -214,7 +214,7 @@ impl Keyword {
             Keyword::Defer => DeferStatementNode::parse(tokens).map(IndependentNode::Defer),
             Keyword::Var => IndependentNode::parse_var(tokens),
             Keyword::Sync => SynchronizedStatementNode::parse(tokens).map(IndependentNode::Sync),
-            Keyword::Generic => GeneralizableNode::parse(tokens).map(Into::into),
+            Keyword::Generic => parse_generalizable(tokens),
             Keyword::Union => UnionDefinitionNode::parse(tokens).map(IndependentNode::Union),
         }
     }

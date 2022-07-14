@@ -13,6 +13,8 @@ use crate::parser::type_node::TypeNode;
 use crate::parser::typed_arg::TypedArgumentListNode;
 use crate::parser::variable::VariableNode;
 
+use super::generalizable::Generalizable;
+
 #[derive(Debug)]
 pub struct MethodDefinitionNode {
     line_info: LineInfo,
@@ -116,6 +118,16 @@ impl MethodDefinitionNode {
         assert!(tokens.token_equals("{")?);
         let body = StatementBodyNode::parse(tokens)?;
         Ok(generic.into_def(body))
+    }
+}
+
+impl Generalizable for MethodDefinitionNode {
+    fn get_generics(&self) -> &[TypeNode] {
+        &self.generics
+    }
+
+    fn add_generics(&mut self, generics: Vec<TypeNode>) {
+        self.generics = generics;
     }
 }
 

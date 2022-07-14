@@ -14,6 +14,8 @@ use crate::parser::token_list::TokenList;
 use crate::parser::type_node::TypeNode;
 use crate::parser::typed_arg::TypedArgumentListNode;
 
+use super::generalizable::Generalizable;
+
 #[derive(Debug)]
 pub struct OperatorDefinitionNode {
     line_info: LineInfo,
@@ -103,10 +105,6 @@ impl OperatorDefinitionNode {
         self.decorators = decorators;
     }
 
-    pub fn add_generics(&mut self, generics: Vec<TypeNode>) {
-        self.generics = generics;
-    }
-
     pub fn parse(tokens: &mut TokenList) -> ParseResult<OperatorDefinitionNode> {
         let op_code = match tokens.next_token()?.deconstruct() {
             (i, TokenType::OperatorSp(s)) => SpecialOpNameNode::new(i, s),
@@ -193,6 +191,16 @@ impl SpecialOpAssignmentNode {
             TestNode::parse(tokens)?
         };
         Ok(SpecialOpAssignmentNode::new(name, assignment, is_colon))
+    }
+}
+
+impl Generalizable for OperatorDefinitionNode {
+    fn get_generics(&self) -> &[TypeNode] {
+        &self.generics
+    }
+
+    fn add_generics(&mut self, generics: Vec<TypeNode>) {
+        self.generics = generics;
     }
 }
 

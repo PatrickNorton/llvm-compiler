@@ -26,7 +26,7 @@ pub mod fn_call;
 pub mod for_loop;
 pub mod formatted_string;
 pub mod func_def;
-mod generalizable;
+pub mod generalizable;
 pub mod generic_stmt;
 pub mod if_stmt;
 pub mod import;
