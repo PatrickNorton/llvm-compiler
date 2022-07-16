@@ -3,8 +3,8 @@ use crate::parser::error::ParseResult;
 use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
 use crate::parser::tokenizer::Tokenizer;
-use std::fs::File;
 use std::io;
+use std::ops::Index;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
@@ -42,6 +42,10 @@ impl TopNode {
     fn new(path: PathBuf, nodes: Vec<IndependentNode>) -> Self {
         Self { path, nodes }
     }
+
+    pub fn get_path(&self) -> &Path {
+        &self.path
+    }
 }
 
 impl<'a> IntoIterator for &'a TopNode {
@@ -51,5 +55,13 @@ impl<'a> IntoIterator for &'a TopNode {
 
     fn into_iter(self) -> Self::IntoIter {
         self.nodes.iter()
+    }
+}
+
+impl Index<usize> for TopNode {
+    type Output = IndependentNode;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.nodes[index]
     }
 }
