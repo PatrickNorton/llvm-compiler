@@ -686,17 +686,21 @@ impl DefaultValue {
     }
 
     pub fn load_bytes(&self, bytes: &mut BytecodeList, info: &mut CompilerInfo) {
-        if let Option::Some((_, Option::Some(constant))) = self.value.get() {
-            bytes.add(Bytecode::LoadConst(constant.clone().into()));
-        } else {
-            let function = self.save_function(info);
-            bytes.add(Bytecode::CallFn(function.into(), 0.into()));
+        match self.value.get() {
+            Option::Some((_, Option::Some(constant))) => {
+                bytes.add(Bytecode::LoadConst(constant.clone().into()));
+            }
+            Option::Some((byte_fn, None)) => {
+                let function = self.save_function(byte_fn, info);
+                bytes.add(Bytecode::CallFn(function.into(), 0.into()));
+            }
+            Option::None => panic!("Called DefaultInfo::load_bytes without function set"),
         }
     }
 
-    fn save_function(&self, info: &mut CompilerInfo) -> u16 {
+    fn save_function(&self, byte_fn: &BytecodeList, info: &mut CompilerInfo) -> u16 {
         *self.bytes_index.get_or_init(|| {
-            let mut byte_fn = self.value.get().unwrap().0.clone();
+            let mut byte_fn = byte_fn.clone();
             byte_fn.add(Bytecode::Return(1.into()));
             let fn_info = FunctionInfo::default(); // FIXME: Get return type
             info.add_function(Function::new(LineInfo::empty(), fn_info, byte_fn))
