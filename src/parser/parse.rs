@@ -8,34 +8,26 @@ use std::ops::Index;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
-pub struct Parser {
-    tokens: TokenList,
-    top: TopNode,
-}
-
-#[derive(Debug)]
 pub struct TopNode {
     path: PathBuf,
     nodes: Vec<IndependentNode>,
 }
 
-impl Parser {
-    pub fn parse(path: PathBuf, mut tokens: TokenList) -> ParseResult<TopNode> {
-        let mut nodes = Vec::new();
-        tokens.pass_newlines()?;
-        while !matches!(tokens.token_type()?, TokenType::Epsilon) {
-            nodes.push(IndependentNode::parse(&mut tokens)?);
-            if matches!(tokens.token_type()?, TokenType::Epsilon) {
-                break;
-            }
-            tokens.expect_newline()?;
+pub fn parse(path: PathBuf, mut tokens: TokenList) -> ParseResult<TopNode> {
+    let mut nodes = Vec::new();
+    tokens.pass_newlines()?;
+    while !matches!(tokens.token_type()?, TokenType::Epsilon) {
+        nodes.push(IndependentNode::parse(&mut tokens)?);
+        if matches!(tokens.token_type()?, TokenType::Epsilon) {
+            break;
         }
-        Ok(TopNode::new(path, nodes))
+        tokens.expect_newline()?;
     }
+    Ok(TopNode::new(path, nodes))
+}
 
-    pub fn parse_file(f: PathBuf) -> io::Result<ParseResult<TopNode>> {
-        Ok(Tokenizer::parse(f.clone())?.and_then(|t| Self::parse(f, t)))
-    }
+pub fn parse_file(f: PathBuf) -> io::Result<ParseResult<TopNode>> {
+    Ok(Tokenizer::parse(f.clone())?.and_then(|t| parse(f, t)))
 }
 
 impl TopNode {

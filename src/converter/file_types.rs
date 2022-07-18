@@ -10,10 +10,9 @@ use crate::parser::definition::BaseClassRef;
 use crate::parser::descriptor::DescriptorNode;
 use crate::parser::import::{ImportExportNode, ImportExportType};
 use crate::parser::line_info::{LineInfo, Lined};
-use crate::parser::parse::TopNode;
+use crate::parser::parse::{parse_file, TopNode};
 use crate::parser::typedef::TypedefStatementNode;
 use crate::parser::variable::VariableNode;
-use crate::parser::Parser;
 use crate::util::reborrow_option;
 
 use super::builtins::ParsedBuiltins;
@@ -66,7 +65,7 @@ impl FileTypes {
             return Ok(Vec::new());
         }
         let mut to_compile = Vec::new();
-        let node = Parser::parse_file(path.clone())??;
+        let node = parse_file(path.clone())??;
         let mut file_types = FileTypes::new(path.clone(), permissions);
         let mut typedefs = Vec::new();
         let mut autos = Vec::new();

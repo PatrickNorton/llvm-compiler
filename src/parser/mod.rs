@@ -78,4 +78,4 @@ pub mod with_stmt;
 pub mod yield_stmt;
 
 pub use error::ParserError;
-pub use parse::Parser;
+pub use parse::parse_file;
