@@ -98,7 +98,7 @@ pub enum AccessLevel {
     /// The `file` access level.
     ///
     /// An item annotated with `file` is accessible by any code within the file
-    /// that this is define in. An access with `file` clearance can access any
+    /// that this is defined in. An access with `file` clearance can access any
     /// variable with access level `file` or `private`.
     File,
 }
@@ -228,7 +228,7 @@ impl AccessHandler {
             if self.classes_with_access.contains_key(base) {
                 AccessLevel::Private
             } else {
-                AccessLevel::Public
+                AccessLevel::File
             }
         } else if self.classes_with_access.contains_key(base) {
             AccessLevel::Private
@@ -593,5 +593,260 @@ fn decrement<T: Hash + Eq>(value: T, map: &mut HashMap<T, usize>) {
 impl Default for AccessHandler {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod handler_tests {
+    use crate::converter::access_handler::AccessLevel;
+    use crate::converter::builtins::{NULL_TYPE, OBJECT};
+    use crate::converter::type_obj::BaseType;
+    use crate::macros::hash_set;
+
+    use super::AccessHandler;
+
+    #[test]
+    fn default_cls_super() {
+        let handler = AccessHandler::new();
+        assert_eq!(handler.get_cls(), None);
+        assert_eq!(handler.get_super(), None);
+    }
+
+    #[test]
+    fn default_access_level() {
+        let handler = AccessHandler::new();
+        assert_eq!(handler.access_level(&OBJECT.into()), AccessLevel::Public);
+        assert_eq!(handler.access_level(&NULL_TYPE), AccessLevel::Public);
+    }
+
+    #[test]
+    fn private_access() {
+        let mut handler = AccessHandler::new();
+        handler.allow_private_access(OBJECT.into());
+        assert_eq!(handler.access_level(&OBJECT.into()), AccessLevel::Private);
+        handler.remove_private_access(OBJECT.into());
+        assert_eq!(handler.access_level(&OBJECT.into()), AccessLevel::Public);
+    }
+
+    #[test]
+    fn stacked_private() {
+        let mut handler = AccessHandler::new();
+        handler.allow_private_access(OBJECT.into());
+        handler.allow_private_access(OBJECT.into());
+        assert_eq!(handler.access_level(&OBJECT.into()), AccessLevel::Private);
+        handler.remove_private_access(OBJECT.into());
+        assert_eq!(handler.access_level(&OBJECT.into()), AccessLevel::Private);
+        handler.remove_private_access(OBJECT.into());
+        assert_eq!(handler.access_level(&OBJECT.into()), AccessLevel::Public);
+    }
+
+    #[test]
+    fn protected_access() {
+        let mut handler = AccessHandler::new();
+        handler.allow_protected_access(OBJECT.into());
+        assert_eq!(handler.access_level(&OBJECT.into()), AccessLevel::Protected);
+        handler.remove_protected_access(OBJECT.into());
+        assert_eq!(handler.access_level(&OBJECT.into()), AccessLevel::Public);
+    }
+
+    #[test]
+    fn stacked_protected() {
+        let mut handler = AccessHandler::new();
+        handler.allow_protected_access(OBJECT.into());
+        handler.allow_protected_access(OBJECT.into());
+        assert_eq!(handler.access_level(&OBJECT.into()), AccessLevel::Protected);
+        handler.remove_protected_access(OBJECT.into());
+        assert_eq!(handler.access_level(&OBJECT.into()), AccessLevel::Protected);
+        handler.remove_protected_access(OBJECT.into());
+        assert_eq!(handler.access_level(&OBJECT.into()), AccessLevel::Public);
+    }
+
+    #[test]
+    fn layered_protected_private() {
+        let mut handler = AccessHandler::new();
+        handler.allow_protected_access(OBJECT.into());
+        assert_eq!(handler.access_level(&OBJECT.into()), AccessLevel::Protected);
+        handler.allow_private_access(OBJECT.into());
+        assert_eq!(handler.access_level(&OBJECT.into()), AccessLevel::Private);
+        handler.remove_private_access(OBJECT.into());
+        assert_eq!(handler.access_level(&OBJECT.into()), AccessLevel::Protected);
+        handler.allow_private_access(OBJECT.into());
+        handler.remove_protected_access(OBJECT.into());
+        assert_eq!(handler.access_level(&OBJECT.into()), AccessLevel::Private);
+        handler.remove_private_access(OBJECT.into());
+        assert_eq!(handler.access_level(&OBJECT.into()), AccessLevel::Public);
+    }
+
+    #[test]
+    fn in_file() {
+        let mut handler = AccessHandler::new();
+        assert_eq!(handler.access_level(&OBJECT.into()), AccessLevel::Public);
+        handler.set_defined_in_file(hash_set!(BaseType::new(OBJECT.into())));
+        assert_eq!(handler.access_level(&OBJECT.into()), AccessLevel::File);
+    }
+
+    #[test]
+    fn in_file_private() {
+        let mut handler = AccessHandler::new();
+        assert_eq!(handler.access_level(&OBJECT.into()), AccessLevel::Public);
+        handler.allow_private_access(OBJECT.into());
+        assert_eq!(handler.access_level(&OBJECT.into()), AccessLevel::Private);
+        handler.set_defined_in_file(hash_set!(BaseType::new(OBJECT.into())));
+        assert_eq!(handler.access_level(&OBJECT.into()), AccessLevel::Private);
+        handler.remove_private_access(OBJECT.into());
+        assert_eq!(handler.access_level(&OBJECT.into()), AccessLevel::File);
+    }
+
+    #[test]
+    fn cls_type() {
+        let mut handler = AccessHandler::new();
+        assert_eq!(handler.get_cls(), None);
+        handler.add_cls(OBJECT.into());
+        assert_eq!(handler.get_cls(), Some(&OBJECT.into()));
+        handler.remove_cls();
+        assert_eq!(handler.get_cls(), None);
+    }
+
+    #[test]
+    fn super_type() {
+        let mut handler = AccessHandler::new();
+        assert_eq!(handler.get_super(), None);
+        handler.add_super(OBJECT.into());
+        assert_eq!(handler.get_super(), Some(&OBJECT.into()));
+        handler.remove_super();
+        assert_eq!(handler.get_super(), None);
+    }
+}
+
+#[cfg(test)]
+mod level_tests {
+    use std::collections::HashSet;
+
+    use crate::{macros::hash_set, parser::descriptor::DescriptorNode};
+
+    use super::AccessLevel;
+
+    #[test]
+    fn private_access() {
+        assert!(AccessLevel::can_access(
+            AccessLevel::Private,
+            AccessLevel::Private
+        ));
+        assert!(AccessLevel::can_access(
+            AccessLevel::Protected,
+            AccessLevel::Private
+        ));
+        assert!(AccessLevel::can_access(
+            AccessLevel::File,
+            AccessLevel::Private
+        ));
+        assert!(AccessLevel::can_access(
+            AccessLevel::Pubget,
+            AccessLevel::Private
+        ));
+        assert!(AccessLevel::can_access(
+            AccessLevel::Public,
+            AccessLevel::Private
+        ));
+    }
+
+    #[test]
+    fn protected_access() {
+        assert!(!AccessLevel::can_access(
+            AccessLevel::Private,
+            AccessLevel::Protected
+        ));
+        assert!(AccessLevel::can_access(
+            AccessLevel::Protected,
+            AccessLevel::Protected
+        ));
+        assert!(!AccessLevel::can_access(
+            AccessLevel::File,
+            AccessLevel::Protected
+        ));
+        assert!(AccessLevel::can_access(
+            AccessLevel::Pubget,
+            AccessLevel::Protected
+        ));
+        assert!(AccessLevel::can_access(
+            AccessLevel::Public,
+            AccessLevel::Protected
+        ));
+    }
+
+    #[test]
+    fn file_access() {
+        assert!(!AccessLevel::can_access(
+            AccessLevel::Private,
+            AccessLevel::File
+        ));
+        assert!(!AccessLevel::can_access(
+            AccessLevel::Protected,
+            AccessLevel::File
+        ));
+        assert!(AccessLevel::can_access(
+            AccessLevel::File,
+            AccessLevel::File
+        ));
+        assert!(AccessLevel::can_access(
+            AccessLevel::Pubget,
+            AccessLevel::File
+        ));
+        assert!(AccessLevel::can_access(
+            AccessLevel::Public,
+            AccessLevel::File
+        ));
+    }
+
+    #[test]
+    fn public_access() {
+        assert!(!AccessLevel::can_access(
+            AccessLevel::Private,
+            AccessLevel::Public
+        ));
+        assert!(!AccessLevel::can_access(
+            AccessLevel::Protected,
+            AccessLevel::Public
+        ));
+        assert!(!AccessLevel::can_access(
+            AccessLevel::File,
+            AccessLevel::Public
+        ));
+        assert!(AccessLevel::can_access(
+            AccessLevel::Pubget,
+            AccessLevel::Public
+        ));
+        assert!(AccessLevel::can_access(
+            AccessLevel::Public,
+            AccessLevel::Public
+        ));
+    }
+
+    #[test]
+    fn from_empty_descriptors() {
+        assert_eq!(
+            AccessLevel::from_descriptors(&HashSet::new()),
+            AccessLevel::File
+        );
+    }
+
+    #[test]
+    fn from_valid_descriptors() {
+        assert_eq!(
+            AccessLevel::from_descriptors(&hash_set!(DescriptorNode::Public)),
+            AccessLevel::Public
+        );
+        assert_eq!(
+            AccessLevel::from_descriptors(&hash_set!(DescriptorNode::Const)),
+            AccessLevel::File
+        );
+        assert_eq!(
+            AccessLevel::from_descriptors(&hash_set!(
+                DescriptorNode::Auto,
+                DescriptorNode::Const,
+                DescriptorNode::Private
+            )),
+            AccessLevel::Private
+        );
     }
 }
