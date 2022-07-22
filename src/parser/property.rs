@@ -97,7 +97,7 @@ impl PropertyDefinitionNode {
 
     pub fn parse(tokens: &mut TokenList) -> ParseResult<PropertyDefinitionNode> {
         let (info, tok) = tokens.next_token()?.deconstruct();
-        assert!(matches!(tok, TokenType::Keyword(Keyword::Do)));
+        assert!(matches!(tok, TokenType::Keyword(Keyword::Property)));
         let type_node = TypeLikeNode::parse(tokens, false)?;
         let name = VariableNode::parse(tokens)?;
         tokens.expect("{", true)?;

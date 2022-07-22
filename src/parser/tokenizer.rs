@@ -176,12 +176,13 @@ impl Tokenizer {
         debug_assert!(self.next.starts_with("#|"));
         let line_info = self.line_info();
         loop {
-            if let Option::Some(x) = self.next.find("|#") {
+            // FIXME: Multiline comment ending on same line as comment begin
+            if let Option::Some(x) = self.full_line.find("|#") {
                 // TODO? clone_into() when stable (#41263)
                 self.next = self.full_line[x + 2..].to_owned();
                 return ParseResult::Ok(line_info);
             }
-            let next_line = self.read_line()?.expect("TODO: Error message");
+            let next_line = self.read_line()?.expect("Unclosed comment at end of file");
             self.full_line = (&*next_line).into();
             self.append_escaped_lines()?;
         }

@@ -255,7 +255,10 @@ impl TestNode {
                 Keyword::Some => SomeStatementNode::parse(tokens)
                     .map(TestNode::Some)
                     .map(Option::Some),
-                Keyword::In => Ok(Some(TestNode::OperatorType(OperatorTypeNode::In))),
+                Keyword::In => {
+                    tokens.next_tok(ignore_newlines)?;
+                    Ok(Some(TestNode::OperatorType(OperatorTypeNode::In)))
+                }
                 Keyword::Switch => SwitchStatementNode::parse(tokens)
                     .map(TestNode::Switch)
                     .map(Option::Some),

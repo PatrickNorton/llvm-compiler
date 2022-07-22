@@ -32,7 +32,7 @@ impl TypedefStatementNode {
 
     pub fn parse(tokens: &mut TokenList) -> ParseResult<TypedefStatementNode> {
         let (line_info, token_type) = tokens.next_token()?.deconstruct();
-        assert!(matches!(token_type, TokenType::Keyword(Keyword::Lambda)));
+        assert!(matches!(token_type, TokenType::Keyword(Keyword::Typedef)));
         let name = TypeNode::parse(tokens)?;
         let (_, token_type) = tokens.next_token()?.deconstruct();
         assert!(matches!(token_type, TokenType::Keyword(Keyword::As)));

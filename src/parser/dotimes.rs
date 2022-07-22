@@ -43,7 +43,7 @@ impl DotimesStatementNode {
 
     pub fn parse(tokens: &mut TokenList) -> ParseResult<DotimesStatementNode> {
         let (info, tok) = tokens.next_token()?.deconstruct();
-        assert!(matches!(tok, TokenType::Keyword(Keyword::Do)));
+        assert!(matches!(tok, TokenType::Keyword(Keyword::Dotimes)));
         let iterations = TestNode::parse(tokens)?;
         let body = StatementBodyNode::parse(tokens)?;
         let nobreak = StatementBodyNode::parse_on_keyword(tokens, Keyword::Nobreak)?;

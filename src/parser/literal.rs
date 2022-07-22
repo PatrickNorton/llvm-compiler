@@ -91,7 +91,7 @@ impl DictLiteralNode {
         let info = tokens.next_tok(true)?.deconstruct().0;
         let mut values = Vec::new();
         if parse_if_matches!(tokens, true, TokenType::Colon)?.is_some() {
-            tokens.expect("}", true)?;
+            tokens.expect("}", false)?;
             return Ok(DictLiteralNode::new(info, Vec::new()));
         }
         loop {

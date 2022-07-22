@@ -104,7 +104,7 @@ impl EnumDefinitionNode {
         let mut names = Vec::new();
         loop {
             names.push(EnumKeywordNode::parse(tokens)?);
-            if parse_if_matches!(tokens, TokenType::Comma)?.is_none() {
+            if parse_if_matches!(tokens, true, TokenType::Comma)?.is_none() {
                 break;
             }
         }

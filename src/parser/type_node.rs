@@ -180,7 +180,7 @@ impl TypeNode {
         if !tokens.token_equals("[")? {
             let optional = parse_if_matches!(
                 tokens,
-                true,
+                ignore_newlines,
                 TokenType::Operator(OperatorTypeNode::Optional)
             )?
             .is_some();

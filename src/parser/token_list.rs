@@ -957,7 +957,7 @@ impl TokenList {
     /// ```
     pub fn expect_newline(&mut self) -> ParseResult<()> {
         match parse_if_matches!(self, TokenType::Newline)? {
-            Option::Some(_) => Ok(()),
+            Option::Some(_) => self.pass_newlines(),
             Option::None => Err(self.error("Expected newline")),
         }
     }

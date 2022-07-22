@@ -249,7 +249,7 @@ impl TypedArgumentListNode {
                 current_arg_list.push(TypedArgumentNode::parse(tokens, !allow_untyped)?);
                 tokens.pass_newlines()?;
             }
-            if parse_if_matches!(tokens, TokenType::Comma)?.is_none() {
+            if parse_if_matches!(tokens, true, TokenType::Comma)?.is_none() {
                 break;
             }
         }
