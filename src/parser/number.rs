@@ -72,6 +72,13 @@ impl Number {
             };
             if d < radix as u8 {
                 v.push(d);
+            } else if i > 0 && dot_pos == Some(i - 1) {
+                // Deal with trailing dot that isn't a number,
+                // for example in `tuple.0.method()`
+                // FIXME: Deal with trailing letters in hex numbers:
+                // `0x1.foo()` will fail b/c `f` is a valid hex digit
+                dot_pos = None;
+                break;
             } else {
                 return Option::None;
             }
