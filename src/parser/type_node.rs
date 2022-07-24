@@ -24,7 +24,13 @@ pub struct TypeNode {
 #[derive(Debug)]
 pub enum TypeLikeNode {
     Type(TypeNode),
-    Var(LineInfo),
+    Var(VarNode),
+}
+
+#[derive(Debug)]
+pub struct VarNode {
+    line_info: LineInfo,
+    mutability: Option<DescriptorNode>,
 }
 
 impl TypeNode {
@@ -249,7 +255,7 @@ impl TypeLikeNode {
     pub fn set_mutability(&mut self, descriptor: DescriptorNode) {
         match self {
             TypeLikeNode::Type(t) => t.set_mutability(descriptor),
-            TypeLikeNode::Var(_) => todo!(),
+            TypeLikeNode::Var(v) => v.set_mutability(descriptor),
         }
     }
 
@@ -257,7 +263,7 @@ impl TypeLikeNode {
         match *tokens.token_type()? {
             TokenType::Keyword(Keyword::Var) => {
                 let (line_info, _) = tokens.next_tok(ignore_newlines)?.deconstruct();
-                Ok(TypeLikeNode::Var(line_info))
+                Ok(TypeLikeNode::Var(VarNode::new(line_info)))
             }
             TokenType::Descriptor(descriptor) => {
                 tokens.next_tok(ignore_newlines)?;
@@ -292,11 +298,16 @@ impl TypeLikeNode {
             tokens.next_tok(ignore_newlines)?;
             Ok(type_var)
         } else {
-            assert!(matches!(
-                tokens.token_type()?,
-                TokenType::Name(_) | TokenType::Keyword(Keyword::Var)
-            ));
-            TypeNode::parse_newline(tokens, ignore_newlines).map(TypeLikeNode::Type)
+            match tokens.token_type()? {
+                TokenType::Keyword(Keyword::Var) => {
+                    let (line_info, _) = tokens.next_tok(ignore_newlines)?.deconstruct();
+                    Ok(TypeLikeNode::Var(VarNode::new(line_info)))
+                }
+                TokenType::Name(_) => {
+                    TypeNode::parse_newline(tokens, ignore_newlines).map(TypeLikeNode::Type)
+                }
+                _ => panic!(),
+            }
         }
     }
 
@@ -374,6 +385,11 @@ impl TypeLikeNode {
                         return Ok(i);
                     }
                 }
+                TokenType::Descriptor(DescriptorNode::Mut) => {
+                    if previous.is_some() && net_braces == 0 {
+                        return Ok(if net_braces == 0 { i } else { 0 });
+                    }
+                }
                 _ => return Ok(if net_braces == 0 { i } else { 0 }),
             }
             previous = if let TokenType::Newline = token.token_type() {
@@ -383,6 +399,19 @@ impl TypeLikeNode {
             };
         }
         unreachable!("Infinite loop should never be broken from")
+    }
+}
+
+impl VarNode {
+    pub fn new(line_info: LineInfo) -> Self {
+        Self {
+            line_info,
+            mutability: Option::None,
+        }
+    }
+
+    pub fn set_mutability(&mut self, descriptor: DescriptorNode) {
+        self.mutability = Some(descriptor);
     }
 }
 
@@ -396,7 +425,13 @@ impl Lined for TypeLikeNode {
     fn line_info(&self) -> &LineInfo {
         match self {
             TypeLikeNode::Type(t) => t.line_info(),
-            TypeLikeNode::Var(l) => l,
+            TypeLikeNode::Var(l) => l.line_info(),
         }
+    }
+}
+
+impl Lined for VarNode {
+    fn line_info(&self) -> &LineInfo {
+        &self.line_info
     }
 }

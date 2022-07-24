@@ -10,6 +10,8 @@ use crate::parser::variable::VariableNode;
 use std::iter::Chain;
 use std::mem::take;
 
+use super::type_node::VarNode;
+
 #[derive(Debug)]
 pub struct TypedArgumentNode {
     line_info: LineInfo,
@@ -106,7 +108,7 @@ impl TypedArgumentNode {
         let type_var = if is_typed {
             TypeLikeNode::parse(tokens, true)?
         } else {
-            TypeLikeNode::Var(LineInfo::empty())
+            TypeLikeNode::Var(VarNode::new(LineInfo::empty()))
         };
         let var = VariableNode::parse(tokens)?;
         tokens.pass_newlines()?;

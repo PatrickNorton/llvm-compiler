@@ -78,6 +78,7 @@ impl Number {
                 // FIXME: Deal with trailing letters in hex numbers:
                 // `0x1.foo()` will fail b/c `f` is a valid hex digit
                 dot_pos = None;
+                digit_count = Some(i - 1);
                 break;
             } else {
                 return Option::None;
