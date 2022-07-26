@@ -49,13 +49,70 @@ pub struct CLArgs {
 /// ```
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Optimization {
+    /// The optimization for deduplicating const `bytes` literals.
+    ///
+    /// Because `bytes` is not a `const` class, `bytes` literals cannot
+    /// typically be interned as constants in the bytecode (mutating an interned
+    /// `bytes` literal can cause UB). This allows `bytes` literals that are
+    /// never mutated to be interned as constants.
     ConstBytes,
+
+    /// The optimization for removing dead code.
+    ///
+    /// Dead code is any code that cannot be executed. At the moment, the only
+    /// dead-code passes done are for code between unconditional jumps and
+    /// labels, as well as jumps to the next statement.
     DeadCode,
+
+    /// The optimization for removing dead stores.
+    ///
+    /// A dead store is any store, for example via `Bytecode::Store`, that is
+    /// never referenced or only referenced in a way that can keep it on the
+    /// stack.
     DeadStore,
+
+    /// The optimization for common-subexpression elimination.
+    ///
+    /// This optimization attempts to spot common expressions that are repeated
+    /// multiple times in code and precompute them, in order to avoid the cost
+    /// of multiple computation.
     CommonSubexpr,
+
+    /// The optimization for inlining functions.
+    ///
+    /// This optimization takes the bytecode of certain functions and copies
+    /// them into their callers. This prevents the overhead of function calls
+    /// and, when combined with other optimizations, can cause significant other
+    /// speedups as well.
+    ///
+    /// When defined, this optimization implies
+    /// [`-finline-functions-called-once`](Self::InlineFnOnce) and
+    /// [`-finline-small-functions`](Self::InlineSmallFn).
     InlineFunctions,
+
+    /// The optimization for inlining functions that are called once.
+    ///
+    /// This is a subset of [`-finline-functions`](Self::InlineFunctions), the
+    /// difference being that this only attempts to inline functions that are
+    /// called once throughout the codebase.
     InlineFnOnce,
+
+    /// The optimization for inlining small functions.
+    ///
+    /// This is a subset of [`-finline-functions`](Self::InlineFunctions), the
+    /// difference being that this has a much smaller threshold for compiled
+    /// function size.
     InlineSmallFn,
+
+    /// The optimization for optimizing `pure` and constant-returning functions.
+    ///
+    /// A `pure` function is a function whose output is fully deterministic
+    /// based on its input: i.e. passing in the same set of inputs will always
+    /// give the same output. Additionally, a `pure` function must have no
+    /// visible side effects. These functions can be optimized away in the same
+    /// way as [common-subexpression elimination](Self::CommonSubexpr).
+    ///
+    /// This optimization implies [`-fgsce`](Self::CommonSubexpr).
     PureConst,
 }
 
@@ -75,7 +132,7 @@ pub enum CLArgError {
     Illegal(String),
 }
 
-const MAX_OPT: u32 = 3;
+const MAX_OPT: u32 = OPT_LIST.len() as u32;
 
 const O0_OPTIMIZATIONS: &[Optimization] = &[];
 
@@ -254,7 +311,7 @@ impl CLArgs {
                         let level = rest.parse().map_err(CLArgError::InvalidOptLevel)?;
                         check_opt_level(&opt_level)?;
                         if level > MAX_OPT {
-                            println!("Warning: -O{} is equivalent to -O{}", level, MAX_OPT);
+                            eprintln!("Warning: -O{} is equivalent to -O{}", level, MAX_OPT);
                             opt_level = Some(MAX_OPT);
                         } else {
                             opt_level = Some(level);
