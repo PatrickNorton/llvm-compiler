@@ -8,6 +8,8 @@ use crate::parser::token_list::TokenList;
 use crate::parser::type_node::{TypeLikeNode, TypeNode};
 use crate::parser::typed_var::TypedVariableNode;
 
+use super::error::ParserException;
+
 #[derive(Debug)]
 pub struct VariableNode {
     line_info: LineInfo,
@@ -59,7 +61,9 @@ impl VariableNode {
         let (line_info, token_type) = tokens.next_tok(ignore_newlines)?.deconstruct();
         match token_type {
             TokenType::Name(string) => ParseResult::Ok(VariableNode::new(line_info, string)),
-            _ => ParseResult::Err(tokens.error_expected("name")),
+            tok => ParseResult::Err(
+                ParserException::of(format!("Expected name, got {:?}", tok), line_info).into(),
+            ),
         }
     }
 
