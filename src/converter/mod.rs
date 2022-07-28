@@ -164,9 +164,7 @@ fn local_module_path(
     let mut result = Vec::new();
     for file in read_dir(parent_path).unwrap() {
         let path = file.unwrap().path();
-        if is_module(&path) && has_extension(&path, FILE_EXTENSION)
-            || path.file_stem() == Some(OsStr::new(name))
-        {
+        if is_module(&path) && path.file_stem() == Some(OsStr::new(name)) {
             result.push(path);
         }
     }
