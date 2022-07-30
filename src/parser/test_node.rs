@@ -44,7 +44,6 @@ pub enum TestNode {
     Name(NameNode),
     Number(NumberNode),
     Operator(OperatorNode),
-    OperatorType(OperatorTypeNode),
     Raise(RaiseStatementNode),
     Range(RangeLiteralNode),
     Slice(SliceNode),
@@ -57,6 +56,24 @@ pub enum TestNode {
 
 #[derive(Debug)]
 pub struct EmptyTestNode {
+    line_info: LineInfo,
+}
+
+#[derive(Debug)]
+enum PartialTestNode {
+    Test(TestNode),
+    Op(DummyOp),
+}
+
+#[derive(Debug)]
+enum StackValue {
+    Node(TestNode),
+    Op(DummyOp),
+}
+
+#[derive(Debug)]
+struct DummyOp {
+    op: OperatorTypeNode,
     line_info: LineInfo,
 }
 
@@ -141,16 +158,15 @@ impl TestNode {
         let mut stack = VecDeque::<DummyOp>::new();
         let mut parse_curly = true;
         loop {
-            let line_info = tokens.line_info()?.clone();
             let node = Self::parse_node(tokens, ignore_newlines, parse_curly)?;
             match node {
                 Option::None => break,
-                Option::Some(TestNode::OperatorType(op)) => {
+                Option::Some(PartialTestNode::Op(op)) => {
                     // Convert - to u- where needed
-                    let operator = if op == OperatorTypeNode::Subtract && parse_curly {
+                    let operator = if op.op == OperatorTypeNode::Subtract && parse_curly {
                         OperatorTypeNode::USubtract
                     } else {
-                        op
+                        op.op
                     };
                     // Operators in a place where they shouldn't be, e.g. 1 + * 2
                     if parse_curly ^ (operator.is_unary() && !operator.is_postfix()) {
@@ -159,20 +175,20 @@ impl TestNode {
                     // Push all operators that bind more tightly onto the queue
                     while stack
                         .get(0)
-                        .map_or_else(|| false, |x| operator.precedence() >= x.op.precedence())
+                        .map_or(false, |x| operator.precedence() >= x.op.precedence())
                     {
                         queue.push_back(StackValue::Op(stack.pop_front().unwrap()));
                     }
                     // Postfix operators don't go on the stack, as they have no
                     // arguments left to be parsed
                     if operator.is_postfix() {
-                        queue.push_back(StackValue::Op(DummyOp::new(operator, line_info)))
+                        queue.push_back(StackValue::Op(DummyOp::new(operator, op.line_info)))
                     } else {
-                        stack.push_front(DummyOp::new(operator, line_info.clone()))
+                        stack.push_front(DummyOp::new(operator, op.line_info))
                     }
                     parse_curly = !operator.is_postfix();
                 }
-                Option::Some(node) => {
+                Option::Some(PartialTestNode::Test(node)) => {
                     if !parse_curly {
                         return Err(tokens.default_error());
                     }
@@ -182,6 +198,7 @@ impl TestNode {
                 }
             }
         }
+        queue.reserve(stack.len());
         while let Option::Some(x) = stack.pop_front() {
             queue.push_back(StackValue::Op(x))
         }
@@ -196,12 +213,17 @@ impl TestNode {
         tokens: &mut TokenList,
         ignore_newlines: bool,
         parse_curly: bool,
-    ) -> ParseResult<Option<TestNode>> {
+    ) -> ParseResult<Option<PartialTestNode>> {
         let node = Self::parse_internal_node(tokens, ignore_newlines, parse_curly)?;
         Ok(match node {
-            Option::Some(node) => match PostDottableNode::try_from(node) {
-                Result::Ok(x) => Option::Some(Self::parse_post(tokens, x.into(), ignore_newlines)?),
-                Result::Err(node) => Option::Some(node),
+            Option::Some(node @ PartialTestNode::Op(_)) => Option::Some(node),
+            Option::Some(PartialTestNode::Test(node)) => match PostDottableNode::try_from(node) {
+                Result::Ok(x) => Option::Some(PartialTestNode::Test(Self::parse_post(
+                    tokens,
+                    x.into(),
+                    ignore_newlines,
+                )?)),
+                Result::Err(node) => Option::Some(PartialTestNode::Test(node)),
             },
             Option::None => Option::None,
         })
@@ -211,28 +233,34 @@ impl TestNode {
         tokens: &mut TokenList,
         ignore_newlines: bool,
         parse_curly: bool,
-    ) -> ParseResult<Option<TestNode>> {
+    ) -> ParseResult<Option<PartialTestNode>> {
         if ignore_newlines {
             tokens.pass_newlines()?;
         }
         match tokens.token_type()? {
             TokenType::OpenBrace(c) => {
                 if parse_curly || *c != '{' {
-                    Self::parse_open_brace(tokens, ignore_newlines).map(Option::Some)
+                    Self::parse_open_brace(tokens, ignore_newlines)
+                        .map(PartialTestNode::Test)
+                        .map(Option::Some)
                 } else {
                     ParseResult::Ok(Option::None)
                 }
             }
-            TokenType::Name(_) => {
-                NameNode::parse_newline(tokens, ignore_newlines).map(|x| Some(TestNode::Name(x)))
-            }
-            TokenType::Number(_) => Ok(Some(TestNode::Number(NumberNode::parse(tokens)?))),
+            TokenType::Name(_) => NameNode::parse_newline(tokens, ignore_newlines)
+                .map(|x| Some(PartialTestNode::Test(TestNode::Name(x)))),
+            TokenType::Number(_) => Ok(Some(PartialTestNode::Test(TestNode::Number(
+                NumberNode::parse(tokens)?,
+            )))),
             &TokenType::Operator(op) => {
-                tokens.next_tok(ignore_newlines)?;
-                Ok(Some(TestNode::OperatorType(op)))
+                let (line_info, _) = tokens.next_tok(ignore_newlines)?.deconstruct();
+                Ok(Some(PartialTestNode::Op(DummyOp::new(op, line_info))))
             }
-            TokenType::OpFunc(_) => EscapedOperatorNode::parse(tokens, ignore_newlines)
-                .map(|x| Some(TestNode::Name(NameNode::EscapedOp(x)))),
+            TokenType::OpFunc(_) => EscapedOperatorNode::parse(tokens, ignore_newlines).map(|x| {
+                Some(PartialTestNode::Test(TestNode::Name(NameNode::EscapedOp(
+                    x,
+                ))))
+            }),
             TokenType::Newline => {
                 if ignore_newlines {
                     panic!("Illegal place for newline")
@@ -240,7 +268,9 @@ impl TestNode {
                     ParseResult::Ok(Option::None)
                 }
             }
-            TokenType::String(_) => StringLikeNode::parse(tokens).map(|x| Some(x.into())),
+            TokenType::String(_) => {
+                StringLikeNode::parse(tokens).map(|x| Some(PartialTestNode::Test(x.into())))
+            }
             TokenType::Keyword(_) => Self::parse_keyword_node(tokens, ignore_newlines),
             _ => ParseResult::Ok(Option::None),
         }
@@ -249,28 +279,35 @@ impl TestNode {
     fn parse_keyword_node(
         tokens: &mut TokenList,
         ignore_newlines: bool,
-    ) -> ParseResult<Option<TestNode>> {
+    ) -> ParseResult<Option<PartialTestNode>> {
         match tokens.token_type()? {
             TokenType::Keyword(key) => match key {
                 Keyword::Some => SomeStatementNode::parse(tokens)
                     .map(TestNode::Some)
+                    .map(PartialTestNode::Test)
                     .map(Option::Some),
                 Keyword::In => {
-                    tokens.next_tok(ignore_newlines)?;
-                    Ok(Some(TestNode::OperatorType(OperatorTypeNode::In)))
+                    let (line_info, _) = tokens.next_tok(ignore_newlines)?.deconstruct();
+                    Ok(Some(PartialTestNode::Op(DummyOp::new(
+                        OperatorTypeNode::In,
+                        line_info,
+                    ))))
                 }
                 Keyword::Switch => SwitchStatementNode::parse(tokens)
                     .map(TestNode::Switch)
+                    .map(PartialTestNode::Test)
                     .map(Option::Some),
                 Keyword::Lambda => LambdaNode::parse(tokens, ignore_newlines)
                     .map(TestNode::Lambda)
+                    .map(PartialTestNode::Test)
                     .map(Option::Some),
                 Keyword::Raise => RaiseStatementNode::parse(tokens, ignore_newlines)
                     .map(TestNode::Raise)
+                    .map(PartialTestNode::Test)
                     .map(Option::Some),
                 _ => Ok(None),
             },
-            _ => panic!("Expected a token"),
+            t => panic!("Expected a keyword token, got {:?}", t),
         }
     }
 
@@ -428,18 +465,6 @@ impl TestNode {
     }
 }
 
-#[derive(Debug)]
-enum StackValue {
-    Node(TestNode),
-    Op(DummyOp),
-}
-
-#[derive(Debug)]
-struct DummyOp {
-    op: OperatorTypeNode,
-    line_info: LineInfo,
-}
-
 impl DummyOp {
     pub fn new(op: OperatorTypeNode, line_info: LineInfo) -> DummyOp {
         DummyOp { op, line_info }
@@ -456,9 +481,10 @@ fn convert_queue_to_node(queue: VecDeque<StackValue>) -> ParseResult<TestNode> {
                 let nodes = if op.is_unary() {
                     vec![temp.pop_front().unwrap()]
                 } else {
-                    let mut t = vec![temp.pop_front().unwrap(), temp.pop_front().unwrap()];
-                    t.reverse();
-                    t
+                    // The operands are in the stack in reverse order
+                    let second = temp.pop_front().unwrap();
+                    let first = temp.pop_front().unwrap();
+                    vec![first, second]
                 };
                 temp.push_front(TestNode::Operator(OperatorNode::from_nodes(
                     info, op, nodes,
@@ -488,7 +514,6 @@ impl Lined for TestNode {
             TestNode::Name(n) => n.line_info(),
             TestNode::Number(n) => n.line_info(),
             TestNode::Operator(o) => o.line_info(),
-            TestNode::OperatorType(o) => o.line_info(),
             TestNode::Raise(r) => r.line_info(),
             TestNode::Range(r) => r.line_info(),
             TestNode::Slice(s) => s.line_info(),

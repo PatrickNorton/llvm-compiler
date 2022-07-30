@@ -187,7 +187,6 @@ impl<'a> TestConvertible<'a> for &'a TestNode {
             }
             TestNode::Number(n) => TestConverter::Number(n.test_converter(ret_count)),
             TestNode::Operator(o) => TestConverter::Operator(o.test_converter(ret_count)),
-            TestNode::OperatorType(_) => todo!(),
             TestNode::Raise(r) => TestConverter::Raise(r.test_converter(ret_count)),
             TestNode::Range(r) => TestConverter::Range(r.test_converter(ret_count)),
             TestNode::Slice(s) => TestConverter::Slice(s.test_converter(ret_count)),
@@ -221,7 +220,7 @@ impl<'a> TestConvertible<'a> for &'a TestNode {
             TestNode::Name(NameNode::Dotted(d)) => {
                 TestConverter::Dotted(d.test_conv_expected(ret_count, expected))
             }
-            TestNode::Name(NameNode::EscapedOp(_)) => todo!(),
+            TestNode::Name(NameNode::EscapedOp(_)) => todo!("Escaped operators"),
             TestNode::Name(NameNode::Function(f)) => {
                 TestConverter::Function(f.test_conv_expected(ret_count, expected))
             }
@@ -236,7 +235,6 @@ impl<'a> TestConvertible<'a> for &'a TestNode {
             TestNode::Operator(o) => {
                 TestConverter::Operator(o.test_conv_expected(ret_count, expected))
             }
-            TestNode::OperatorType(_) => todo!(),
             TestNode::Raise(r) => TestConverter::Raise(r.test_conv_expected(ret_count, expected)),
             TestNode::Range(r) => TestConverter::Range(r.test_conv_expected(ret_count, expected)),
             TestNode::Slice(s) => TestConverter::Slice(s.test_conv_expected(ret_count, expected)),
