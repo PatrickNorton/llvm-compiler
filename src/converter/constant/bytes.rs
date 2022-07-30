@@ -5,6 +5,7 @@ use itertools::Itertools;
 
 use crate::converter::builtins::BuiltinRef;
 use crate::converter::type_obj::TypeObject;
+use crate::util::fmt_with::format_with;
 use crate::util::{string_escape, usize_to_bytes, U32_BYTES};
 
 use super::{ConstantBytes, LangConstant};
@@ -30,9 +31,9 @@ impl BytesConstant {
             .iter()
             .map(|&x| {
                 if x < 0x80 {
-                    string_escape::escaped(x as char)
+                    string_escape::escaped(x as char).to_string()
                 } else {
-                    format!(r"\x{:02x}", x).into()
+                    format!(r"\x{:02x}", x)
                 }
             })
             .join("")
@@ -62,14 +63,13 @@ impl Display for BytesConstant {
         write!(
             f,
             r#"b"{}""#,
-            self.value
-                .iter()
-                .map(|&x| if x < 0x80 {
-                    string_escape::escaped(x as char)
+            format_with(&self.value, |val, fmt| val.iter().try_for_each(|&x| {
+                if x < 0x80 {
+                    string_escape::escaped(x as char).fmt(fmt)
                 } else {
-                    format!(r"\x{:02x}", x).into()
-                })
-                .format("")
+                    write!(fmt, r"\x{:02x}", x)
+                }
+            }))
         )
     }
 }

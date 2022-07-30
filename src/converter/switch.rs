@@ -1,8 +1,7 @@
 use std::borrow::Cow;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
-use std::convert::identity;
-use std::fmt::Display;
+use std::fmt::{self, Display, Formatter};
 use std::hash::Hash;
 use std::iter::zip;
 
@@ -15,6 +14,7 @@ use crate::parser::line_info::Lined;
 use crate::parser::switch_stmt::{CaseStatementNode, SwitchStatementNode};
 use crate::parser::test_node::TestNode;
 use crate::parser::variable::VariableNode;
+use crate::util::fmt_with::{format_with, FormatWith};
 use crate::util::{first, string_escape};
 
 use super::base_converter::BaseConverter;
@@ -224,7 +224,8 @@ impl<'a> SwitchConverter<'a> {
                     .map(Cow::into_owned)
                     .ok_or_else(|| literal_exception("int", lbl).into())
             },
-            identity,
+            // TODO: Remove clone here
+            |x, fmt| x.fmt(fmt),
             get_tbl,
         )
     }
@@ -245,7 +246,7 @@ impl<'a> SwitchConverter<'a> {
                     Err(literal_exception("string", lbl).into())
                 }
             },
-            |x| string_escape::escape(&x),
+            |x, fmt| string_escape::escape(x).fmt(fmt),
             str_tbl,
         )
     }
@@ -271,21 +272,20 @@ impl<'a> SwitchConverter<'a> {
                     _ => Err(literal_exception("char", lbl).into()),
                 }
             },
-            CharConstant::name,
+            |&x, fmt| CharConstant::name(x).fmt(fmt),
             char_tbl,
         )
     }
 
-    fn convert_tbl<T, D>(
+    fn convert_tbl<T>(
         &mut self,
         info: &mut CompilerInfo,
         add_to_map: impl FnMut(&mut CompilerInfo, &mut TestConverter, &TestNode) -> CompileResult<T>,
-        error_escape: impl FnOnce(T) -> D,
+        error_escape: impl Fn(&T, &mut Formatter<'_>) -> fmt::Result,
         create_table: impl FnOnce(HashMap<T, Label>, Label) -> SwitchTable,
     ) -> CompileResult<(BytecodeList, DivergingInfo)>
     where
         T: Eq + Hash + Clone,
-        D: Display,
     {
         let mut jumps = HashMap::new();
         let mut bytes = self.tbl_header(info)?;
@@ -297,16 +297,15 @@ impl<'a> SwitchConverter<'a> {
         Ok((bytes, result.diverging_info))
     }
 
-    fn convert_tbl_inner<T, D>(
+    fn convert_tbl_inner<T>(
         &mut self,
         info: &mut CompilerInfo,
         mut add_to_map: impl FnMut(&mut CompilerInfo, &mut TestConverter, &TestNode) -> CompileResult<T>,
-        error_escape: impl FnOnce(T) -> D,
+        error_escape: impl Fn(&T, &mut Formatter<'_>) -> fmt::Result,
         jumps: &mut HashMap<T, Label>,
     ) -> CompileResult<TblReturn>
     where
         T: Eq + Hash + Clone,
-        D: Display,
     {
         let mut default_val = None;
         let mut will_return = None;
@@ -332,19 +331,18 @@ impl<'a> SwitchConverter<'a> {
             for label in stmt.get_label() {
                 let mut lbl_converter = label.test_converter(1);
                 let value = add_to_map(info, &mut lbl_converter, label)?;
-                // TODO: Remove clone here
                 // May require feature(map_replace_key) (#44286)
-                match jumps.entry(value.clone()) {
+                match jumps.entry(value) {
                     Entry::Vacant(entry) => {
                         let lbl = Label::new();
                         bytes.add_label(lbl.clone());
                         entry.insert(lbl);
                     }
-                    Entry::Occupied(_) => {
+                    Entry::Occupied(entry) => {
                         return Err(CompilerException::of(
                             format!(
                                 "Cannot define {} twice in switch statement",
-                                error_escape(value)
+                                format_with(entry.key(), error_escape)
                             ),
                             self.node,
                         )
