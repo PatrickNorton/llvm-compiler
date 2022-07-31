@@ -1,5 +1,7 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::error::Error;
+use std::fmt::Display;
 use std::iter::zip;
 
 use derive_new::new;
@@ -14,6 +16,20 @@ use super::CompileResult;
 #[derive(Debug, new)]
 pub struct GenericInfo {
     params: Vec<TemplateParam>,
+}
+
+#[derive(Debug)]
+pub struct GenerifyError {
+    ty: GenerifyErrorType,
+}
+
+#[derive(Debug)]
+enum GenerifyErrorType {
+    UnequalLength(usize, usize),
+    TooFewArgs(usize, usize),
+    MismatchedList(TemplateParam, TypeObject),
+    MismatchedNonList(TemplateParam, TypeObject),
+    FailedBound(TemplateParam, TypeObject),
 }
 
 impl GenericInfo {
@@ -63,7 +79,9 @@ impl GenericInfo {
             } else if generic.get_subtypes().is_empty() {
                 TemplateParam::new_unbounded(generic.str_name().to_string(), i)
             } else {
-                todo!("Default interfaces are done before types are registered, so this doesn't work yet")
+                // FIXME: Default interfaces are done before types are
+                // registered, so this doesn't work yet
+                TemplateParam::new_unknown_bound(generic.str_name().to_string(), i)
             };
             params.push(param)
         }
@@ -75,7 +93,7 @@ impl GenericInfo {
         assert_eq!(self.params.len(), gen_info.params.len());
         for (param, new_param) in zip(&self.params, gen_info.params) {
             assert_eq!(param.name(), new_param.name());
-            if param.is_bounded() {
+            if !param.is_bounded() {
                 param.set_bound(new_param.get_bound().clone());
             } else {
                 assert_eq!(
@@ -111,7 +129,7 @@ impl GenericInfo {
         }
     }
 
-    pub fn generify(&self, args: Vec<TypeObject>) -> Option<Vec<TypeObject>> {
+    pub fn generify(&self, args: Vec<TypeObject>) -> Result<Vec<TypeObject>, GenerifyError> {
         if !self.params.iter().any(|x| x.is_vararg()) {
             self.generify_no_varargs(args)
         } else {
@@ -119,31 +137,32 @@ impl GenericInfo {
         }
     }
 
-    fn generify_no_varargs(&self, args: Vec<TypeObject>) -> Option<Vec<TypeObject>> {
+    fn generify_no_varargs(&self, args: Vec<TypeObject>) -> Result<Vec<TypeObject>, GenerifyError> {
         if args.len() != self.len() {
-            return None;
+            return Err(GenerifyError::new(GenerifyErrorType::UnequalLength(
+                self.len(),
+                args.len(),
+            )));
         }
         zip(args, &self.params)
             .map(|(arg, param)| {
-                if is_invalid(&arg, param) {
-                    None
-                } else {
-                    Some(arg)
-                }
+                check_arg(&arg, param)?;
+                Ok(arg)
             })
             .collect()
     }
 
-    fn generify_vararg(&self, args: Vec<TypeObject>) -> Option<Vec<TypeObject>> {
+    fn generify_vararg(&self, args: Vec<TypeObject>) -> Result<Vec<TypeObject>, GenerifyError> {
         if args.len() < self.len() - 1 {
-            return None;
+            return Err(GenerifyError::new(GenerifyErrorType::TooFewArgs(
+                self.len(),
+                args.len(),
+            )));
         }
         let mut result = Vec::with_capacity(self.len());
         let mut i = 0;
         while i < args.len() && !self.params[i].is_vararg() {
-            if is_invalid(&args[i], &self.params[i]) {
-                return None;
-            }
+            check_arg(&args[i], &self.params[i])?;
             // TODO: Remove clones
             result.push(args[i].clone());
             i += 1;
@@ -155,9 +174,7 @@ impl GenericInfo {
                 // Number of types resulted in empty vararg, proceed accordingly
                 result.push(TypeObject::list([]));
                 while i < args.len() {
-                    if is_invalid(&args[i], &self.params[i]) {
-                        return None;
-                    }
+                    check_arg(&args[i], &self.params[i])?;
                     // TODO: Remove clones
                     result.push(args[i].clone());
                     i += 1;
@@ -168,9 +185,7 @@ impl GenericInfo {
                 result.push(TypeObject::list([args[i].clone()]));
                 i += 1;
                 while i < args.len() {
-                    if is_invalid(&args[i], &self.params[i]) {
-                        return None;
-                    }
+                    check_arg(&args[i], &self.params[i])?;
                     // TODO: Remove clones
                     result.push(args[i].clone());
                     i += 1;
@@ -181,28 +196,44 @@ impl GenericInfo {
                 result.push(TypeObject::list_of(args[i..diff + i + 1].to_vec()));
                 i += 1;
                 while i < self.len() {
-                    if is_invalid(&args[i + diff], &self.params[i]) {
-                        return None;
-                    }
+                    check_arg(&args[i + diff], &self.params[i])?;
                     // TODO: Remove clones
                     result.push(args[i + diff].clone());
                     i += 1;
                 }
             }
         }
-        Some(result)
+        Ok(result)
     }
 }
 
-fn is_invalid(arg: &TypeObject, param: &TemplateParam) -> bool {
+fn check_arg(arg: &TypeObject, param: &TemplateParam) -> Result<(), GenerifyError> {
     let is_list = matches!(param.get_bound(), TypeObject::List(_));
-    if is_list != matches!(arg, TypeObject::List(_)) {
-        true
-    } else if !is_list {
+    let arg_is_list = matches!(arg, TypeObject::List(_));
+    if is_list && !arg_is_list {
+        Err(GenerifyError::new(GenerifyErrorType::MismatchedList(
+            param.clone(),
+            arg.clone(),
+        )))
+    } else if !arg_is_list && is_list {
+        Err(GenerifyError::new(GenerifyErrorType::MismatchedNonList(
+            param.clone(),
+            arg.clone(),
+        )))
+    } else if !is_list && !param.get_bound().is_superclass(arg) {
         // FIXME? param.get_bound() != null
-        return !param.get_bound().is_superclass(arg);
+        Err(GenerifyError::new(GenerifyErrorType::FailedBound(
+            param.clone(),
+            arg.clone(),
+        )))
     } else {
-        false
+        Ok(())
+    }
+}
+
+impl GenerifyError {
+    fn new(ty: GenerifyErrorType) -> Self {
+        Self { ty }
     }
 }
 
@@ -211,3 +242,53 @@ impl Default for GenericInfo {
         Self::empty()
     }
 }
+
+impl Error for GenerifyError {}
+
+impl Display for GenerifyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.ty.fmt(f)
+    }
+}
+
+impl Display for GenerifyErrorType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GenerifyErrorType::UnequalLength(len1, len2) => write!(
+                f,
+                "Type parameter list expected {} types, but got {}",
+                len1, len2
+            ),
+            GenerifyErrorType::TooFewArgs(len1, len2) => write!(
+                f,
+                "Type parameter expected no fewer than {} types, but got {}",
+                len1, len2
+            ),
+            GenerifyErrorType::MismatchedList(bound, value) => write!(
+                f,
+                "Type parameter {} has a bound of type {} (a list type), \
+                 but {} was given (not a list type)",
+                bound.name(),
+                bound.get_bound().name(),
+                value.name(),
+            ),
+            GenerifyErrorType::MismatchedNonList(bound, value) => write!(
+                f,
+                "Type parameter {} has a bound of type {} (not a list type), \
+                 but {} was given (a list type)",
+                bound.name(),
+                bound.get_bound().name(),
+                value.name(),
+            ),
+            GenerifyErrorType::FailedBound(bound, value) => write!(
+                f,
+                "Type parameter {} has bound of type {}, but {} was given",
+                bound.name(),
+                bound.get_bound().name(),
+                value.name()
+            ),
+        }
+    }
+}
+
+impl Error for GenerifyErrorType {}

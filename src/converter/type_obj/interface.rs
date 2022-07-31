@@ -167,26 +167,40 @@ impl InterfaceType {
         args: Vec<TypeObject>,
     ) -> CompileResult<TypeObject> {
         let generic_info = self.get_generic_info();
-        let true_args = generic_info.generify(args);
-        if let Option::Some(true_args) = true_args {
-            if true_args.len() != generic_info.len() {
-                Err(
-                    CompilerException::of("Cannot generify object in this manner", line_info)
-                        .into(),
-                )
-            } else {
-                Ok(InterfaceType {
-                    value: Arc::new(InterfaceTypeInner {
-                        info: self.value.info.clone(),
-                        typedef_name: self.typedef_name().clone(),
-                        generics: true_args,
-                        is_const: self.is_const(),
-                    }),
+        match generic_info.generify(args.clone()) {
+            Result::Ok(true_args) => {
+                if true_args.len() != generic_info.len() {
+                    Err(CompilerException::of(
+                        format!(
+                            "Cannot generify object in this manner: type {} by types [{}]",
+                            self.name(),
+                            true_args.iter().map(|x| x.name()).format(", "),
+                        ),
+                        line_info,
+                    )
+                    .into())
+                } else {
+                    Ok(InterfaceType {
+                        value: Arc::new(InterfaceTypeInner {
+                            info: self.value.info.clone(),
+                            typedef_name: self.typedef_name().clone(),
+                            generics: true_args,
+                            is_const: self.is_const(),
+                        }),
+                    }
+                    .into())
                 }
-                .into())
             }
-        } else {
-            Err(CompilerException::of("Cannot generify object in this manner", line_info).into())
+            Result::Err(e) => Err(CompilerException::of(
+                format!(
+                    "Cannot generify object in this manner: type {} by types [{}]\nNote: {}",
+                    self.name(),
+                    args.iter().map(|x| x.name()).format(", "),
+                    e
+                ),
+                line_info,
+            )
+            .into()),
         }
     }
 
