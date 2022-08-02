@@ -176,7 +176,7 @@ impl ImportHandler {
             let strings = &import_info.names;
             let as_names = import_info.as_names.as_ref().unwrap_or(&import_info.names);
             let export_handler = global_info.export_info(path);
-            if strings.len() == 1 && strings[0] == "*" {
+            if strings == &["*"] {
                 for (name, value) in export_handler.exported_types(import_info, global_info)? {
                     imported_types.insert(name, (value, import_info.line_info.clone()));
                 }

@@ -101,7 +101,7 @@ impl OperatorTypeNode {
                     || input[value.sequence().len()..]
                         .chars()
                         .next()
-                        .map_or_else(|| true, |x| !UnicodeXID::is_xid_continue(x)))
+                        .map_or(true, |x| !UnicodeXID::is_xid_continue(x)))
             {
                 return Some((TokenType::Operator(value), value.sequence().len()));
             }

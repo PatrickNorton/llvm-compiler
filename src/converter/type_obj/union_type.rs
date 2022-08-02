@@ -100,7 +100,7 @@ impl UnionTypeObject {
             &self.value.generics,
             self.value.is_const,
             &self.value.typedef_name,
-            self.value.info.is_const_class.get().unwrap(),
+            self.value.info.is_const_class.get().unwrap_or(false),
         )
     }
 

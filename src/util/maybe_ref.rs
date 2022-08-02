@@ -32,8 +32,16 @@ impl<'a, T> From<&'a T> for MaybeRef<'a, T> {
     }
 }
 
+impl<'a, T: PartialEq> PartialEq for MaybeRef<'a, T> {
+    fn eq(&self, other: &Self) -> bool {
+        **self == **other
+    }
+}
+
+impl<'a, T: Eq> Eq for MaybeRef<'a, T> {}
+
 macro_rules! impl_fmt {
-    ($format:ident, $( $formats:ident ),+) => {
+    ($format:ident, $( $formats:ident ),+ $(,)?) => {
         impl_fmt!($format);
         $(
             impl_fmt!($formats);

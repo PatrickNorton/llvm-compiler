@@ -365,7 +365,7 @@ impl ArgumentInfo {
                 // FIXME: Get line info for all missing-argument scenarios
                 let line_info = new_args
                     .first()
-                    .map_or_else(LineInfo::empty, |x| x.line_info().clone());
+                    .map_or(LineInfo::empty_ref(), |x| x.line_info());
                 return Err(CompilerException::of(
                     format!(
                         "Missing value for required keyword-only argument {}",
@@ -562,9 +562,7 @@ impl ArgumentInfo {
 
     fn has_vararg(&self) -> bool {
         debug_assert!(self.vararg_is_valid());
-        self.normal_args
-            .last()
-            .map_or_else(|| false, |x| x.is_vararg)
+        self.normal_args.last().map_or(false, |x| x.is_vararg)
     }
 
     fn not_enough_args<T: Deref<Target = Argument>>(
@@ -579,7 +577,7 @@ impl ArgumentInfo {
             .collect_vec();
         let arg_line_info = new_args
             .first()
-            .map_or_else(LineInfo::empty, |x| x.line_info().clone());
+            .map_or(LineInfo::empty_ref(), |x| x.line_info());
         match *unmatched {
             [] => CompilerInternalError::of(
                 "`Argument::not_enough_args` was called with no unmatched arguments",

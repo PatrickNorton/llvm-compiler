@@ -155,7 +155,7 @@ impl TypeTypeObject {
             .generic
             .as_ref()
             .and_then(|x| x.static_defined())
-            .map(|x| -> Box<dyn Iterator<Item = Cow<'_, str>>> { Box::new(x.map(Cow::Borrowed)) })
+            .map(|x| -> Box<dyn Iterator<Item = _>> { Box::new(x.map(Cow::Borrowed)) })
     }
 
     pub fn same_base_type(&self, other: &TypeObject) -> bool {

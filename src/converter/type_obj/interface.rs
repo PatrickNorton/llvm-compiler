@@ -225,14 +225,18 @@ impl InterfaceType {
 
     fn get_contract(&self) -> (HashSet<String>, HashSet<OpSpTypeNode>) {
         let info = self.get_info();
-        let attributes = info
-            .attributes
-            .get()
-            .expect("Attributes should be set before contract");
-        let static_attributes = info
-            .static_attributes
-            .get()
-            .expect("Attributes should be set before contract");
+        let attributes = info.attributes.get().unwrap_or_else(|| {
+            panic!(
+                "Attributes should be set before contract (class {})",
+                self.name()
+            )
+        });
+        let static_attributes = info.static_attributes.get().unwrap_or_else(|| {
+            panic!(
+                "Static attributes should be set before contract (class {})",
+                self.name()
+            )
+        });
         let mut methods = HashSet::with_capacity(attributes.len() + static_attributes.len());
         for (name, attr_info) in attributes {
             if !attr_info.has_impl {

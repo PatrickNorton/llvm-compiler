@@ -133,7 +133,7 @@ pub fn convert_to_file(
 fn find_path(name: &str, info: &dyn Lined, args: &CLArgs) -> CompileResult<(PathBuf, bool)> {
     // TODO? Make installed packages local to the project instead of global
     // (c.f. Python's packaging disaster)
-    let path = env::var("NEWLANG_PATH").unwrap();
+    let path = env::var("NEWLANG_PATH").expect("Could not find $NEWLANG_PATH environment variable");
     for filename in path.split(':') {
         if !filename.is_empty() {
             let result = WalkDir::new(filename).into_iter().find(|x| match x {

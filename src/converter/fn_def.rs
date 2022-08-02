@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use crate::parser::annotation::AnnotatableRef;
 use crate::parser::descriptor::DescriptorNode;
 use crate::parser::func_def::FunctionDefinitionNode;
+use crate::parser::generalizable::Generalizable;
 use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::typed_arg::TypedArgumentNode;
 
@@ -177,7 +178,7 @@ impl<'a> FunctionDefConverter<'a> {
         let converter = node.base_converter();
         let name = node.get_name().get_name();
         if let Option::Some(predefined) = info.get_fn(name).map(|x| x.get_info().clone()) {
-            converter.convert_predefined(info, predefined, name)
+            converter.convert_predefined(info, &predefined, name)
         } else {
             converter.convert_undefined(info, name).map(|x| x.1)
         }
@@ -186,7 +187,7 @@ impl<'a> FunctionDefConverter<'a> {
     fn convert_inner<'b>(&self, info: &'b mut CompilerInfo) -> CompileResult<FunctionRef<'b>> {
         let name = self.node.get_name().get_name();
         if let Option::Some(predef_info) = info.get_fn(name).map(|x| x.get_info().clone()) {
-            self.convert_predefined(info, predef_info, name)?;
+            self.convert_predefined(info, &predef_info, name)?;
             Ok(info.get_fn(name).unwrap())
         } else {
             self.convert_undefined(info, name).map(|x| x.0)
@@ -196,7 +197,7 @@ impl<'a> FunctionDefConverter<'a> {
     fn convert_predefined(
         &self,
         info: &mut CompilerInfo,
-        fn_info: FunctionInfo,
+        fn_info: &FunctionInfo,
         name: &str,
     ) -> CompileResult<FunctionConstant> {
         let generics = fn_info.get_generics().get_param_map();

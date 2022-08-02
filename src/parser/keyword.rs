@@ -145,7 +145,7 @@ impl Keyword {
                 && input[key.len()..]
                     .chars()
                     .next()
-                    .map_or_else(|| true, |x| !UnicodeXID::is_xid_continue(x))
+                    .map_or(true, |x| !UnicodeXID::is_xid_continue(x))
             {
                 return Option::Some((TokenType::Keyword(*value), key.len()));
             }

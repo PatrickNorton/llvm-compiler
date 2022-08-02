@@ -1,5 +1,6 @@
 pub mod decimal;
 pub mod error_counter;
+pub mod fmt_with;
 pub mod int_allocator;
 pub mod levenshtein;
 pub mod maybe_ref;

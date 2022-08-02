@@ -32,6 +32,7 @@ struct InfoInner {
 
 /// A trait for an object that has an associated [`LineInfo`].
 pub trait Lined {
+    /// Returns a reference to the [`LineInfo`] associated with `self`.
     fn line_info(&self) -> &LineInfo;
 }
 
@@ -124,9 +125,7 @@ impl LineInfo {
     /// assert_eq!(empty.get_path(), usize::MAX);
     /// ```
     pub fn get_line_number(&self) -> usize {
-        self.inner
-            .as_ref()
-            .map_or_else(|| usize::MAX, |x| x.line_no)
+        self.inner.as_ref().map_or(usize::MAX, |x| x.line_no)
     }
 
     /// The user-facing display of the region associated with the [`LineInfo`].
@@ -212,6 +211,15 @@ where
 {
     fn line_info(&self) -> &LineInfo {
         (*self).line_info()
+    }
+}
+
+impl<T> Lined for &mut T
+where
+    T: Lined + ?Sized,
+{
+    fn line_info(&self) -> &LineInfo {
+        (**self).line_info()
     }
 }
 

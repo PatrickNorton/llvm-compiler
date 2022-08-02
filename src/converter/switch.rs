@@ -14,7 +14,7 @@ use crate::parser::line_info::Lined;
 use crate::parser::switch_stmt::{CaseStatementNode, SwitchStatementNode};
 use crate::parser::test_node::TestNode;
 use crate::parser::variable::VariableNode;
-use crate::util::fmt_with::{format_with, FormatWith};
+use crate::util::fmt_with::format_with;
 use crate::util::{first, string_escape};
 
 use super::base_converter::BaseConverter;
