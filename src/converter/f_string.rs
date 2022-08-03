@@ -1,7 +1,7 @@
 use derive_new::new;
 use num::ToPrimitive;
 
-use crate::parser::formatted_string::{FormatInfo, FormattedStringNode};
+use crate::parser::formatted_string::{FormatInfo, FormatSign, FormatType, FormattedStringNode};
 use crate::parser::line_info::Lined;
 use crate::parser::operator_sp::OpSpTypeNode;
 use crate::parser::test_node::TestNode;
@@ -114,26 +114,25 @@ impl<'a> FormattedStringConverter<'a> {
         if !format.is_empty() {
             let mut converter = arg.test_converter(1);
             match format.fmt_type {
-                's' => converter
+                FormatType::Str | FormatType::None => converter
                     .constant_return(info)
                     .map(|x| x.and_then(|y| y.str_value())),
-                'r' => converter
+                FormatType::Repr => converter
                     .constant_return(info)
                     .map(|x| x.and_then(|y| y.repr_value())),
-                'n' | 'd' => self.decimal_constant(info, converter),
-                'x' => self.hex_constant(info, converter),
-                'o' => self.octal_constant(info, converter),
-                'b' => self.binary_constant(info, converter),
-                'c' => self.char_constant(info, converter),
-                'X' => self.upper_hex_constant(info, converter),
-                'e' => self.exp_constant(info, converter),
-                'E' => self.upper_exp_constant(info, converter),
-                'f' => self.fixed_constant(info, converter),
-                'F' => self.upper_fixed_constant(info, converter),
-                'g' => self.general_float_constant(info, converter),
-                'G' => self.upper_general_constant(info, converter),
-                '%' => self.percent_constant(info, converter),
-                _ => Ok(None),
+                FormatType::Number | FormatType::Decimal => self.decimal_constant(info, converter),
+                FormatType::LowerHex => self.hex_constant(info, converter),
+                FormatType::Octal => self.octal_constant(info, converter),
+                FormatType::Binary => self.binary_constant(info, converter),
+                FormatType::Character => self.char_constant(info, converter),
+                FormatType::UpperHex => self.upper_hex_constant(info, converter),
+                FormatType::Scientific => self.exp_constant(info, converter),
+                FormatType::UpperSci => self.upper_exp_constant(info, converter),
+                FormatType::Fixed => self.fixed_constant(info, converter),
+                FormatType::UpperFixed => self.upper_fixed_constant(info, converter),
+                FormatType::General => self.general_float_constant(info, converter),
+                FormatType::UpperGeneral => self.upper_general_constant(info, converter),
+                FormatType::Percentage => self.percent_constant(info, converter),
             }
         } else {
             TestConverter::constant_return(arg, info, 1).map(|x| x.and_then(|y| y.str_value()))
@@ -385,18 +384,22 @@ impl<'a> FormattedStringConverter<'a> {
     ) -> CompileResult<()> {
         assert!(!format.is_empty());
         match format.fmt_type {
-            's' => self.convert_to_str(info, arg, bytes, format),
-            'r' => self.convert_to_repr(info, arg, bytes, format),
-            'd' => self.convert_to_int(info, arg, bytes, format),
-            'x' => self.convert_to_base(info, arg, 16, bytes, format),
-            'X' => self.convert_to_upper_hex(info, arg, bytes, format),
-            'o' => self.convert_to_base(info, arg, 8, bytes, format),
-            'b' => self.convert_to_base(info, arg, 2, bytes, format),
-            'c' => self.convert_to_char(info, arg, bytes, format),
-            'n' | 'e' | 'E' | 'f' | 'F' | 'g' | 'G' | '%' => {
-                self.convert_decimal(info, arg, bytes, format)
-            }
-            _ => panic!("Unexpected format type {}", format.fmt_type),
+            FormatType::Str | FormatType::None => self.convert_to_str(info, arg, bytes, format),
+            FormatType::Repr => self.convert_to_repr(info, arg, bytes, format),
+            FormatType::Decimal => self.convert_to_int(info, arg, bytes, format),
+            FormatType::LowerHex => self.convert_to_base(info, arg, 16, bytes, format),
+            FormatType::UpperHex => self.convert_to_upper_hex(info, arg, bytes, format),
+            FormatType::Octal => self.convert_to_base(info, arg, 8, bytes, format),
+            FormatType::Binary => self.convert_to_base(info, arg, 2, bytes, format),
+            FormatType::Character => self.convert_to_char(info, arg, bytes, format),
+            FormatType::Number
+            | FormatType::Scientific
+            | FormatType::UpperSci
+            | FormatType::Fixed
+            | FormatType::UpperFixed
+            | FormatType::General
+            | FormatType::UpperGeneral
+            | FormatType::Percentage => self.convert_decimal(info, arg, bytes, format),
         }
     }
 
@@ -457,7 +460,7 @@ impl<'a> FormattedStringConverter<'a> {
     }
 
     fn check_str_format(&self, format: &FormatInfo) -> CompileResult<()> {
-        if format.sign != '\0' {
+        if format.sign != FormatSign::None {
             Err(CompilerException::of(
                 "Sign specifier is invalid in non-numeric format specifiers",
                 format,
@@ -523,7 +526,7 @@ impl<'a> FormattedStringConverter<'a> {
         bytes: &mut BytecodeList,
         format: &FormatInfo,
     ) -> CompileResult<()> {
-        assert_eq!(format.fmt_type, 'X');
+        assert_eq!(format.fmt_type, FormatType::UpperHex);
         self.convert_fmt_int(info, arg, bytes, format)
     }
 

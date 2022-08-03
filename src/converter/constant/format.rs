@@ -24,12 +24,12 @@ impl FormatConstant {
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = vec![ConstantBytes::Format as u8];
         bytes.extend((self.value.fill as u32).to_be_bytes());
-        bytes.push(map_null(self.value.align, '<').try_into().unwrap());
-        bytes.push(map_null(self.value.sign, '-').try_into().unwrap());
+        bytes.push(self.value.align.to_byte());
+        bytes.push(self.value.sign.to_byte());
         bytes.push(self.hash_zero_byte());
         bytes.extend(usize_to_bytes(self.value.min_width));
         bytes.extend(usize_to_bytes(self.value.precision));
-        bytes.push(map_null(self.value.fmt_type, 's').try_into().unwrap());
+        bytes.push(self.value.fmt_type.to_byte());
         bytes
     }
 

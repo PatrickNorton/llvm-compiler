@@ -22,14 +22,55 @@ pub struct FormattedStringNode {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FormatInfo {
     pub fill: char,
-    pub align: char,
-    pub sign: char,
+    pub align: AlignType,
+    pub sign: FormatSign,
     pub hash: bool,
     pub zero: bool,
     pub min_width: usize,
     pub precision: usize,
-    pub fmt_type: char,
+    pub fmt_type: FormatType,
     line_info: LineInfo,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
+pub enum AlignType {
+    #[default]
+    None,
+    Left,
+    Right,
+    AfterSign,
+    Center,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
+pub enum FormatSign {
+    #[default]
+    None,
+    Plus,
+    Minus,
+    Space,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
+pub enum FormatType {
+    #[default]
+    None,
+    Binary,
+    Character,
+    Decimal,
+    Octal,
+    LowerHex,
+    UpperHex,
+    Number,
+    Scientific,
+    UpperSci,
+    Fixed,
+    UpperFixed,
+    General,
+    UpperGeneral,
+    Percentage,
+    Str,
+    Repr,
 }
 
 impl FormattedStringNode {
@@ -127,33 +168,30 @@ impl FormattedStringNode {
 }
 
 const FORMAT_INVALID: &str = "\"'[](){}";
-const ALIGN_VALID: &str = "><=^";
-const SIGN_VALID: &str = " +-";
-const TYPE_VALID: &str = "bcdoxXneEfFgG%rs";
 
 impl FormatInfo {
     pub fn empty() -> FormatInfo {
         FormatInfo {
             fill: '\0',
-            align: '\0',
-            sign: '\0',
+            align: AlignType::None,
+            sign: FormatSign::None,
             hash: false,
             zero: false,
             min_width: 0,
             precision: 0,
-            fmt_type: '\0',
+            fmt_type: FormatType::None,
             line_info: LineInfo::empty(),
         }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.only_type() && self.fmt_type == '\0'
+        self.only_type() && self.fmt_type == FormatType::None
     }
 
     pub fn only_type(&self) -> bool {
         self.fill == '\0'
-            && self.align == '\0'
-            && self.sign == '\0'
+            && self.align == AlignType::None
+            && self.sign == FormatSign::None
             && !self.hash
             && !self.zero
             && self.min_width == 0
@@ -169,15 +207,16 @@ impl FormatInfo {
             return Ok((Self::empty(), 1));
         }
         let mut chars = specifier.chars().peekable();
+        // TODO: Reduce double-parsing here
         let (fill, align) = if Self::starts_align(chars.clone()) {
-            (chars.next().unwrap(), chars.next().unwrap())
-        } else {
             (
-                '\0',
-                chars.next_if(|&x| ALIGN_VALID.contains(x)).unwrap_or('\0'),
+                chars.next().unwrap(),
+                AlignType::from_char(chars.next().unwrap()).unwrap(),
             )
+        } else {
+            ('\0', AlignType::parse(&mut chars))
         };
-        let sign = chars.next_if(|&x| SIGN_VALID.contains(x)).unwrap_or('\0');
+        let sign = FormatSign::parse(&mut chars);
         let hash = chars.next_if(|&x| x == '#').is_some();
         let zero = chars.next_if(|&x| x == '0').is_some();
         let min_width = parse_int(&mut chars);
@@ -186,7 +225,7 @@ impl FormatInfo {
         } else {
             0
         };
-        let fmt_type = chars.next_if(|&x| TYPE_VALID.contains(x)).unwrap_or('\0');
+        let fmt_type = FormatType::parse(&mut chars);
         let line_info = line_info.substring(bang_place + 2);
         Ok((
             FormatInfo {
@@ -218,10 +257,165 @@ impl FormatInfo {
     }
 
     fn starts_align(mut chars: impl Iterator<Item = char>) -> bool {
-        chars.next().is_some()
-            && chars
-                .next()
-                .map_or_else(|| false, |x| ALIGN_VALID.contains(x))
+        chars.next().is_some() && chars.next().and_then(AlignType::from_char).is_some()
+    }
+}
+
+impl AlignType {
+    pub fn parse(chars: &mut Peekable<impl Iterator<Item = char>>) -> Self {
+        match chars.peek().and_then(|&x| Self::from_char(x)) {
+            Option::None => Self::None,
+            Option::Some(val) => {
+                chars.next();
+                val
+            }
+        }
+    }
+
+    pub const fn from_char(x: char) -> Option<Self> {
+        match x {
+            '<' => Some(Self::Left),
+            '>' => Some(Self::Right),
+            '=' => Some(Self::AfterSign),
+            '^' => Some(Self::Center),
+            _ => None,
+        }
+    }
+
+    pub const fn to_char(self) -> Option<char> {
+        match self {
+            AlignType::None => None,
+            AlignType::Left => Some('<'),
+            AlignType::Right => Some('>'),
+            AlignType::AfterSign => Some('='),
+            AlignType::Center => Some('^'),
+        }
+    }
+
+    pub const fn to_byte(self) -> u8 {
+        match self {
+            AlignType::None | AlignType::Left => b'<',
+            AlignType::Right => b'>',
+            AlignType::AfterSign => b'=',
+            AlignType::Center => b'^',
+        }
+    }
+}
+
+impl FormatSign {
+    pub fn parse(chars: &mut Peekable<impl Iterator<Item = char>>) -> Self {
+        match chars.peek().and_then(|&x| Self::from_char(x)) {
+            Option::None => Self::None,
+            Option::Some(val) => {
+                chars.next();
+                val
+            }
+        }
+    }
+
+    pub const fn from_char(x: char) -> Option<Self> {
+        match x {
+            '+' => Some(Self::Plus),
+            '-' => Some(Self::Minus),
+            ' ' => Some(Self::Space),
+            _ => None,
+        }
+    }
+
+    pub const fn to_char(self) -> Option<char> {
+        match self {
+            FormatSign::None => None,
+            FormatSign::Plus => Some('+'),
+            FormatSign::Minus => Some('-'),
+            FormatSign::Space => Some(' '),
+        }
+    }
+
+    pub const fn to_byte(self) -> u8 {
+        match self {
+            FormatSign::None => b'-',
+            FormatSign::Plus => b'+',
+            FormatSign::Minus => b'-',
+            FormatSign::Space => b' ',
+        }
+    }
+}
+
+impl FormatType {
+    pub fn parse(chars: &mut Peekable<impl Iterator<Item = char>>) -> Self {
+        match chars.peek().and_then(|&x| Self::from_char(x)) {
+            Option::None => Self::None,
+            Option::Some(val) => {
+                chars.next();
+                val
+            }
+        }
+    }
+
+    pub const fn from_char(x: char) -> Option<Self> {
+        match x {
+            'b' => Some(Self::Binary),
+            'c' => Some(Self::Character),
+            'd' => Some(Self::Decimal),
+            'o' => Some(Self::Octal),
+            'x' => Some(Self::LowerHex),
+            'X' => Some(Self::UpperHex),
+            'n' => Some(Self::Number),
+            'e' => Some(Self::Scientific),
+            'E' => Some(Self::UpperSci),
+            'f' => Some(Self::Fixed),
+            'F' => Some(Self::UpperFixed),
+            'g' => Some(Self::General),
+            'G' => Some(Self::UpperGeneral),
+            '%' => Some(Self::Percentage),
+            's' => Some(Self::Str),
+            'r' => Some(Self::Repr),
+            _ => None,
+        }
+    }
+
+    pub const fn to_char(self) -> Option<char> {
+        match self {
+            Self::None => None,
+            Self::Binary => Some('b'),
+            Self::Character => Some('c'),
+            Self::Decimal => Some('d'),
+            Self::Octal => Some('o'),
+            Self::LowerHex => Some('x'),
+            Self::UpperHex => Some('X'),
+            Self::Number => Some('n'),
+            Self::Scientific => Some('e'),
+            Self::UpperSci => Some('E'),
+            Self::Fixed => Some('f'),
+            Self::UpperFixed => Some('F'),
+            Self::General => Some('g'),
+            Self::UpperGeneral => Some('G'),
+            Self::Percentage => Some('%'),
+            Self::Str => Some('s'),
+            Self::Repr => Some('r'),
+        }
+    }
+
+    pub const fn to_byte(self) -> u8 {
+        match self {
+            Self::None => b's',
+            Self::Binary => b'b',
+            Self::Character => b'c',
+            Self::Decimal => b'd',
+            Self::Octal => b'o',
+            Self::LowerHex => b'x',
+            Self::UpperHex => b'X',
+            Self::Number => b'n',
+            Self::Scientific => b'e',
+            Self::UpperSci => b'E',
+            Self::Fixed => b'f',
+            Self::UpperFixed => b'F',
+            Self::General => b'g',
+            Self::UpperGeneral => b'G',
+            Self::Percentage => b'%',
+            Self::Str => b's',
+            Self::Repr => b'r',
+        }
     }
 }
 
@@ -288,11 +482,11 @@ impl Display for FormatInfo {
         if self.fill != '\0' {
             f.write_char(self.fill)?;
         }
-        if self.align != '\0' {
-            f.write_char(self.align)?;
+        if let Option::Some(chr) = self.align.to_char() {
+            f.write_char(chr)?;
         }
-        if self.sign != '\0' {
-            f.write_char(self.sign)?;
+        if let Option::Some(chr) = self.sign.to_char() {
+            f.write_char(chr)?;
         }
         if self.hash {
             f.write_char('#')?;
@@ -306,8 +500,8 @@ impl Display for FormatInfo {
         if self.precision != 0 {
             write!(f, "{}", self.precision)?;
         }
-        if self.fmt_type != '\0' {
-            f.write_char(self.fmt_type)?;
+        if let Option::Some(chr) = self.fmt_type.to_char() {
+            f.write_char(chr)?;
         }
         Ok(())
     }
