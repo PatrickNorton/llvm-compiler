@@ -1,13 +1,15 @@
 use std::collections::HashMap;
 use std::error::Error;
 use std::mem::take;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
+use either::Either;
 use itertools::Itertools;
 
 use crate::converter::builtins::ParsedBuiltins;
 use crate::macros::hash_map;
 use crate::parser::base::IndependentNode;
+use crate::parser::line_info::LineInfo;
 use crate::parser::parse::TopNode;
 
 use super::compiler_info::CompilerInfo;
@@ -18,7 +20,7 @@ use super::file_types::FileTypes;
 use super::global_info::GlobalCompilerInfo;
 use super::import_handler::{builtins_file, ImportHandler};
 use super::permission::PermissionLevel;
-use super::type_obj::InterfaceType;
+use super::type_obj::{InterfaceType, TypeObject};
 use super::{builtins, CompileResult};
 
 pub fn compile_all(
@@ -90,8 +92,7 @@ pub fn compile_all(
     let mut all_infos = import_handlers
         .into_iter()
         .map(|(file, handler)| {
-            // TODO? Remove clone here
-            let predeclared = all_files[&file].1.types.clone();
+            let predeclared = predeclared_types(&file, &all_files);
             let info = CompilerInfo::with_handler(global_info, handler, predeclared)?;
             Ok((file, info))
         })
@@ -190,4 +191,42 @@ fn load_default_interfaces<'a>(
             .complete_without_reserving(info, &ty, defaults, true)?;
     }
     Ok(())
+}
+
+fn predeclared_types(
+    file: &Path,
+    all_files: &HashMap<PathBuf, (TopNode, FileTypes)>,
+) -> HashMap<String, (TypeObject, LineInfo)> {
+    // TODO? Typedefs
+    let (_, file_types) = &all_files[file];
+    let mut predeclared = file_types.types.clone();
+    for (path, import_info) in &file_types.imports {
+        let (_, import_file) = &all_files[path];
+        for import in import_info {
+            if let Option::Some((ty, info)) = imported_ty(import_file, all_files, &import.name) {
+                predeclared.insert(
+                    import
+                        .as_name
+                        .clone()
+                        .unwrap_or_else(|| import.name.clone()),
+                    (ty.clone(), info.clone()),
+                );
+            }
+        }
+    }
+    predeclared
+}
+
+fn imported_ty<'a>(
+    import_file: &'a FileTypes,
+    all_files: &'a HashMap<PathBuf, (TopNode, FileTypes)>,
+    name: &str,
+) -> Option<&'a (TypeObject, LineInfo)> {
+    if let Option::Some(pair) = import_file.types.get(name) {
+        Option::Some(pair)
+    } else if let Option::Some(Either::Right(file)) = import_file.exports.get(name) {
+        imported_ty(&all_files[file].1, all_files, name)
+    } else {
+        None
+    }
 }
