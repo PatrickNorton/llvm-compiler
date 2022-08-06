@@ -187,7 +187,7 @@ fn load_default_interfaces<'a>(
             }
         };
         node.base_converter()
-            .complete_without_reserving(info, &ty, defaults)?;
+            .complete_without_reserving(info, &ty, defaults, true)?;
     }
     Ok(())
 }

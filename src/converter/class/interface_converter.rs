@@ -78,7 +78,7 @@ impl<'a> AnnotatableConverter<'a> for InterfaceConverter<'a> {
             type_val.set_generic_parent();
             ensure_proper_inheritance(self.node, &user_type, &true_supers)?;
             info.add_type(user_type.into());
-            self.parse_into_object(info, &mut converter, type_val.clone(), None)?;
+            self.parse_into_object(info, &mut converter, type_val.clone(), None, false)?;
             if self.node.get_descriptors().contains(&DescriptorNode::Auto) {
                 return Err(CompilerException::of(
                     "Auto interfaces may only be defined at top level",
@@ -135,7 +135,7 @@ impl<'a> InterfaceConverter<'a> {
         obj: &InterfaceType,
         defaults: &mut DefaultHolder<'a>,
     ) -> CompileResult<u16> {
-        self.complete_without_reserving(info, obj, defaults)?;
+        self.complete_without_reserving(info, obj, defaults, false)?;
         Ok(info.reserve_class(obj.clone().into()))
     }
 
@@ -144,6 +144,7 @@ impl<'a> InterfaceConverter<'a> {
         info: &mut CompilerInfo,
         obj: &InterfaceType,
         defaults: &mut DefaultHolder<'a>,
+        auto_interface: bool,
     ) -> CompileResult<()> {
         let mut converter = ConverterHolder::new();
         obj.get_generic_info()
@@ -151,7 +152,13 @@ impl<'a> InterfaceConverter<'a> {
         obj.set_generic_parent();
         info.access_handler_mut().add_cls(obj.clone().into());
         info.add_local_types(obj.clone().into(), obj.get_generic_info().get_param_map());
-        let result = self.parse_into_object(info, &mut converter, obj.clone(), Some(defaults));
+        let result = self.parse_into_object(
+            info,
+            &mut converter,
+            obj.clone(),
+            Some(defaults),
+            auto_interface,
+        );
         info.access_handler_mut().remove_cls();
         info.remove_local_types();
         result
@@ -163,6 +170,7 @@ impl<'a> InterfaceConverter<'a> {
         converter: &mut ConverterHolder<'a>,
         obj: InterfaceType,
         defaults: Option<&mut DefaultHolder<'a>>,
+        auto_interface: bool,
     ) -> CompileResult<()> {
         self.parse_statements(info, converter, defaults)?;
         converter.check_attributes()?;
@@ -176,7 +184,11 @@ impl<'a> InterfaceConverter<'a> {
         ));
         obj.set_attributes(attr_infos(converter.all_attrs(), &self.generic_attrs));
         obj.set_static_attributes(attr_infos(converter.static_attrs(), &HashSet::new()));
-        obj.seal(Some(info.global_info()), Some(info.builtins()));
+        if auto_interface {
+            obj.seal_without_interfaces()
+        } else {
+            obj.seal(Some(info.global_info()), Some(info.builtins()));
+        }
         Ok(())
     }
 

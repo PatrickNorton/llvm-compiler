@@ -187,6 +187,7 @@ impl Linker {
                         info,
                         &predeclared_type,
                         defaults,
+                        false,
                     )?
                 }
                 Ok(Some(TypeTypeObject::new(predeclared_type.into()).into()))

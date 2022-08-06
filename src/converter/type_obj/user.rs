@@ -187,6 +187,10 @@ pub trait UserTypeLike: UserTypeInner + PartialEq<TypeObject> {
         self.get_info().seal();
     }
 
+    fn seal_without_interfaces(&self) {
+        self.get_info().seal();
+    }
+
     fn set_operators(&self, operators: HashMap<OpSpTypeNode, Self::Operator>) {
         self.get_info()
             .operators
