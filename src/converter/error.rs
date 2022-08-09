@@ -130,6 +130,16 @@ impl CompilerTodoError {
     }
 }
 
+impl Display for CompilerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CompilerError::Normal(n) => Display::fmt(n, f),
+            CompilerError::Internal(i) => Display::fmt(i, f),
+            CompilerError::Todo(t) => Display::fmt(t, f),
+        }
+    }
+}
+
 impl Display for CompilerException {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}\n{:?}", self.message, self.backtrace)
@@ -148,21 +158,13 @@ impl Display for CompilerTodoError {
     }
 }
 
+impl Error for CompilerError {}
+
 impl Error for CompilerException {}
 
 impl Error for CompilerInternalError {}
 
 impl Error for CompilerTodoError {}
-
-impl From<CompilerError> for Box<dyn Error> {
-    fn from(val: CompilerError) -> Self {
-        match val {
-            CompilerError::Normal(n) => Box::new(n),
-            CompilerError::Internal(i) => Box::new(i),
-            CompilerError::Todo(t) => Box::new(t),
-        }
-    }
-}
 
 impl From<CompilerException> for CompilerError {
     fn from(x: CompilerException) -> Self {

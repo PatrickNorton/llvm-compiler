@@ -177,7 +177,7 @@ impl<'a> DeleteConverter<'a> {
             Option::None => Err(CompilerException::of(
                 format!(
                     "Delete cannot be called on an index with a variable of type '{}' \
-                 ('{}' has no usable operator del[])",
+                     ('{}' has no usable operator del[])",
                     ret_type.name(),
                     ret_type.name()
                 ),

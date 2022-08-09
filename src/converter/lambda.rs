@@ -30,15 +30,15 @@ pub struct LambdaConverter<'a> {
 
 impl<'a> ConverterTest for LambdaConverter<'a> {
     fn return_type(&mut self, info: &mut CompilerInfo) -> CompileTypes {
-        Ok(vec![FunctionInfo::new(
+        let fn_info = FunctionInfo::new(
             LineInfo::empty(),
             String::new(),
             false,
             GenericInfo::empty(),
             self.convert_args(info)?,
             self.lambda_return_type(info)?,
-        )
-        .to_callable()])
+        );
+        Ok(vec![fn_info.to_callable()])
     }
 }
 

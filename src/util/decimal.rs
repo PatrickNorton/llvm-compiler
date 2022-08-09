@@ -268,6 +268,7 @@ fn display_dec(
     scale: isize,
     f: &mut std::fmt::Formatter<'_>,
 ) -> std::fmt::Result {
+    // TODO: Reduce amount of string-allocation/copying required
     // Aquire the absolute integer as a decimal string
     let mut abs_int = int_val.abs().to_str_radix(10);
     // Split the representation at the decimal point
@@ -298,10 +299,14 @@ fn display_dec(
     let after = if let Some(precision) = f.precision() {
         let len = after.len();
         if len < precision {
-            after + "0".repeat(precision - len).as_str()
+            let mut tmp = after;
+            tmp.push_str(&"0".repeat(precision - len));
+            tmp
         } else {
             // TODO: Should we round?
-            after[0..precision].to_string()
+            let mut tmp = after;
+            tmp.truncate(precision);
+            tmp
         }
     } else {
         after

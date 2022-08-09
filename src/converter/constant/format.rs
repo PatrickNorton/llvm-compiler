@@ -38,14 +38,6 @@ impl FormatConstant {
     }
 }
 
-fn map_null(x: char, replace: char) -> char {
-    if x == '\0' {
-        replace
-    } else {
-        x
-    }
-}
-
 impl Display for FormatConstant {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.value.fmt(f)
@@ -83,12 +75,12 @@ mod tests {
         let fmt_bytes = &[
             FMT_BYTE,
             0, 0, 0, 0,
-            0x3c, // '<'
-            0x2d, // '-'
+            b'<',
+            b'-',
             0,
             0, 0, 0, 0,
             0, 0, 0, 0,
-            0x73, // 'c'
+            b'c',
         ];
         assert_eq!(
             FormatConstant::new(FormatInfo::empty()).to_bytes(),

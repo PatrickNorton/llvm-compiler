@@ -150,14 +150,29 @@ impl<'a> IncDecConverter<'a> {
         if index_type
             .operator_info(OpSpTypeNode::GetAttr, info)
             .is_none()
-            || index_type
-                .operator_info(OpSpTypeNode::SetAttr, info)
-                .is_none()
         {
-            Err(self.type_error(index_type).into())
+            Err(self.index_error(index_type, OpSpTypeNode::GetAttr).into())
+        } else if index_type
+            .operator_info(OpSpTypeNode::SetAttr, info)
+            .is_none()
+        {
+            Err(self.index_error(index_type, OpSpTypeNode::SetAttr).into())
         } else {
             Ok(())
         }
+    }
+
+    fn index_error(&self, ty: &TypeObject, op: OpSpTypeNode) -> CompilerException {
+        let inc_name = self.inc_name();
+        let ty_name = ty.name();
+        CompilerException::of(
+            format!(
+                "Cannot {inc_name} index of object of type '{ty_name}'\n\
+                 Note: To {inc_name}, type '{ty_name}' requires both \
+                 operator [] and operator []=, but it is missing {op}",
+            ),
+            self.node,
+        )
     }
 
     fn inc_name(&self) -> &'static str {
