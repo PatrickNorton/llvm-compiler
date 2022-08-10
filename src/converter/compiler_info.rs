@@ -279,7 +279,11 @@ impl<'a> CompilerInfo<'a> {
     }
 
     pub fn add_local_types(&mut self, parent: TypeObject, values: HashMap<String, TypeObject>) {
-        self.var_holder.add_local_types(parent, values)
+        self.var_holder.add_local_types(Some(parent), values)
+    }
+
+    pub fn add_parentless_locals(&mut self, values: HashMap<String, TypeObject>) {
+        self.var_holder.add_local_types(None, values)
     }
 
     pub fn remove_local_types(&mut self) {
@@ -491,13 +495,6 @@ impl<'a> CompilerInfo<'a> {
 
     pub fn remove_features<'b>(&mut self, features: impl IntoIterator<Item = &'b str>) {
         features.into_iter().for_each(|x| self.remove_feature(x))
-    }
-
-    pub fn add_predeclared_types(
-        &mut self,
-        types: HashMap<String, (TypeObject, LineInfo)>,
-    ) -> CompileResult<()> {
-        self.var_holder.add_predeclared_types(types)
     }
 
     pub fn set_builtin(

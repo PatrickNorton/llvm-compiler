@@ -220,7 +220,7 @@ impl<'a> FunctionDefConverter<'a> {
         );
         var_holder.add_stack_frame();
         self.check_gen()?;
-        var_holder.add_local_types(fn_info.to_callable(), generics);
+        var_holder.add_local_types(Some(fn_info.to_callable()), generics);
         let mut bytes = BytecodeList::new();
         self.convert_body(info, &mut bytes, is_gen, true_ret)?;
         let var_holder = info.var_holder_mut();
@@ -280,7 +280,7 @@ impl<'a> FunctionDefConverter<'a> {
         var_holder.add_stack_frame();
         self.check_gen()?;
         var_holder.add_local_types(
-            fn_info.to_callable(),
+            Some(fn_info.to_callable()),
             generics.into_iter().map(|(x, y)| (x, y.into())).collect(),
         );
         self.convert_body(info, &mut bytes, is_generator, true_ret)?;

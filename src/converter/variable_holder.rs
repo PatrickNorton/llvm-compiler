@@ -4,6 +4,7 @@ use std::iter::zip;
 use std::mem::replace;
 
 use either::Either;
+use itertools::Itertools;
 
 use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::type_node::TypeNode;
@@ -45,7 +46,7 @@ pub struct VariableInfo {
 
 #[derive(Debug)]
 struct LocalTypeFrame {
-    parent_type: TypeObject,
+    parent_type: Option<TypeObject>,
     children: HashMap<String, TypeObject>,
 }
 
@@ -305,7 +306,11 @@ impl VariableHolder {
         panic!("Variable {} removed but undefined", name)
     }
 
-    pub fn add_local_types(&mut self, parent: TypeObject, values: HashMap<String, TypeObject>) {
+    pub fn add_local_types(
+        &mut self,
+        parent: Option<TypeObject>,
+        values: HashMap<String, TypeObject>,
+    ) {
         self.local_types.push(LocalTypeFrame {
             parent_type: parent,
             children: values,
@@ -364,7 +369,7 @@ impl VariableHolder {
             .iter()
             .rev()
             .find(|frame| frame.children.contains_key(&*base_name))
-            .map(|x| &x.parent_type)
+            .and_then(|x| x.parent_type.as_ref())
     }
 
     pub fn class_of(

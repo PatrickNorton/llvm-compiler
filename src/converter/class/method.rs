@@ -125,8 +125,7 @@ impl<'a> MethodConverter<'a> {
         defaults: Option<&mut DefaultHolder<'a>>,
     ) -> CompileResult<()> {
         let generics = GenericInfo::parse(info, node.get_generics())?;
-        // FIXME: Local types w/o parent
-        // info.add_local_types(None, generics.get_param_map());
+        info.add_parentless_locals(generics.get_param_map());
         let name = method_name(node);
         let args = ArgumentInfo::of(node.get_args(), info, defaults)?;
         let returns = info.types_of(node.get_retval())?;
@@ -147,8 +146,7 @@ impl<'a> MethodConverter<'a> {
         );
         let access_level = AccessLevel::from_descriptors(node.get_descriptors());
         let is_mut = node.get_descriptors().contains(&DescriptorNode::Mut);
-        // FIXME: Local types w/o parent
-        // info.remove_local_types()
+        info.remove_local_types();
         fn_info.set_generic_parent();
         if is_gen && !has_returns {
             return Err(generator_error(node).into());

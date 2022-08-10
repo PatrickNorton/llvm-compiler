@@ -109,6 +109,7 @@ impl<'a> ClassConverter<'a> {
         obj.get_generic_info()
             .re_parse(info, self.node.get_name().get_subtypes())?;
         obj.set_generic_parent();
+        info.add_local_types(obj.clone().into(), obj.get_generic_info().get_param_map());
         let supers = convert_supers(self.node, info.types_of(self.node.get_superclasses())?)?;
         obj.set_supers(supers.into_iter().map_into().collect());
         let is_const = self.node.get_descriptors().contains(&DescriptorNode::Const);
@@ -122,6 +123,7 @@ impl<'a> ClassConverter<'a> {
             self.check_const_supers(obj, &supers)?;
         }
         self.parse_into_object(info, &mut converter, obj, is_const, Some(defaults))?;
+        info.remove_local_types();
         Ok(if reserve {
             info.reserve_class(obj.clone().into())
         } else {
