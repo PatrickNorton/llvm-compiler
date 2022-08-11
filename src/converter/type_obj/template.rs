@@ -70,6 +70,19 @@ impl TemplateParam {
             value: Arc::new(TemplateInner {
                 name,
                 index,
+                bound: TemplateBound::Known(OBJECT.into()),
+                is_vararg: false,
+                typedef_name: None,
+                parent: OnceCell::new(),
+            }),
+        }
+    }
+
+    pub fn new_unknown_bound(name: String, index: usize) -> Self {
+        Self {
+            value: Arc::new(TemplateInner {
+                name,
+                index,
                 bound: TemplateBound::Redefined(Arc::new(OnceCell::new())),
                 is_vararg: false,
                 typedef_name: None,
