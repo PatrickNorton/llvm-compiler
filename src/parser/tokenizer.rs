@@ -41,9 +41,9 @@ impl Tokenizer {
         Ok(tokenizer.next_token().map(|_| tokenizer))
     }
 
-    fn from_str(str: &str, path: PathBuf, line_number: usize) -> ParseResult<Tokenizer> {
+    fn from_str(text: &str, path: PathBuf, line_number: usize) -> ParseResult<Tokenizer> {
         let mut tokenizer = Tokenizer {
-            reader: Reader::String(Cursor::new(str.as_bytes().to_vec())),
+            reader: Reader::String(Cursor::new(text.as_bytes().to_vec())),
             file_name: path.into(),
             next: String::new(),
             full_line: Arc::from(""),
@@ -141,15 +141,9 @@ impl Tokenizer {
 
     fn multiline_string(&self) -> Option<char> {
         let mut chars = self.next.chars();
-        let mut next = match chars.next() {
-            Option::Some(x) => x,
-            Option::None => return None,
-        };
+        let mut next = chars.next()?;
         while STRING_PREFIXES.contains(next) {
-            next = match chars.next() {
-                Option::Some(x) => x,
-                Option::None => return None,
-            };
+            next = chars.next()?;
         }
         let delim = match next {
             '"' | '\'' => next,
@@ -177,9 +171,16 @@ impl Tokenizer {
         let line_info = self.line_info();
         loop {
             // FIXME: Multiline comment ending on same line as comment begin
+            // Example:
+            // ```
+            // #|
+            // comment
+            // |# not_a_comment() #|
+            // comment2
+            // |#
+            // ```
             if let Option::Some(x) = self.full_line.find("|#") {
-                // TODO? clone_into() when stable (#41263)
-                self.next = self.full_line[x + 2..].to_owned();
+                self.full_line[x + 2..].clone_into(&mut self.next);
                 return ParseResult::Ok(line_info);
             }
             let next_line = self.read_line()?.expect("Unclosed comment at end of file");
@@ -200,8 +201,7 @@ impl Tokenizer {
                 } else if chr == delim {
                     if backslashes % 2 == 0 {
                         sequence.push_str(&next_line[..i + 1]);
-                        // TODO? clone_into() when stable (#41263)
-                        self.next = next_line[i + 1..].to_owned();
+                        next_line[i + 1..].clone_into(&mut self.next);
                         self.full_line = (&*next_line).into();
                         return ParseResult::Ok((sequence, line_info));
                     } else {
