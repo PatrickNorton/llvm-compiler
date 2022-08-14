@@ -33,7 +33,8 @@ pub enum AssignableNode {
 ///
 /// # Syntax
 /// ```text
-/// [AssignableNode] (, [AssignableNode])* (=|:=) [TestNode] (, [TestNode])*
+/// AssignableNode *("," AssignableNode) [","] ("="|":=") TestNode
+///     *("," TestNode) [","]
 /// ```
 #[derive(Debug)]
 pub struct AssignmentNode {

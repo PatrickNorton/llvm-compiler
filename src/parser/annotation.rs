@@ -58,7 +58,7 @@ impl AnnotatableNode {
     ///
     /// # Annotation syntax
     /// ```text
-    /// $[NameNode]
+    /// "$" NameNode
     /// ```
     pub fn parse_left_annotation(tokens: &mut TokenList) -> ParseResult<AnnotatableNode> {
         assert!(matches!(tokens.token_type()?, TokenType::Dollar));

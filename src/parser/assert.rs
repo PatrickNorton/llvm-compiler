@@ -9,7 +9,7 @@ use crate::parser::token_list::TokenList;
 ///
 /// # Grammar
 /// ```text
-/// assert [TestNode] (as [TestNode])?
+/// "assert" TestNode ["as" TestNode]
 /// ```
 #[derive(Debug)]
 pub struct AssertStatementNode {

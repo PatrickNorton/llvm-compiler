@@ -11,7 +11,7 @@ use crate::parser::variable::VariableNode;
 ///
 /// # Grammar
 /// ```text
-/// (*|**)?([VariableNode]=)?[TestNode]
+/// ["*"|"**"] [VariableNode "="] TestNode
 /// ```
 #[derive(Debug)]
 pub struct ArgumentNode {
