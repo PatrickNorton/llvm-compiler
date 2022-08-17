@@ -1,0 +1,6 @@
+export quote
+
+func quote(str string) -> str {
+    var SPECIAL_CHARS = r"[\^$.|?*+(){}"
+    return "".join([f"\\{i}" if i in SPECIAL_CHARS else str(i) for char i in string])
+}

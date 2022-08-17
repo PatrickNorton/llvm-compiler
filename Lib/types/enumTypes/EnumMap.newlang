@@ -1,0 +1,76 @@
+from .. typeget Enum
+
+from collections import AbstractDict
+from itertools import any
+
+export EnumMap
+
+union Value[T] {
+    T Full
+    null Empty
+}
+
+class EnumMap[K[Enum[K]], V] from AbstractDict[K, V] {
+    private Array[Value[V]] values
+
+    public operator new (*tuple[K, V] items) {
+        self.values = Array(K.length, Value.Empty())
+        for var item in items {
+            self[item[0]] = item[1]
+        }
+    }
+
+    public operator new (dict[K, V] items) {
+        self.values = Array(K.length, Value.Empty())
+        for K key, V value in items {
+            self[key] = value
+        }
+    }
+
+    public operator + (dict[K, V] items, /) -> cls {
+        return {**self, **other}
+    }
+
+    public operator [] (K key) -> V {
+        var value = self.values[key.ordinal]
+        raise KeyError if value.Empty?
+        return value.Full!!
+    }
+
+    public operator []= (K key, V value) {
+        raise KeyError if key not in self
+        self.values[key.ordinal] = value
+    }
+
+    public operator del[] (K key) {
+        raise KeyError if key not in self
+        self.values[key.ordinal] = Value.Empty()
+    }
+
+    public operator in (K key) {
+        return self.values[key.ordinal].Full?
+    }
+
+    public operator iter -> K, V {
+        yield from (K[i], value.Full!! for int i, var value in enumerate(self.values) if value.Full?)
+    }
+
+    public operator bool {
+        return any(i.Full? for var i in self.values)
+    }
+
+    public method remove(V value) -> K {
+        K key = self.keyOf(value)
+        del self[key]
+        return key
+    }
+
+    public method keyOf(V value) -> K {
+        for int i, var val in enumerate(self.values) {
+            if val.Full? as v {
+                return K[i] if value == v
+            }
+        }
+        raise KeyError
+    }
+}

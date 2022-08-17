@@ -1,0 +1,277 @@
+from numtools import IntRef
+
+from .match import Match
+from .dfa import DFA, Builder as DFA, DfaBuilder
+from .nfa import NFA, Builder as NFA, NfaBuilder
+from .packed import PackedMatch
+from .prefilter import PrefilterState
+
+export AhoCorasick, AhoCorasickBuilder, MatchKind
+
+public class AhoCorasick {
+    private Imp imp
+    private MatchKind matchKind
+
+    operator new(Imp imp, MatchKind matchKind) {
+        self.imp = imp
+        self.matchKind = matchKind
+    }
+
+    public static method new(Iterable[bytes] patterns) -> cls {
+        return AhoCorasickBuilder().build(patterns)
+    }
+
+    public static method newAutoConfigured(list[bytes] patterns) -> cls {
+        return AhoCorasickBuilder().autoConfigure(patterns).build(patterns)
+    }
+
+    public method isMatch(bytes haystack) -> bool {
+        return self.earliestFind(haystack)?
+    }
+
+    public method earliestFind(bytes haystack) -> Match? {
+        final var prestate = PrefilterState(self.maxPatternLen())
+        final var start = IntRef(self.imp.startState())
+        return self.imp.earliestFindAt(prestate, haystack, 0, start)
+    }
+
+    public method find(bytes haystack) -> Match? {
+        final var prestate = PrefilterState(self.maxPatternLen())
+        return self.imp.findAtNoState(prestate, haystack, 0)
+    }
+
+    public generator method findIter(bytes haystack) -> Match {
+        final var prestate = PrefilterState(self.maxPatternLen())
+        mut int pos = 0
+        while pos < haystack.length {
+            if self.imp.findAtNoState(prestate, haystack, pos)? as mat {
+                if mat.end == pos {
+                    pos++
+                } else {
+                    pos = mat.end
+                }
+                yield mat
+            } else {
+                return
+            }
+        }
+    }
+
+    public generator method findOverlappingIter(bytes haystack) -> Match {
+        final var prestate = PrefilterState(self.maxPatternLen())
+        mut var pos = 0
+        mut var lastMatchEnd = 0
+        final var stateId = IntRef(self.imp.startState())
+        final var matchIndex = IntRef(0)
+        while true {
+            if self.imp.overlappingFindAt(prestate, haystack, pos, stateId, matchIndex)? as m {
+                pos = m.end
+                yield m
+            } else {
+                return
+            }
+        }
+    }
+
+    # Replacement methods seem not to be used and are a real pain, so they're not here
+
+    public method patternCount() -> int {
+        return self.imp.patternCount()
+    }
+
+    public method supportsOverlapping() -> bool {
+        return self.matchKind.supportsOverlapping()
+    }
+
+    public method supportsStream() -> bool {
+        return self.matchKind.supportsStream()
+    }
+
+    public method maxPatternLen() -> int {
+        return self.imp.maxPatternLen()
+    }
+}
+
+union Imp {
+    NFA NFA
+    DFA DFA
+
+    public method matchKind() -> MatchKind {
+        return switch self {
+            case Imp.NFA as nfa => nfa.matchKind
+            case Imp.DFA as dfa => dfa.matchKind
+        }
+    }
+
+    public method startState() -> int {
+        return switch self {
+            case Imp.NFA as nfa => nfa.startState()
+            case Imp.DFA as dfa => dfa.startState()
+        }
+    }
+
+    public method maxPatternLen() -> int {
+        return switch self {
+            case Imp.NFA as nfa => nfa.maxPatternLen
+            case Imp.DFA as dfa => dfa.maxPatternLen
+        }
+    }
+
+    public method patternCount() -> int {
+        return switch self {
+            case Imp.NFA as nfa => nfa.patternCount
+            case Imp.DFA as dfa => dfa.patternCount
+        }
+    }
+
+    public method overlappingFindAt(
+        mut PrefilterState prestate,
+        bytes haystack,
+        int at,
+        mut IntRef stateId,
+        mut IntRef matchIndex,
+    ) -> Match? {
+        return switch self {
+            case Imp.NFA as nfa => nfa.overlappingFindAt(
+                prestate, haystack, at, stateId, matchIndex
+            )
+            case Imp.DFA as dfa => dfa.overlappingFindAt(
+                prestate, haystack, at, stateId, matchIndex
+            )
+        }
+    }
+
+    public method earliestFindAt(
+        mut PrefilterState prestate,
+        bytes haystack,
+        int at,
+        mut IntRef stateId,
+    ) -> Match? {
+        return switch self {
+            case Imp.NFA as nfa => nfa.earliestFindAt(prestate, haystack, at, stateId)
+            case Imp.DFA as dfa => dfa.earliestFindAt(prestate, haystack, at, stateId)
+        }
+    }
+
+    public method findAtNoState(
+        mut PrefilterState prestate,
+        bytes haystack,
+        int at,
+    ) -> Match? {
+        return switch self {
+            case Imp.NFA as nfa => nfa.findAtNoState(prestate, haystack, at)
+            case Imp.DFA as dfa => dfa.findAtNoState(prestate, haystack, at)
+        }
+    }
+}
+
+class AhoCorasickBuilder {
+    final NfaBuilder nfaBuilder
+    final DfaBuilder dfaBuilder
+    mut bool dfa
+
+    public operator new {
+        self.nfaBuilder = NfaBuilder()
+        self.dfaBuilder = DfaBuilder()
+        self.dfa = false
+    }
+
+    public method build(Iterable[bytes] patterns) -> AhoCorasick {
+        var nfa = self.nfaBuilder.build(patterns)
+        var matchKind = nfa.matchKind
+        if self.dfa {
+            var dfa = self.dfaBuilder.build(nfa)
+            return AhoCorasick(Imp.DFA(dfa), matchKind)
+        } else {
+            return AhoCorasick(Imp.NFA(nfa), matchKind)
+        }
+    }
+
+    public mut method autoConfigure(list[bytes] patterns) -> mut cls {
+        if patterns.length <= 100 {
+            self.setDfa(true).byteClasses(false)
+        } elif patterns.length <= 5000 {
+            self.setDfa(true)
+        }
+        return self
+    }
+
+    public mut method matchKind(MatchKind kind) -> mut cls {
+        self.nfaBuilder.matchKind(kind)
+        return self
+    }
+
+    public mut method anchored(bool yes) -> mut cls {
+        self.nfaBuilder.anchored(yes)
+        return self
+    }
+
+    public mut method asciiCaseInsensitive(bool yes) -> mut cls {
+        self.nfaBuilder.asciiCaseInsensitive(yes)
+        return self
+    }
+
+    public mut method denseDepth(int depth) -> mut cls {
+        self.nfaBuilder.denseDepth(depth)
+        return self
+    }
+
+    public mut method setDfa(bool yes) -> mut cls {
+        self.dfa = yes
+        return self
+    }
+
+    public mut method prefilter(bool yes) -> mut cls {
+        self.nfaBuilder.prefilter(yes)
+        return self
+    }
+
+    public mut method byteClasses(bool yes) -> mut cls {
+        self.dfaBuilder.byteClasses(yes)
+        return self
+    }
+
+    public mut method premultiply(bool yes) -> mut cls {
+        self.dfaBuilder.premultiply(yes)
+        return self
+    }
+}
+
+enum MatchKind {
+    STANDARD,
+    LEFTMOST_FIRST,
+    LEFTMOST_LONGEST
+
+    public method supportsOverlapping() -> bool {
+        return self is MatchKind.STANDARD
+    }
+
+    public method isStandard() -> bool {
+        return self is MatchKind.STANDARD
+    }
+
+    public method isLeftmost() -> bool {
+        return self is MatchKind.LEFTMOST_FIRST or self is MatchKind.LEFTMOST_LONGEST
+    }
+
+    public method isLeftmostFirst() -> bool {
+        return self is MatchKind.LEFTMOST_FIRST
+    }
+
+    public method supportsStream() -> bool {
+        return self.isStandard()
+    }
+
+    public method asPacked() -> PackedMatch? {
+        # FIXME: Switch on enum
+        if self == MatchKind.STANDARD {
+            return null
+        } elif self == MatchKind.LEFTMOST_FIRST {
+            return PackedMatch.LEFTMOST_FIRST
+        } elif self == MatchKind.LEFTMOST_LONGEST {
+            return PackedMatch.LEFTMOST_LONGEST
+        } else {
+            raise NotImplemented()
+        }
+    }
+}

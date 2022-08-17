@@ -1,0 +1,335 @@
+export print
+
+$builtin("print", 0)
+func print(object obj, /) {}
+
+$builtin("int", 2)
+const class int {
+    public operator new (object o, /) {}
+    public operator int -> int {}
+    public operator hash {}
+
+    public operator + (int other, /) -> int {}
+    public operator - (int other, /) -> int {}
+    public operator * (int other, /) -> int {}
+    public operator // (int other, /) -> int {}
+    public operator u- -> int {}
+    public operator ** (int other, /) -> int {}
+    public operator % (int other, /) -> int {}
+    public operator << (int other, /) -> int {}
+    public operator >> (int other, /) -> int {}
+    public operator & (int other, /) -> int {}
+    public operator | (int other, /) -> int {}
+    public operator ^ (int other, /) -> int {}
+    public operator ~ -> int {}
+
+    public operator == (int other, /) -> bool {}
+    public operator < (int other, /) -> bool {}
+    public operator <= (int other, /) -> bool {}
+    public operator > (int other, /) -> bool {}
+    public operator >= (int other, /) -> bool {}
+
+    public method strBase(int base) -> str {}
+    public method divRem(int other) -> tuple[int, int] {}
+}
+
+$builtin("str", 3)
+const class str {
+    public int length
+    public list[char] chars
+
+    public operator new (object o, /) {}
+
+    public operator + (str other, /) -> str {}
+    public operator * (int count, /) -> str {}
+    public operator == (str other, /) -> bool {}
+    public operator [] (int i, /) -> char {}
+    public operator [:] (slice s, /) -> str {}
+    public operator iter -> char {}
+    public operator in (char c, /) -> bool {}
+
+    public operator hash {}
+
+    public method get(int i, /) -> char? {}
+    public method join(Iterable[str] strs, /) -> str {}
+    public method startsWith(str start, /) -> bool {}
+    public method endsWith(str end, /) -> bool {}
+    public method split(str split, /, int? count = null) -> list[str] {}
+    public method replace(str pat, str new, /, int? count = null) -> str {}
+    public method splitLines() -> list[str] {}
+    public method upper() -> str {}
+    public method lower() -> str {}
+    public method isUpper() -> bool {}
+    public method isLower() -> bool {}
+    public method indexOf(str s, /) -> int? {}
+    public method lastIndexOf(str s, /) -> int? {}
+    public method encode(str encoding) -> mut bytes {}
+    public method intBase(int base) -> int? {}
+    public method asInt() -> int? {}
+    public method stripLeading(str pat, /) -> str? {}
+    public method stripTrailing(str pat, /) -> str? {}
+    public method trim(str text, /) -> str {}
+    public method trimTrailing(str suffix, /) -> str {}
+    public method trimLeading(str prefix, /) -> str {}
+    public method expandTabs(int size = 4) -> str {}
+    public method isAscii() -> bool {}
+
+    public static method fromChars(list[char] chars) -> str {}
+}
+
+$builtin("bool", 4)
+const class bool {
+    public operator new (object o, /) {}
+    public operator bool -> bool {}
+    public operator int -> int {}
+
+    public operator & (bool other, /) -> bool {}
+    public operator | (bool other, /) -> bool {}
+    public operator ^ (bool other, /) -> bool {}
+    public operator ~ -> bool {}
+}
+
+$builtin("range", 5)
+const class range {
+    public int length
+
+    public operator iter -> int {}
+    public operator in (int i, /) -> bool {}
+    public operator == (range other) -> bool {}
+
+    public method get(int i, /) -> int? {}
+}
+
+$builtin("iter", 7)
+generic T
+func iter(Iterable[T] value, /) -> mut Iterator[T] {}
+
+$builtin("repr", 8)
+func repr(object val, /) -> str {}
+
+$builtin("input", 9)
+func input(str message, /) -> str {}
+
+$builtin("list", 10)
+class list[T] {
+    pubget int length
+
+    public operator new (Iterable[T] value, /, *, int length = 0) {}
+
+    public operator [] (int i, /) -> T {}
+    public mut operator []= (int i, T value, /) {}
+    public mut operator del[] (int i, /) {}
+    public operator [:] (slice s, /) -> mut list[T] {}
+    public mut operator [:]= (slice s, Iterable[T] values, /) {}
+    public mut operator del[:] (slice s, /) {}
+    public operator iter[:] (slice s, /) -> Iterable[T] {}
+    public operator in (T value, /) -> bool {}
+    public operator reversed -> T {}
+    public operator + (list[T] other, /) -> mut list[T] {}
+    public operator * (int count, /) -> mut list[T] {}
+    public operator iter -> T {}
+    public operator == (list[T] other, /) -> bool {}
+
+    public method get(int i, /) -> T? {}
+    public mut method insert(int i, T value, /) {}
+    public mut method pop() -> T? {}
+    public mut method reverse() {}
+    public method count(T value, /) -> int {}
+    public mut method clear() {}
+    public method indexOf(T value, /) -> int? {}
+    public mut method add(T value, /) {}
+    public mut method addAll(Iterable[T] values, /) {}
+    public mut method popFirst() -> T? {}
+    public mut method swap(int i, int j, /) {}
+    public mut method remove(int i) -> T {}
+    public mut method replace(int i, T value, /) -> T? {}
+}
+
+$builtin("set", 11)
+class set[T] {
+    pubget int length
+
+    public operator in (T value, /) -> bool {}
+    public mut operator del[] (T value, /) {}
+    public operator == (set[T] other, /) -> bool {}
+    public operator > (set[T] other, /) -> bool {}
+    public operator >= (set[T] other, /) -> bool {}
+    public operator < (set[T] other, /) -> bool {}
+    public operator <= (set[T] other, /) -> bool {}
+    public operator iter -> T {}
+
+    public mut method add(T value, /) {}
+    public mut method addAll(Iterable[T] values, /) {}
+    public mut method remove(T value, /) -> bool {}
+    public mut method clear() {}
+}
+
+$builtin("char", 12)
+const class char {
+    public operator new(int value, /) {}
+    public operator + (char other, /) -> char {}
+    public operator - (char other, /) -> char {}
+    public operator == (char other, /) -> bool {}
+    public operator int -> int {}
+
+    public method upper() -> char {}
+    public method lower() -> char {}
+    public method isUpper() -> bool {}
+    public method isLower() -> bool {}
+    public method isAscii() -> bool {}
+    public method utf8Len() -> int {}
+    public method utf16Len() -> int {}
+    public method encode(str encoding) -> bytes {}
+
+    public static method fromInt(int i, /) -> char? {}
+}
+
+$builtin("open", 13)
+func open(str file) -> object {} # FIXME: Should be Context[object]
+
+$builtin("reversed", 14)
+generic T
+generator func reversed(Iterable[T] values, /) -> T {}
+
+$builtin("slice", 15)
+const class slice {
+    public int? start
+    public int? stop
+    public int? step
+
+    public method toRange() -> range {}
+}
+
+$builtin("id", 16)
+func id(object o, /) -> int {}
+
+$builtin("Array", 17)
+class Array[T] {
+    pubget int length
+
+    public operator new (T value, int count, /) {}
+
+    public operator [] (int i, /) -> T {}
+    public mut operator []= (int i, T value, /) {}
+    public operator iter -> T {}
+    public operator in (T value, /) -> bool {}
+    public operator == (Array[T] other, /) -> bool {}
+    public operator [:] (slice s, /) -> Array[T] {}
+    public operator reversed -> T {}
+
+    public static method fromIter(Iterable[T] values, /, int? capacity = null) -> Array[T] {}
+}
+
+$builtin("enumerate", 18)
+generic T
+generator func enumerate(Iterable[T] value, /) -> int, T {}
+
+$builtin("bytes", 19)
+class bytes {
+    pubget int length
+
+    public operator new (object o, /) {}
+
+    public operator + (bytes other, /) -> mut bytes {}
+    public operator * (int count, /) -> mut bytes {}
+    public operator == (bytes other, /) -> bool {}
+    public operator [] (int i, /) -> int {}
+    public operator [:] (slice s, /) -> mut bytes {}
+    public mut operator []= (int i, int value, /) {}
+    public operator iter -> int {}
+    public operator in (int value, /) -> bool {}
+    public operator reversed -> mut bytes {}
+
+    public method join(Iterable[object] values, /) -> mut bytes {}
+    public method encode(str encoding) -> str {}
+    public method indexOf(int value, /) -> int? {}
+    public method get(int i, /) -> int? {}
+    public mut method insert(int i, int value, /) {}
+    public mut method add(int value, /) {}
+    public mut method addChar(char c, /, str encoding) {}
+    public method startsWith(bytes value, /) -> bool {}
+    public method endsWith(bytes value, /) -> bool {}
+    public method lastIndexOf(int value, /) -> int? {}
+    public method hex() -> str {}
+    public mut method reverse() {}
+    public method trim(bytes text, /) -> mut bytes {}
+    public method trimTrailing(bytes suffix, /) -> mut bytes {}
+    public method trimLeading(bytes prefix, /) -> mut bytes {}
+
+    public static method fromHex(str hex, /) -> mut bytes {}
+}
+
+$builtin("dict", 20)
+class dict[K, V] {
+    pubget int length
+
+    public operator in (K key, /) -> bool {}
+    public operator [] (K key, /) -> V {}
+    public mut operator []= (K key, V value, /) {}
+    public mut operator del[] (K key) {}
+    public operator iter -> K, V {}
+    public operator == (dict[K, V] other, /) -> bool {}
+
+    public method get(K key, /) -> V? {}
+    public method getPair(K key, /) -> tuple[K, V]? {}
+    public mut method set(K key, V value, /) -> V? {}
+    public mut method clear() {}
+    public mut method setDefault(K key, V value, /) -> V {}
+    public mut method replace(K key, V value, /) -> V? {}
+    public mut method remove(K key, /) -> V? {}
+    public mut method retain(Callable[K, V, [bool]] predicate, /) {}
+}
+
+$builtin("NotImplemented", 22)
+class NotImplemented from Throwable {
+    public operator new {}
+}
+
+$builtin("Throwable", 24)
+interface Throwable {
+    public method msg() -> str
+}
+
+$builtin("ValueError", 27)
+class ValueError from Throwable {
+    public operator new (str msg, /) {}
+}
+
+$builtin("NullError", 28)
+class NullError from Throwable {
+    public operator new (str msg, /) {}
+}
+
+$builtin("AssertionError", 30)
+class AssertionError from Throwable {
+    public operator new (str msg, /) {}
+}
+
+$builtin("hash", 26)
+func hash(Hashable value, /) -> int {}
+
+$builtin("dec", 36)
+class dec {}
+
+$builtin("Hashable")
+auto interface Hashable {
+    public operator hash -> int
+}
+
+# Note: this function signature isn't strictly accurate, but since this is
+# hidden, its signature isn't ever used (its only use is in the internals of
+# format creation).
+$builtin("__format_internal", 31, hidden)
+func __format_internal(int format, object value) {}
+
+$builtin("ArithmeticError", 33)
+class ArithmeticError from Throwable {
+    public operator new (str msg, /) {}
+}
+
+$builtin("__test_internal", 34, hidden)
+func __test_internal(*Callable[[]] vars) {}
+
+$builtin("option", 35)
+generic T
+func option(T value, /) -> T? {}

@@ -1,0 +1,5 @@
+from test import Foo2
+
+export recursionTest
+
+func recursionTest() {}

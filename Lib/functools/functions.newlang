@@ -1,0 +1,29 @@
+export apply, identity
+
+generic A, B
+func apply(Callable[A, B, [A]] function, *B values, *, A start) -> A {
+    A finalVal = start
+    for B value in values {
+        finalVal = function(finalVal, value)
+    }
+    return finalVal
+}
+
+generic T
+func apply(Callable[T, T, T] function, *T values) -> T {
+    T finalVal = values[0]
+    for T value in values[1:] {
+        finalVal = function(finalVal, values)
+    }
+    return finalVal
+}
+
+generic T
+func identity(T foo) -> T {
+    return foo
+}
+
+generic T
+func lazy(T value) -> Callable[[T]] {
+    return lambda => value
+}

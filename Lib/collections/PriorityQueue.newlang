@@ -1,0 +1,77 @@
+from interfaces import Comparable
+
+export PriorityQueue
+
+class PriorityQueue[T[Comparable[T]]] {
+    private final list[T] values
+
+    public operator new(*, int length = 0) {
+        # TODO: Preset length
+        self.values = []
+    }
+
+    public property int length {
+        get {
+            return self.values.length
+        }
+    }
+
+    public operator repr {
+        return f"PriorityQueue[{T}](length = {self.length})"
+    }
+
+    public method peek() -> T? {
+        return self.values.get(0)
+    }
+
+    public mut method pop() -> T? {
+        return self.values.pop() if self.values.length <= 1
+        self.values.swap(0, -1)
+        var result = self.values.pop()
+        mut var index = 0
+        while self.maxValue(*childIndices(index))? as max {
+            if self.values[max] > self.values[index] {
+                self.values.swap(max, index)
+                index = max
+            } else {
+                break
+            }
+        }
+        return result
+    }
+
+    public mut method push(T value, /) {
+        self.values.add(value)
+        mut int index = self.values.length - 1
+        while index > 0 {
+            var parent = parentIndex(index)
+            if self.values[index] > self.values[parent] {
+                self.values.swap(index, parent)
+                index = parent
+            } else {
+                break
+            }
+        }
+    }
+
+    private method maxValue(int a, int b) -> T? {
+        if self.values.get(a)? as x {
+            if self.values.get(b)? as y {
+                return a if x > y else b
+            } else {
+                return a
+            }
+        } else {
+            return null
+        }
+    }
+}
+
+func parentIndex(int index) -> int {
+    return (index - 1) // 2
+}
+
+func childIndices(int index) -> tuple[int, int] {
+    var firstChild = index * 2 + 1
+    return (firstChild, firstChild + 1)
+}

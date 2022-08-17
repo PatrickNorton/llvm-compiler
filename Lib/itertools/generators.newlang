@@ -1,0 +1,202 @@
+# from interfaces typeget Boolable, Iterable, Callable, Iterator
+
+from .functions import any
+
+export accumulate, chain, compress, dropWhile, filter, filterEqual, filterFalse,
+export filterNotEqual, firstN, map, pairs, takeWhile, withNext, zip, zipCount, zipLongest
+
+# With thanks to Python for all the ideas <3
+
+generic T
+generator func accumulate(Iterable[T] value, /, Callable[T, T, [T]] function, *, T? initial = null) -> T {
+    Iterator[T] iter = iter(value)
+    mref T total
+    if initial? as ini {
+        total = ini
+    } else {
+        if iter.next()? as n {
+            total = n
+        } else {
+            return
+        }
+    }
+    yield total
+    for T i in iter {
+        total = function(total, i)
+        yield total
+    }
+}
+
+generic T
+generator func chain(*Iterable[T] values) -> T {
+    for var i in values {
+        yield from i
+    }
+}
+
+generic T, U
+generator func compress(Iterable[T] data, Iterable[U] selectors) -> T {
+    for T i, U j in data, selectors {
+        yield i if j
+    }
+}
+
+generic T
+generator func dropWhile(Callable[T, [bool]] predicate, Iterable[T] iterable) -> T {
+    Iterator[T] iter = iter(iterable)
+    for T i in iter {
+        if not predicate(i) {
+            yield i
+            break
+        }
+    }
+    yield from iter
+}
+
+generic T
+generator func filter(Callable[T, [bool]] predicate, Iterable[T] sequence) -> T {
+    yield from (i for T i in sequence if predicate(i))
+}
+
+generic T
+generator func filterEqual(T sentinel, Iterable[T] sequence) -> T {
+    yield from (i for T i in sequence if i == sentinel)
+}
+
+generic T
+generator func filterFalse(Callable[T, [bool]] predicate, Iterable[T] sequence) -> T {
+    yield from (i for T i in sequence if not predicate(i))
+}
+
+generic T
+generator func filterNotEqual(T sentinel, Iterable[T] sequence) -> T {
+    yield from (i for T i in sequence if i != sentinel)
+}
+
+generic T
+generator func filterNull(Iterable[T?] values) -> T {
+    for T? i in values {
+        if i? as j {
+            yield j
+        }
+    }
+}
+
+generic T
+generator func firstN(int count, Iterable[T] sequence) -> T {
+    var iterator = iter(sequence)
+    dotimes count {
+        if iterator.next()? as n {
+            yield n
+        } else {
+            break
+        }
+    }
+}
+
+generic T, U
+generator func map(Callable[T, [U]] function, Iterable[T] sequence) -> U {
+    yield from (function(i) for T i in sequence)
+}
+
+generic T
+generator func pairs(Iterable[T] values) -> T, T {
+    var iterator = iter(values)
+    while iterator.next()? as v1 {
+        if iterator.next()? as v2 {
+            yield v1, v2
+        } else {
+            break
+        }
+    }
+}
+
+generic T
+generator func takeWhile(Callable[T, [bool]] predicate, Iterable[T] sequence) -> T {
+    yield from (i for T i in sequence while predicate)
+}
+
+#|
+generic T[Iterable[U|Iterable[T]]], U
+generator func traverse(T sequence) -> U {
+    for var element in sequence {
+        if element instanceof Iterable[T] {
+            yield from traverse(element casted Iterable[T])
+        } else {
+            yield element casted U
+        }
+    }
+}
+|#
+
+generic T
+generator func withNext(Iterable[T] values) -> T, T {
+    var iterator = iter(values)
+    mut T previous
+    if iterator.next()? as p {
+        previous = p
+    } else {
+        return
+    }
+    for T current in iterator {
+        yield previous, current
+        previous = current
+    }
+}
+
+generic T, U
+generator func zip(Iterable[T] value1, Iterable[U] value2) -> T, U {
+    for var i, var j in value1, value2 {
+        yield i, j
+    }
+}
+
+generic T, U
+generator func zipCount(Iterable[T] value1, Iterable[T] value2) -> int, T, U {
+    mut int count = 0
+    for var i, var j in value1, value2 {
+        yield count, i, j
+        count++
+    }
+}
+
+# TODO? Parameter packs
+generic T
+generator func zipLongest(*Iterable[T] values, *, T defaultVal) -> list[T] {
+    final Array[Iterator[T]] iterators = Array.fromIter(apply(iter, values))
+    final Array[bool] hasNext = Array(false, values.length)
+    while any(hasNext) {
+        final Array[T] next = Array(defaultVal, values.length)
+        for int i, var j in enumerate(iterators) {
+            if hasNext[i] {
+                if j.next()? as n {
+                    next[i] = n
+                } else {
+                    hasNext[i] = false
+                }
+            }
+        }
+        yield list(next)
+    }
+}
+
+#| TODO: Function overloading
+generic T
+generator func zipLongest(*Iterable[T] values) -> list[T?] {
+    final Array[Iterator[T]] iterators = Array.fromIter(apply(iter, values))
+    final Array[bool] hasNext = Array(false, values.length)
+    while any(hasNext) {
+        final Array[T?] next = Array(null, values.length)
+        for int i, var j in enumerate(iterators) {
+            if hasNext[i] {
+                if j.next()? as n {
+                    next[i] = n
+                } else {
+                    hasNext[i] = false
+                }
+            }
+        }
+        yield next
+    }
+}
+|#

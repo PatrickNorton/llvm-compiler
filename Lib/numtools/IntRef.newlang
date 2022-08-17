@@ -1,0 +1,134 @@
+export IntRef
+
+$derive(\==)
+final class IntRef {
+    mut int value
+
+    public operator new(int value) {
+        self.value = value
+    }
+
+    public operator int {
+        return self.value
+    }
+
+    public operator repr {
+        return f"IntRef({self.value})"
+    }
+
+    public operator + (cls other, /) -> cls {
+        return IntRef(self.value + other.value)
+    }
+
+    public operator - (cls other, /) -> cls {
+        return IntRef(self.value - other.value)
+    }
+
+    public operator u- -> cls {
+        return IntRef(-self.value)
+    }
+
+    public operator * (cls other, /) -> cls {
+        return IntRef(self.value * other.value)
+    }
+
+    public operator // (cls other, /) -> cls {
+        return IntRef(self.value // other.value)
+    }
+
+    public operator ** (cls other, /) -> cls {
+        return IntRef(self.value)
+    }
+
+    public operator >> (cls other, /) -> cls {
+        return IntRef(self.value >> other.value)
+    }
+
+    public operator << (cls other, /) -> cls {
+        return IntRef(self.value << other.value)
+    }
+
+    public operator & (cls other, /) -> cls {
+        return IntRef(self.value & other.value)
+    }
+
+    public operator | (cls other, /) -> cls {
+        return IntRef(self.value | other.value)
+    }
+
+    public operator ~ -> cls {
+        return IntRef(~self.value)
+    }
+
+    public operator ^ (cls other, /) -> cls {
+        return IntRef(self.value ^ other.value)
+    }
+
+    public operator < (cls other, /) -> bool {
+        return self.value < other.value
+    }
+
+    public operator > (cls other, /) -> bool {
+        return self.value > other.value
+    }
+
+    public mut method iadd(cls other, /) {
+        self.value += other.value
+    }
+
+    public mut method isub(cls other, /) {
+        self.value -= other.value
+    }
+
+    public mut method negate() {
+        self.value = -self.value
+    }
+
+    public mut method imul(cls other, /) {
+        self.value *= other.value
+    }
+
+    public mut method idiv(cls other, /) {
+        self.value //= other.value
+    }
+
+    public mut method ipow(cls other, /) {
+        self.value **= other.value
+    }
+
+    public mut method ilshift(cls other, /) {
+        self.value <<= other.value
+    }
+
+    public mut method irshift(cls other, /) {
+        self.value >>= other.value
+    }
+
+    public mut method iand(cls other, /) {
+        self.value &= other.value
+    }
+
+    public mut method ior(cls other, /) {
+        self.value |= other.value
+    }
+
+    public mut method inot() {
+        self.value = ~self.value
+    }
+
+    public mut method ixor(cls other, /) {
+        self.value ^= other.value
+    }
+
+    public mut method inc() {
+        self.value++
+    }
+
+    public mut method dec() {
+        self.value--
+    }
+
+    public mut method set(int value, /) {
+        self.value = value
+    }
+}

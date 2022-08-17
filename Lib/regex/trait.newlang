@@ -1,0 +1,42 @@
+export Slot, Locations
+
+typedef Slot as int?
+
+class Locations {
+    final list[Slot] values
+
+    public operator new(mut list[Slot] values) {
+        self.values = values
+    }
+
+    public method pos(int i) -> tuple[int, int]? {
+        var s = i * 2
+        var e = s + 1
+        if self.values.get(s)? as s {
+            if s? as s2 {
+                if self.values.get(e)? as e {
+                    if e? as e2 {
+                        return (s2, e2)
+                    }
+                }
+            }
+        }
+        return null
+    }
+
+    public operator iter -> tuple[int, int]? {
+        for var idx in [0:self.length] {
+            yield self.pos(idx)
+        }
+    }
+
+    public property int length {
+        get {
+            return self.values.length // 2
+        }
+    }
+
+    public mut method asSlots() -> mut list[Slot] {
+        return self.values
+    }
+}

@@ -1,0 +1,52 @@
+export StringBuilder
+
+final class StringBuilder {
+    private final list[char] chars
+
+    public property int length {
+        get {
+            return self.chars.length
+        }
+    }
+
+    public operator new (*object objects, int cap = 0) {
+        self.chars = []  # TODO: Preallocate length
+        for var obj in objects {
+            self.chars += str(obj).chars
+        }
+    }
+
+    public operator + (object obj) -> cls {
+        self.chars += str(obj).chars
+        return self
+    }
+
+    public operator [] (int index) -> char {
+        return self.chars[index]
+    }
+
+    public operator [:] (int start, int stop, int step) -> str {
+        return str.fromChars(self.chars[start:stop:step])
+    }
+
+    public operator iter -> char {
+        yield from self.chars
+    }
+
+    public operator iter[:] (int start, int stop, int step) -> char {
+        yield from self.chars[start:stop:step]
+    }
+
+    public operator str {
+        return str.fromChars(self.chars)
+    }
+
+    public mut method add(object obj) -> mut cls {
+        self.chars += str(obj).chars
+        return self
+    }
+
+    public mut method clear() {
+        self.chars.clear()
+    }
+}

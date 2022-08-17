@@ -1,0 +1,54 @@
+from ..ast import Span
+
+export RegexBuildError, ErrorKind
+
+class RegexBuildError from Throwable {
+    private ErrorKind kind
+    private str pattern
+    private Span span
+
+    public operator new(ErrorKind kind, str pattern, Span span) {
+        self.kind = kind
+        self.pattern = pattern
+        self.span = span
+    }
+
+    public method msg() -> str {
+        return str(self.kind)
+    }
+}
+
+enum ErrorKind {
+    # This error occurs when a Unicode feature is used when Unicode
+    # support is disabled. For example `(?-u:\pL)` would trigger this error.
+    UnicodeNotAllowed,
+    # This error occurs when translating a pattern that could match a byte
+    # sequence that isn't UTF-8 and `allow_invalid_utf8` was disabled.
+    InvalidUtf8,
+    # This occurs when an unrecognized Unicode property name could not
+    # be found.
+    UnicodePropertyNotFound,
+    # This occurs when an unrecognized Unicode property value could not
+    # be found.
+    UnicodePropertyValueNotFound,
+    # This occurs when a Unicode-aware Perl character class (`\w`, `\s` or
+    # `\d`) could not be found. This can occur when the `unicode-perl`
+    # crate feature is not enabled.
+    UnicodePerlClassNotFound,
+    # This occurs when the Unicode simple case mapping tables are not
+    # available, and the regular expression required Unicode aware case
+    # insensitivity.
+    UnicodeCaseUnavailable,
+    # This occurs when the translator attempts to construct a character class
+    # that is empty.
+    #
+    # Note that this restriction in the translator may be removed in the
+    # future.
+    EmptyClassNotAllowed,
+    # Hints that destructuring should not be exhaustive.
+    #
+    # This enum may grow additional variants, so this makes sure clients
+    # don't count on exhaustive matching. (Otherwise, adding a new variant
+    # could break existing code.)
+    __Nonexhaustive
+}

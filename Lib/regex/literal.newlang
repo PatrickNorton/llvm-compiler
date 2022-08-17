@@ -1,0 +1,544 @@
+from itertools import all
+
+from .AhoCorasick import AhoCorasick, AhoCorasickBuilder, Searcher, Config, MatchKind, freqRank, PackedMatch
+from .hir import Literal, Literals
+
+export LiteralSearcher
+
+$derive(repr)
+class LiteralSearcher {
+    public bool complete
+    public FreqyPacked lcp
+    public FreqyPacked lcs
+    private Matcher matcher
+
+    public property int length {
+        get {
+            return switch self.matcher {
+                case Matcher.Empty => 0
+                case Matcher.Bytes as sset => sset.dense.length
+                case Matcher.FreqyPacked => 1
+                case Matcher.BoyerMoore => 1
+                case Matcher.AC as pair => pair.0.patternCount()
+                case Matcher.Packed as pair => pair.1.length
+            }
+        }
+    }
+
+    public operator new (Literals lits, Matcher matcher) {
+        var complete = lits.allComplete()
+        self.complete = complete
+        self.lcp = FreqyPacked(lits.longestCommonPrefix())
+        self.lcs = FreqyPacked(lits.longestCommonSuffix())
+        self.matcher = matcher
+    }
+
+    public static method empty() -> mut cls {
+        return LiteralSearcher(Literals(), Matcher.Empty())
+    }
+
+    public static method prefixes(Literals lits) -> mut cls {
+        var matcher = Matcher.prefixes(lits)
+        return LiteralSearcher(lits, matcher)
+    }
+
+    public static method suffixes(Literals lits) -> mut cls {
+        var matcher = Matcher.prefixes(lits)
+        return LiteralSearcher(lits, matcher)
+    }
+
+    public operator bool {
+        return self.length != 0
+    }
+
+    public operator iter -> bytes {
+        switch self.matcher {
+            case Matcher.Empty {}
+            case Matcher.Bytes as sset {
+                var dense = sset.dense
+                for int i in [0:dense.length] {
+                    yield dense[i:i+1]
+                }
+            }
+            case Matcher.FreqyPacked as s {
+                yield s.pat
+            }
+            case Matcher.BoyerMoore as s {
+                yield s.pattern
+            }
+            case Matcher.AC as pair {
+                for var literal in pair.1 {
+                    yield literal.value
+                }
+            }
+            case Matcher.Packed as pair {
+                for var literal in pair.1 {
+                    yield literal.value
+                }
+            }
+        }
+    }
+
+    public method isComplete() -> bool {
+        return self.complete and self
+    }
+
+    public method find(bytes haystack) -> tuple[int, int]? {
+        switch self.matcher {
+            case Matcher.Empty {return (0, 0)}
+            case Matcher.Bytes as sset {
+                if sset.find(haystack)? as i {
+                    return (i, i + 1)
+                } else {
+                    return null
+                }
+            }
+            case Matcher.FreqyPacked as s {
+                if s.find(haystack)? as i {
+                    return (i, i + s.length)
+                } else {
+                    return null
+                }
+            }
+            case Matcher.BoyerMoore as s {
+                if s.find(haystack)? as i {
+                    return (i, i + s.length)
+                } else {
+                    return null
+                }
+            }
+            case Matcher.AC as pair {
+                if pair.0.find(haystack)? as m {
+                    return (m.start, m.end)
+                } else {
+                    return null
+                }
+            }
+            case Matcher.Packed as pair {
+                if pair.0.find(haystack)? as m {
+                    return (m.start, m.end)
+                } else {
+                    return null
+                }
+            }
+        }
+    }
+
+    public method findStart(bytes haystack) -> tuple[int, int]? {
+        for var lit in self {
+            continue if lit.length > haystack.length
+            return (0, lit.length) if lit == haystack[0:lit.length]
+        }
+        return null
+    }
+
+    public method findEnd(bytes haystack) -> tuple[int, int]? {
+        for var lit in self {
+            continue if lit.length > haystack.length
+            if lit == haystack[-lit.length:] {
+                return (haystack.length - lit.length, haystack.length)
+            }
+        }
+        return null
+    }
+}
+
+union Matcher {
+    null Empty
+    SingleByteSet Bytes
+    FreqyPacked FreqyPacked
+    BoyerMooreSearch BoyerMoore
+    tuple[AhoCorasick, list[Literal]] AC
+    tuple[Searcher, list[Literal]] Packed
+
+    public static method prefixes(Literals lits) -> cls {
+        var sset = SingleByteSet.prefixes(lits)
+        return Matcher.new(lits, sset)
+    }
+
+    public static method suffixes(Literals lits) -> cls {
+        var sset = SingleByteSet.suffixes(lits)
+        return Matcher.new(lits, sset)
+    }
+
+    public static method new(Literals lits, SingleByteSet sset) -> cls {
+        return Matcher.Empty() if not lits.literals
+        return Matcher.Bytes(sset) if sset.complete
+
+        if lits.literals.length == 1 {
+            var lit = lits.literals[0].value
+            #|
+            if BoyerMooreSearch.shouldUse(lit) {
+                return Matcher.BoyerMoore(BoyerMooreSearch(lit))
+            } else {
+                return Matcher.FreqyPacked(FreqyPacked(lit))
+            }
+            |#
+        }
+
+        var pats = lits.literals
+        var pats2 = [i.value for var i in pats]
+        var isAhoCorasickFast = sset.dense.length <= 1 and sset.allAscii
+        if lits.literals.length <= 100 and not isAhoCorasickFast {
+            mut var builder = Config().matchKind(PackedMatch.LEFTMOST_FIRST).builder()
+            if builder.extend(pats2).build()? as s {
+                return Matcher.Packed((s, pats))
+            }
+        }
+
+        var ac = (AhoCorasickBuilder()
+            .matchKind(MatchKind.LEFTMOST_FIRST)
+            .setDfa(true)
+            .build(pats2))
+        return Matcher.AC((ac, pats))
+    }
+}
+
+$derive(repr)
+class SingleByteSet {
+    private final list[bool] sparse
+    final bytes dense
+    mut bool complete
+    pubget mut bool allAscii
+
+    public operator new {
+        self.sparse = [false] * 256
+        self.dense = bytes("")
+        self.complete = true
+        self.allAscii = true
+    }
+
+    public static method prefixes(Literals lits) -> cls {
+        mut var sset = SingleByteSet()
+        for var lit in lits.literals {
+            sset.complete = sset.complete and lit.length == 1
+            if lit.get(0)? as b {
+                if not sset.sparse[b] {
+                    if b > 0x7F {
+                        sset.allAscii = false
+                    }
+                    sset.dense.add(b)
+                    sset.sparse[b] = true
+                }
+            }
+        }
+        return sset
+    }
+
+    public static method suffixes(Literals lits) -> cls {
+        mut var sset = SingleByteSet()
+        for var lit in lits.literals {
+            sset.complete = sset.complete and lit.length == 1
+            if lit.get(-1)? as b {
+                if not sset.sparse[b] {
+                    if b > 0x7F {
+                        sset.allAscii = false
+                    }
+                    sset.dense.add(b)
+                    sset.sparse[b] = true
+                }
+            }
+        }
+        return sset
+    }
+
+    method find(bytes text) -> int? {
+        return switch self.dense.length {
+            case 0 => null
+            case 1 => text.indexOf(self.dense[0])
+            default => self._find(text)
+        }
+    }
+
+    private method _find(bytes text) -> int? {
+        for int i, var b in enumerate(text) {
+            return i if self.sparse[b]
+        }
+        return null
+    }
+}
+
+class FreqyPacked {
+    bytes pat
+    int charLen
+    int rare1
+    int rare1i
+    int rare2
+    int rare2i
+
+    public operator new(bytes pat) {
+        if not pat {
+            self.pat = pat,
+            self.charLen = 0
+            self.rare1 = 0
+            self.rare1i = 0
+            self.rare2 = 0
+            self.rare2i = 0
+            return
+        }
+
+        # Find the rarest two bytes. Try to make them distinct (but it's not
+        # required).
+        mut var rare1 = pat[0]
+        mut var rare2 = pat[0]
+        for var b in pat[1:] {
+            if freqRank(b) < freqRank(rare1) {
+                rare1 = b
+            }
+        }
+        for var b in pat {
+            if rare1 == rare2 {
+                rare2 = b
+            } elif b != rare1 and freqRank(b) < freqRank(rare2) {
+                rare2 = b
+            }
+        }
+
+        # And find the offsets of their last occurrences.
+        var rare1i = pat.lastIndexOf(rare1)!!
+        var rare2i = pat.lastIndexOf(rare2)!!
+
+        var charLen = str(pat).length
+
+        self.pat = pat
+        self.charLen = charLen
+        self.rare1 = rare1
+        self.rare1i = rare1i
+        self.rare2 = rare2
+        self.rare2i = rare2i
+    }
+
+    public property int length {
+        get {
+            return self.pat.length
+        }
+    }
+
+    public method find(bytes haystack) -> int? {
+        return null if haystack.length < self.pat.length or not self.pat
+        mut int i = self.rare1i
+        while i < haystack.length {
+            if haystack[i:].indexOf(self.rare1)? as n {
+                i += n
+            } else {
+                return null
+            }
+            var start = i - self.rare1i
+            var end = start + self.pat.length
+            return null if end > haystack.length
+            var aligned = haystack[start:end]
+            if aligned[self.rare2i] == self.rare2 and aligned == self.pat {
+                return start
+            }
+            i++
+        }
+        return null
+    }
+
+    public method isSuffix(bytes text) -> bool {
+        return false if text.length > self.length
+        return text[-self.length:] == self.pat
+    }
+}
+
+class BoyerMooreSearch {
+    bytes pattern
+    list[int] skipTable
+    int guard
+    int guardReverseIdx
+    int md2Shift
+
+    public operator new(bytes pattern) {
+        assert pattern
+        self.pattern = pattern
+        self.guard, self.guardReverseIdx = cls.selectGuard(pattern)
+        self.skipTable = cls.compileSkipTable(pattern)
+        self.md2Shift = cls.compileMd2Shift(pattern)
+    }
+
+    public property int length {
+        get {
+            return self.pattern.length
+        }
+    }
+
+    public method find(bytes haystack) -> int? {
+        return null if self.pattern.length > haystack.length
+        mut var windowEnd = self.pattern.length - 1
+        var numUnroll = 10
+        var shortCircuit = (numUnroll + 2) * self.pattern.length
+        if haystack.length < shortCircuit {
+            var backstop = haystack.length - ((numUnroll + 1) * self.pattern.length)
+            while true {
+                if self.skipLoop(haystack, windowEnd, backstop)? as i {
+                    windowEnd = i
+                } else {
+                    return null
+                }
+                break if windowEnd >= backstop
+
+                if self.checkMatch(haystack, windowEnd) {
+                    return windowEnd - (self.pattern.length - 1)
+                } else {
+                    var skip = self.skipTable[haystack[windowEnd]]
+                    windowEnd += self.md2Shift if not skip else skip
+                }
+            }
+        }
+        while windowEnd < haystack.length {
+            mut var skip = self.skipTable[haystack[windowEnd]]
+            if not skip {
+                if self.checkMatch(haystack, windowEnd) {
+                    return windowEnd - (self.pattern.length - 1)
+                } else {
+                    skip = self.md2Shift
+                }
+            }
+            windowEnd += skip
+        }
+        return null
+    }
+
+    method shouldUse(bytes pattern) -> bool {
+        int minLen = 9
+        int minCutoff = 150
+        int maxCutoff = 255
+        int lenCutoffProportion = 4
+
+        var scaledRank = pattern.length * lenCutoffProportion
+        var cutoff = max(minCutoff, maxCutoff - min(maxCutoff, scaledRank))
+        return pattern.length > minLen and all((freqRank(c) >= cutoff for var c in pattern))
+    }
+
+    method checkMatch(bytes haystack, int windowEnd) -> bool {
+        return false if haystack[windowEnd - self.guardReverseIdx] != self.guard
+
+        var windowStart = windowEnd - (self.pattern.length - 1)
+        for int i in [0:self.pattern.length] {
+            if self.pattern[i] != haystack[windowStart + i] {
+                return false
+            }
+        }
+        return true
+    }
+
+    private method skipLoop(
+        bytes haystack,
+        mut int windowEnd,
+        int backstop,
+    ) -> int? {
+        var windowEndSnapshot = windowEnd
+        var skipOf = lambda int we -> int => (
+            self.skipTable[haystack[we]]
+        )
+
+        while true {
+            mut var skip = skipOf(windowEnd)
+            windowEnd += skip
+            skip = skipOf(windowEnd)
+            windowEnd += skip
+            if skip {
+                skip = skipOf(windowEnd)
+                windowEnd += skip
+                skip = skipOf(windowEnd)
+                windowEnd += skip
+                skip = skipOf(windowEnd)
+                windowEnd += skip
+                if skip {
+                    skip = skipOf(windowEnd)
+                    windowEnd += skip
+                    skip = skipOf(windowEnd)
+                    windowEnd += skip
+                    skip = skipOf(windowEnd)
+                    windowEnd += skip
+                    if skip {
+                        skip = skipOf(windowEnd)
+                        windowEnd += skip
+                        skip = skipOf(windowEnd)
+                        windowEnd += skip
+
+                        # If ten iterations did not make at least 16 words
+                        # worth of progress, we just fall back on memchr.
+                        if windowEnd - windowEndSnapshot > 16 * 4 {
+                            # Returning a windowEnd >= backstop will
+                            # immediately break us out of the inner loop in
+                            # `find`.
+                            if windowEnd >= backstop {
+                                return windowEnd
+                            }
+
+                            continue # we made enough progress
+                        } else {
+                            # In case we are already there, and so that
+                            # we will catch the guard char.
+                            windowEnd -= 1 + self.guardReverseIdx
+                            windowEnd = 0 if windowEnd < 0 else windowEnd
+
+                            if haystack[windowEnd:].indexOf(self.guard)? as gIdx {
+                                return windowEnd + gIdx + self.guardReverseIdx
+                            } else {
+                                return null
+                            }
+                        }
+                    }
+                }
+            }
+
+            return windowEnd
+        }
+    }
+
+    static method compileSkipTable(bytes pattern) -> list[int] {
+        mut var tab = [pattern.length] * 256
+
+        for int i, var c in enumerate(pattern) {
+            tab[int(c)] = (pattern.length - 1) - i
+        }
+
+        return tab
+    }
+
+    static method selectGuard(bytes pattern) -> int, int {
+        mut var rarest = pattern[0]
+        mut var rarestRevIdx = pattern.length - 1
+        for int i, var c in enumerate(pattern) {
+            if freqRank(c) < freqRank(rarest) {
+                rarest = c
+                rarestRevIdx = (pattern.length - 1) - i
+            }
+        }
+
+        return rarest, rarestRevIdx
+    }
+
+    static method compileMd2Shift(bytes pattern) -> int {
+        var shiftc = pattern[-1]
+
+        # For a pattern of length 1 we will never apply the
+        # shift rule, so we use a poison value on the principle
+        # that failing fast is a good thing.
+        if pattern.length == 1 {
+            return 0xDEADBEAF
+        }
+
+        mut var i = pattern.length - 2
+        while i > 0 {
+            if pattern[i] == shiftc {
+                return (pattern.length - 1) - i
+            }
+            i--
+        }
+
+        # The skip char never re-occurs in the pattern, so
+        # we can just shift the whole window length.
+        return pattern.length - 1
+    }
+}
+
+func max(int a, int b) -> int {
+    return a if a > b else b
+}
+
+func min(int a, int b) -> int {
+    return a if a < b else b
+}

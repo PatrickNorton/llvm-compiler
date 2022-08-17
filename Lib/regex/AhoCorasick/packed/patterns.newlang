@@ -1,0 +1,106 @@
+from .api import PackedMatch
+
+export Patterns, PatternID
+
+typedef PatternID as int
+
+class Patterns {
+    mut PackedMatch kind
+    mut list[bytes] byId
+    mut list[PatternID] order
+    pubget mut int minimumLen
+    pubget mut PatternID maxPatternId
+    mut int totalPatternBytes
+
+    public operator new {
+        self.kind = PackedMatch.LEFTMOST_FIRST
+        self.byId = []
+        self.order = []
+        self.minimumLen = -1
+        self.maxPatternId = 0
+        self.totalPatternBytes = 0
+    }
+
+    public operator iter -> tuple[PatternID, Pattern] {
+        for int i in [0:self.length] {
+            var index = self.order[i]
+            yield (index, self[index])
+        }
+    }
+
+    public operator [] (int i) -> Pattern {
+        return Pattern(self.byId[i])
+    }
+
+    public property int length {
+        get {
+            return self.byId.length
+        }
+    }
+
+    public mut method add(bytes b) {
+        assert b
+        assert self.byId.length < 2 << 16
+
+        var idVal = self.byId.length
+        self.maxPatternId = idVal
+        self.order.add(idVal)
+        self.byId.add(b)
+        self.minimumLen = b.length if self.minimumLen < 0 else min(self.minimumLen, b.length)
+        self.totalPatternBytes += b.length
+    }
+
+    public mut method reset() {
+        self.kind = PackedMatch.LEFTMOST_FIRST
+        self.byId.clear()
+        self.order.clear()
+        self.minimumLen = -1
+        self.maxPatternId = 0
+    }
+
+    public mut method setMatchKind(PackedMatch kind) {
+        self.kind = kind
+    }
+
+    public method clone() -> mut cls {
+        mut var result = cls()
+        result.kind = self.kind
+        result.byId = self.byId[:]
+        result.order = self.order[:]
+        result.minimumLen = self.minimumLen
+        result.maxPatternId = self.maxPatternId
+        result.totalPatternBytes = self.totalPatternBytes
+        return result
+    }
+}
+
+class Pattern {
+    bytes value
+
+    public operator new (bytes value) {
+        self.value = value
+    }
+
+    public property int length {
+        get {
+            return self.value.length
+        }
+    }
+
+    public method bytes() -> bytes {
+        return self.value
+    }
+
+    public method isPrefix(bytes b) -> bool {
+        return self.length <= b.length and self.equals(b[:self.length])
+    }
+
+    public method equals(bytes b) -> bool {
+        return self.value == b
+    }
+}
+
+# Here b/c math library isn't working yet
+func min(int a, int b) -> int {
+    return a if a < b else b
+}

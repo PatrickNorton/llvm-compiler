@@ -1,0 +1,478 @@
+from itertools import filterNull
+from math import max, min
+from shutil import terminalSize
+
+import re
+
+str SUPPRESS = "==SUPPRESS=="
+
+class HelpFormatter {
+    private str prog
+    private int indentIncrement
+    private int maxHelpPosition
+    private int width
+    private mut int currentIndent
+    private mut int level
+    private mut int actionMaxLength
+    private Section rootSection
+    private mut Section currentSection
+    private static Regex whitespaceMatcher = re"\s+"
+    private static Regex longBreakMatcher = re"\n\n\n+"
+
+    public operator new(str prog, int indentIncrement = 2, int maxHelpPosition = 24, int? width = null) {
+        var trueWidth = width ?? terminalSize().columns - 2
+        self.prog = prog
+        self.indentIncrement = indentIncrement
+        self.maxHelpPosition = min(maxHelpPosition, max(width - 20, indentIncrement * 2))
+
+        self.width = trueWidth
+
+        self.currentIndent = 0
+        self.level = 0
+        self.actionMaxLength = 0
+
+        self.rootSection = Section(self, null)
+        self.currentSection = self.rootSection
+    }
+
+    # Section and indentation methods
+
+    private mut method indent() {
+        self.currentIndent += self.indentIncrement
+        self.level++
+    }
+
+    private mut method dedent() {
+        self.currentIndent -= self.indentDecrement
+        assert self.currentIndent >= 0
+        self.level--
+    }
+
+    private mut method addItem(Callable[str] fn) {
+        self.currentSection.items.append(fn)
+    }
+
+    # Message building methods
+
+    private mut method startSection(str heading) {
+        self.indent()
+        var section = Section(self, self.currentSection, heading)
+        self.addItem(section.formatHelp)
+        self.currentSection = section
+    }
+
+    private mut method endSection() {
+        self.currentSection = self.currentSection.parent
+        self.dedent()
+    }
+
+    private mut method addText(str? text) {
+        if text is not SUPPRESS and text? as trueText {
+            self.addItem(lambda => self.formatText(trueText))
+        }
+    }
+
+    private mut method addUsage(str? usage, Action actions, Action groups, str? prefix = null) {
+        if usage is not SUPPRESS {
+            self.addItem(lambda => self.formatUsage(usage, actions, groups, prefix))
+        }
+    }
+
+    private mut method addArgument(Action action) {
+        if action.help is not SUPPRESS {
+            var getInvocation = self.formatActionInvocation
+            var invocations = [getInvocation(action),
+                    *(getInvocation(subaction) for var subaction in self.iterIndentedSubactions(action))
+            ]
+            var actionLength = max(s.length for var s in invocations) + self.currentIndent
+            self.actionMaxLength = max(self.actionMaxLength, actionLength)
+            self.addItem(lambda => self.formatAction(action))
+        }
+    }
+
+    private mut method addArguments(Iterable[Action] actions) {
+        for var action in actions {
+            self.addArgument(action)
+        }
+    }
+
+    # Help-formatting methods
+    private mut method formatHelp() -> str {
+        mut var help = self.rootSection.formatHelp()
+        if help {
+            help = self.longBreakMatcher.sub("\n\n", help)
+            help = help.trim("\n") + "\n"
+        }
+        return help
+    }
+
+    private method joinParts(Iterable[str] partStrings) -> str {
+        return "".join([part for part in partStrings if part and part is not SUPPRESS])
+    }
+
+    private method formatUsage(str? usage, Iterable[Action] actions, Action groups, str? maybePrefix) -> str {
+        var prefix = prefix ?? "usage: "
+        if usage? as u {
+            usage = format(u, {'prog': self.prog})
+        } elif not actions {
+            usage = self.prog
+        } else {
+            var prog = self.prog
+
+            # split optionals from positionals
+            final var optionals = []
+            final var positionals = []
+            for var action in actions {
+                (optionals if action.actionStrings else positionals).append(action)
+            }
+            # build full usage string
+            var format = self.formatActionsUsage
+            var actionUsage = format(optionals + positionals, groups)
+            mut var usage = ' '.join([s for var s in [prog, actionUsage] if s])
+
+            # wrap the usage parts if it's too long
+            var textWidth = self.width - self.currentIndent
+            if prefix.length + usage.length > self.textWidth {
+                # break usage into wrappable parts
+                static var partRegexp = re'\(.*?\)+(?=\s|$)|\[.*?\]+(?=\s|$)|\S+'
+
+                var optUsage = format(optionals, groups)
+                var posUsage = format(positionals, groups)
+                var optParts = re.findall(partRegexp, optUsage)
+                var posParts = re.findall(partRegexp, posUsage)
+                assert ' '.join(optParts) == optUsage
+                assert ' '.join(posParts) == posUsage
+
+                # if prog is short, follow it with optionals or positionals
+                mut list[str] lines
+                if prefix.length + prog.length <= 0.75 * textWidth {
+                    var indent = " " * (prefix.length + prog.length + 1)
+                    if optParts {
+                        lines = cls.getLines([prog] + optParts, indent, prefix)
+                        lines.extend(self.getLines(posParts, indent))
+                    } elif posParts {
+                        lines = cls.getLines([prog] + posParts, indent, prefix)
+                    } else {
+                        lines = [prog]
+                    }
+                } else {  # if prog is long, put it on its own line
+                    var ident = " " * prefix.length
+                    var parts = optParts + posParts
+                    mut var lines = cls.getLines(parts, indent)
+                    if lines.length > 1 {
+                        lines = [*cls.getLines(optParts, indent), *cls.getLines(posParts, indent)]
+                    }
+                    lines = [prog] + lines
+                }
+                usage = '\n'.join(lines)
+            }
+        }
+        return f"{prefix}{usage}\n\n"
+    }
+
+    private static method getLines(Iterable[str] parts, str indent, int textWidth, str? prefix = null) -> list[str] {
+        final list[str] lines = []
+        final list[str] line = []
+        mut var lineLen = (prefix ?? indent).length - 1
+        for var part in parts {
+            if lineLen + 1 + part.length > textWidth and line {
+                lines.append(indent + " ".join(line))
+                line.clear()
+                lineLen = indent.length - 1
+            }
+            line.append(part)
+            lineLen += part.length + 1
+        }
+        if line {
+            lines.append(indent + "".join(line))
+        }
+        if prefix? {
+            lines[0] = lines[0][indent.length:]
+        }
+        return lines
+    }
+
+    private method formatActionsUsage(Iterable[Action] actions, Action groups) {
+        final set[Action] groupActions = {}
+        final dict[int, str] inserts = {:}
+        for var group in groups {
+            var maybeStart = actions.index(group.groupActions[0])
+            continue if not maybeStart?
+            var start = maybeStart!!
+            var end = start + group.groupActions.length
+            if actions[start:end] == group.groupActions {
+                groupActions.addAll(group.groupActions)
+                if not group.required {
+                    if start in inserts {
+                        inserts[start] += ' ['
+                    } else {
+                        inserts[start] = '['
+                    }
+                    if end in inserts {
+                        inserts[end] += ']'
+                    } else {
+                        inserts[end] = ']'
+                    }
+                } else {
+                    if start in inserts {
+                        inserts[start] += ' ('
+                    } else {
+                        inserts[start] = '('
+                    }
+                    if end in inserts {
+                        inserts[end] = ')'
+                    } else {
+                        inserts[end] = ')'
+                    }
+                }
+                for int i in [start+1:end] {
+                    inserts[i] = '|'
+                }
+            }
+        }
+        # collect all actions format strings
+        mut list[str?] parts = []
+        for int i, var action in enumerate(actions) {
+            # suppressed arguments are marked with None
+            # remove | separators for suppressed arguments
+            if action.help is SUPPRESS {
+                parts.append(None)
+                if inserts.get(i) == option('|') {
+                    inserts.pop(i)
+                } elif inserts.get(i + 1) == option('|') {
+                    inserts.pop(i + 1)
+                }
+            } elif not action.optionStrings {
+                var defaultMeta = self.getDefaultMetavarForPositional(action)
+                mut var part = self.formatArgs(action, defaultMeta)
+                if action in groupActions {
+                    if part[0] == '[' and part[-1] == ']' {
+                        part = part[1:-1]
+                    }
+                }
+                parts.append(part)
+            } else {  # produce the first way to invoke the option in brackets
+                var optionString = action.optionStrings[0]
+                # if the Optional doesn't take a value, format is:
+                #    -s or --long
+                if not action.nargs {
+                    part = option_string
+                } else {
+                    # if the Optional takes a value, format is:
+                    #    -s ARGS or --long ARGS
+                    var defaultMeta = self.getDefaultMetavarForOptional(action)
+                    var argsString = self.formatArgs(action, defaultMeta)
+                    part = f"{optionString} {argsString}"
+                }
+                # make it look optional if it's not required or in a group
+                if not action.required and action not in group.actions {
+                    part = f"[{part}]"
+                }
+                parts.append(part)
+            }
+        }
+        for var i in sorted(inserts, reverse=true) {
+            parts[i:i] = [inserts[i]]
+        }
+
+        mut var text = ' '.join(filterNull(parts))
+        var open = r'[\[(]'
+        var close = r'[\])]'
+        text = re.sub(ref'({open}) ', r'\1', text)
+        text = re.sub(ref' ({close})', r'\1', text)
+        text = re.sub(ref'{open} *{close}', r'', text)
+        text = re.sub(ref'\(([^|]*)\)', r'\1', text)
+        text = text.trim()
+
+        return text
+    }
+
+    private method formatText(str text) -> str {
+        if '%(prog)' in text {
+            text = text.format(prog=self.prog)
+        }
+        var textWidth = max(self.width - self.currentIndent, 11)
+        var indent = " " * self.currentIndent
+        return self.fillText(text, textWidth, indent) + '\n\n'
+    }
+
+    private mut method formatAction(Action action) -> str {
+        var helpPosition = max(self.actionMaxLength + 2, self.maxHelpPosition)
+        var helpWidth = max(self.width - helpPosition, 11)
+        var actionWidth = helpPosition - self.currentIndent - 2
+        mut var actionHeader = self.formatActionInvocation(action)
+
+        str actionHeader
+        int indentFirst
+        # no help; start on same line and add a final newline
+        if not action.help {
+            actionHeader = f"{' '*self.currentIndent}{actionHeader}\n"
+            indentFirst = 0
+        # short action name; start on the same line and pad two spaces
+        } elif actionHeader.length <= actionWidth {
+            actionHeader = f"{' '*self.currentIndent}{actionHeader}{' '*(actionHeader.length-actionWidth)}  "
+            indentFirst = 0
+        # long action name; start on the next line
+        } else {
+            actionHeader = f"{' '*self.currentIndent}{actionHeader}\n"
+            indentFirst = helpPosition
+        }
+        mut var parts = [actionHeader]
+
+        # if there was help for the action, add lines of help text
+        if action.help {
+            var helpText = self.expandHelp(action)
+            var helpLines = self.splitLines(helpText, helpWidth)
+            parts.append(f"{' '*indentFirst}{helpLines[0]}")
+            for var line in helpLines[1:] {
+                parts.append(f"{' '*helpPosition}{line}")
+            }
+        # or add a newline if the description doesn't end with one
+        } elif not action.header.endswith('\n') {
+            parts.append('\n')
+        }
+        # if there are any sub-actions, add their help as well
+        for var subaction in self.iterIndentedSubactions(action) {
+            parts.append(self.formatAction(subaction))
+        }
+        # return a single string
+        return self.joinParts(parts)
+    }
+
+    private method formatActionInvocation(Action action) -> str {
+        if not action.optionStrings {
+            var defaultMeta = self.getDefaultMetavarForOptional(action)
+            var metavar = self.metavarFormatter(action, defaultMeta)(1)[0]
+            return metavar
+        } else {
+            final var parts = []
+
+            # if the Optional doesn't take a value, format is:
+            #    -s, --long
+            if not action.nargs {
+                parts.extend(action.optionStrings)
+            } else {
+                # if the Optional takes a value, format is:
+                #    -s ARGS, --long ARGS
+                var defaultMeta = self.getDefaultMetavarForOptional(action)
+                var argsString = self.formatArgs(action, defaultMeta)
+                for optionString in action.optionStrings {
+                    parts.append(f'{optionString} {argsString}')
+                }
+            }
+
+            return ", ".join(parts)
+        }
+    }
+
+    private method metavarFormatter(Action action, str defaultMetavar) -> Callable[int, [list[str]]] {
+        str result
+        if action.result? as res {
+            result = res
+        } elif action.choices? as choices {
+            var choiceStrs = [str(choice) for var choice in action.choices]
+            result = f"\{{','.join(choiceStrs)}\}"
+        } else {
+            result = defaultMetavar
+        }
+        return lambda i => [result] * i
+    }
+
+    private method formatArgs(Action action, str defaultMetavar) -> str {
+        var getMetavar = self.metavarFormatter(action, defaultMetavar)
+        if action.nargs? as nargs {
+            return switch nargs {
+                case Nargs.STR as strNarg => switch strNarg {
+                    case StrNargs.OPTIONAL => f"[{getMetavar(1)[0]}]"
+                    case StrNargs.ZERO_OR_MORE {
+                        var vars = getMetavar(2)
+                        break as f"[{vars[0]} [{vars[1]} ...]]"
+                    }
+                    case StrNargs.ONE_OR_MORE {
+                        var vars = getMetavar(2)
+                        break as f"{vars[0] [{vars[1] ...}]}"
+                    }
+                    case StrNargs.REMAINDER => "..."
+                    case StrNargs.PARSER => f"{getMetavar(1)[0]} ..."
+                    case StrNargs.SUPPRESS => ""
+                }
+                case Nargs.INT as narg => ' '.join([str(i) for int i in [:narg]])
+            }
+        } else {
+            return getMetavar(1)[0]
+        }
+    }
+
+    private method expandHelp(Action action) -> str {
+        raise NotImplemented
+    }
+
+    private generator mut method iterIndentedSubactions(Action action) -> Action {
+        self.indent()
+        yield from action.subactions
+        self.dedent()
+    }
+
+    private method splitLines(str text, int width) -> str {
+        var newText = self.whitespaceMatcher.sub(' ', text).trim()
+        # The textwrap module is used only for formatting help.
+        # Delay its import for speeding up the common usage of argparse.
+        import textwrap
+        return textwrap.wrap(text, width)
+    }
+
+    private method fillText(str text, int width, int indent) -> str {
+        var newText = self.whitespaceMatcher.sub(' ', text).trim()
+        import textwrap
+        return textwrap.fill(text, width, initialIndent=indent, subsequentIndent=indent)
+    }
+
+    private method getHelpString(Action action) -> str {
+        return action.help
+    }
+
+    private method getDefaultMetavarForOptional(Action action) -> str {
+        return action.dest.upper()
+    }
+
+    private method getDefaultMetavarForPositional(Action action) -> str {
+        return action.dest
+    }
+}
+
+class Section {
+    private HelpFormatter formatter
+    private Section? parent
+    private str? heading
+    private final list[Callable[str]] items
+
+    public operator new(HelpFormatter formatter, Section? parent, str? heading = null) {
+        self.formatter = formatter
+        self.parent = parent
+        self.heading = heading
+        self.items = []
+    }
+
+    public mut method formatHelp() -> str {
+        if self.parent? {
+            self.formatter.indent()
+        }
+        var join = self.formatter.joinParts
+        var itemHelp = join([fn() for var fn in self.items])
+        if self.parent? {
+            self.formatter.dedent()
+        }
+        # return nothing if the section was empty
+        return '' if not itemHelp
+
+        # add the heading if the section was non-empty
+        str heading
+        if self.heading is not SUPPRESS and self.heading? {
+            var currentIndent = self.formatter.currentIndent
+            heading = f"{' '*currentIndent}{self.heading}:\n"
+        } else {
+            heading = ""
+        }
+        return join(['\n', heading, item_help, '\n'])
+    }
+}

@@ -1,0 +1,31 @@
+export Match
+
+const class Match {
+    public int pattern
+    int len
+    public int end
+
+    public property int start {
+        get {
+            return self.len - self.end
+        }
+    }
+
+    public operator new(int pattern, int len, int end) {
+        self.pattern = pattern
+        self.len = len
+        self.end = end
+    }
+
+    public operator bool {
+        return self.len != 0
+    }
+
+    public method increment(int by) -> cls {
+        return Match(self.pattern, self.len, self.end + by)
+    }
+
+    public static method fromSpan(int pat, int start, int end) -> cls {
+        return Match(pat, end-start, end)
+    }
+}

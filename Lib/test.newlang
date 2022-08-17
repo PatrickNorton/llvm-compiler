@@ -1,0 +1,19 @@
+from test2 import recursionTest
+
+export Foo2
+
+auto interface Test {
+    public method foo() -> int
+}
+
+class Foo2 {
+    public operator new() {}
+
+    public method foo() -> int {
+        return 1
+    }
+}
+
+func testAuto() {
+    Test foo = Foo2()
+}

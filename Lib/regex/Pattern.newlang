@@ -1,0 +1,17 @@
+const final class Pattern {
+    private str original
+
+    private operator new (str value, bool quick) {
+        self.original = value
+    }
+
+    operator str := self.original
+
+    public method match(String str) {
+
+    }
+
+    public static method compile(str value, bool quick = false) -> cls {
+        return cls(value, quick)
+    }
+}

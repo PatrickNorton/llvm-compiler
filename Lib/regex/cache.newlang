@@ -1,0 +1,23 @@
+export Cached
+
+class Cached[T] {
+    private final list[T] stack
+
+    public operator new() {
+        # self.stack = []  FIXME: Non-constant types in list
+    }
+
+    public method get() -> T? {
+        if self.stack {
+            # return self.stack.pop()  FIXME: Interior mutability
+        } else {
+            # return null
+        }
+        # raise NotImplemented()
+        return null
+    }
+
+    public mut method put(T value) {
+        self.stack.add(value)
+    }
+}

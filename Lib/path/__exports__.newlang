@@ -1,0 +1,11 @@
+const class Path {
+    private str inner
+
+    public operator new(str value) {
+        self.inner = value
+    }
+
+    public operator / (str next) -> Path {
+        return Path(self.value + sys.FILE_SEPARATOR + next)
+    }
+}

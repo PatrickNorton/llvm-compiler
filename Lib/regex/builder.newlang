@@ -1,0 +1,158 @@
+from .exec import ExecBuilder, Exec
+from .unicode import Regex
+
+export RegexOptions, RegexBuilder
+
+class RegexOptions {
+    public mut list[str] pats
+    public mut int sizeLimit
+    public mut int dfaSizeLimit
+    public mut int nestLimit
+    public mut bool caseInsensitive
+    public mut bool multiLine
+    public mut bool dotMatchesNewLine
+    public mut bool swapGreed
+    public mut bool ignoreWhitespace
+    public mut bool unicode
+    public mut bool octal
+
+    public operator new() {
+        self.pats = []
+        self.sizeLimit = 10 * (1 << 20)
+        self.dfaSizeLimit = 2 * (1 << 20)
+        self.nestLimit = 250
+        self.caseInsensitive = false
+        self.multiLine = false
+        self.dotMatchesNewLine = false
+        self.swapGreed = false
+        self.ignoreWhitespace = false
+        self.unicode = true
+        self.octal = false
+    }
+}
+
+class RegexBuilder {
+    public final RegexOptions options
+
+    public operator new(str pattern) {
+        self.options = RegexOptions()
+        self.options.pats.add(pattern)
+    }
+
+    public method build() -> Exec {
+        return ExecBuilder().setOptions(self.options).onlyUtf8().build()
+    }
+
+    public mut method caseInsensitive(bool yes) -> RegexBuilder {
+        self.options.caseInsensitive = yes
+        return self
+    }
+
+    public mut method multiLine(bool yes) -> RegexBuilder {
+        self.options.multiLine = yes
+        return self
+    }
+
+    public mut method dotMatchesNewLine(bool yes) -> RegexBuilder {
+        self.options.dotMatchesNewLine = yes
+        return self
+    }
+
+    public mut method swapGreed(bool yes) -> RegexBuilder {
+        self.options.swapGreed = yes
+        return self
+    }
+
+    public mut method ignoreWhitespace(bool yes) -> RegexBuilder {
+        self.options.ignoreWhitespace = yes
+        return self
+    }
+
+    public mut method unicode(bool yes) -> RegexBuilder {
+        self.options.unicode = yes
+        return self
+    }
+
+    public mut method octal(bool yes) -> RegexBuilder {
+        self.options.octal = yes
+        return self
+    }
+
+    public mut method sizeLimit(int limit) -> RegexBuilder {
+        self.options.sizeLimit = limit
+        return self
+    }
+
+    public mut method dfaSizeLimit(int limit) -> RegexBuilder {
+        self.options.dfaSizeLimit = limit
+        return self
+    }
+
+    public mut method nestLimit(int limit) -> RegexBuilder {
+        self.options.nestLimit = limit
+        return self
+    }
+}
+
+class RegexSetBuilder {
+    public final RegexOptions options
+
+    public operator new(Iterable[str] items) {
+        self.options = RegexOptions()
+        self.options.pats.addAll(items)
+    }
+
+    public method build() -> Exec {
+        return ExecBuilder().setOptions(self.options).onlyUtf8().build()
+    }
+
+    public mut method caseInsensitive(bool yes) -> RegexSetBuilder {
+        self.options.caseInsensitive = yes
+        return self
+    }
+
+    public mut method multiLine(bool yes) -> RegexSetBuilder {
+        self.options.multiLine = yes
+        return self
+    }
+
+    public mut method dotMatchesNewLine(bool yes) -> RegexSetBuilder {
+        self.options.dotMatchesNewLine = yes
+        return self
+    }
+
+    public mut method swapGreed(bool yes) -> RegexSetBuilder {
+        self.options.swapGreed = yes
+        return self
+    }
+
+    public mut method ignoreWhitespace(bool yes) -> RegexSetBuilder {
+        self.options.ignoreWhitespace = yes
+        return self
+    }
+
+    public mut method unicode(bool yes) -> RegexSetBuilder {
+        self.options.unicode = yes
+        return self
+    }
+
+    public mut method octal(bool yes) -> RegexSetBuilder {
+        self.options.octal = yes
+        return self
+    }
+
+    public mut method sizeLimit(int limit) -> RegexSetBuilder {
+        self.options.sizeLimit = limit
+        return self
+    }
+
+    public mut method dfaSizeLimit(int limit) -> RegexSetBuilder {
+        self.options.dfaSizeLimit = limit
+        return self
+    }
+
+    public mut method nestLimit(int limit) -> RegexSetBuilder {
+        self.options.nestLimit = limit
+        return self
+    }
+}

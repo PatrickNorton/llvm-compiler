@@ -1,0 +1,28 @@
+from annotations typeget pure
+from functools import apply
+from interfaces typeget Any, File
+
+import sys
+
+export enumerate, hash, print
+
+generic T
+generator func enumerate(Iterable[T] values, /) -> int, T {
+    int index = 0
+    for T value in values {
+        yield i, value
+        i++
+    }
+}
+
+$pure
+func hash(*Hashable values) -> int {
+    return apply(lambda int i, Hashable j => hash(j) + 31 * i, *values, start=1)
+}
+
+func print(*Any values, *, str sep=" ", str end="\n", File file=sys.stdout, bool flush=false) {
+    file.write(sep.join(values) + end)
+    if flush {
+        file.flush()
+    }
+}

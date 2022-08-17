@@ -1,0 +1,80 @@
+from .ast import AstBuilder
+from .ast import Parser as AstParser
+from .hir import Hir, HirBuilder, Translator
+
+export Parser, ParserBuilder
+
+class ParserBuilder {
+    private final AstBuilder ast
+    private final HirBuilder hir
+
+    public operator new() {
+        self.ast = AstBuilder()
+        self.hir = HirBuilder()
+    }
+
+    public method build() -> mut Parser {
+        return Parser(self.ast.build(), self.hir.build())
+    }
+
+    public mut method nestLimit(int limit) -> mut cls {
+        self.ast.nestLimit = limit
+        return self
+    }
+
+    public mut method octal(bool yes) -> mut cls {
+        self.ast.setOctal(yes)
+        return self
+    }
+
+    public mut method allowInvalidUtf8(bool yes) -> mut cls {
+        self.hir.allowInvalidUtf8(yes)
+        return self
+    }
+
+    public mut method ignoreWhitespace(bool yes) -> mut cls {
+        self.ast.ignoreWhitespace = yes
+        return self
+    }
+
+    public mut method caseInsensitive(bool yes) -> mut cls {
+        self.hir.caseInsensitive(yes)
+        return self
+    }
+
+    public mut method multiLine(bool yes) -> mut cls {
+        self.hir.multiLine(yes)
+        return self
+    }
+
+    public mut method dotMatchesNewline(bool yes) -> mut cls {
+        self.hir.dotMatchesNewline(yes)
+        return self
+    }
+
+    public mut method swapGreed(bool yes) -> mut cls {
+        self.hir.swapGreed(yes)
+        return self
+    }
+
+    public mut method unicode(bool yes) -> mut cls {
+        self.hir.unicode(yes)
+        return self
+    }
+}
+
+class Parser {
+    AstParser ast
+    Translator hir
+
+    public operator new(AstParser ast, Translator hir) {
+        self.ast = ast
+        self.hir = hir
+    }
+
+    public mut method parse(str pattern) -> Hir {
+        var ast = self.ast.parse(pattern)
+        var hir = self.hir.translate(pattern, ast)
+        return hir
+    }
+}

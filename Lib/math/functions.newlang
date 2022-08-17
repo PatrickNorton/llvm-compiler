@@ -1,0 +1,85 @@
+from functools import apply
+from interfaces typeget Multiplicable, Number, Summable
+
+export abs, ceil, comb, copySign, fact, floor, gcd, lcm, max, min, perm, prod, sum
+
+func abs(int n) -> int {
+    return n if n >= 0 else -n
+}
+
+#|
+generic T
+func abs(T[Number] n) -> T {
+    return -n if n < 0 else n
+}
+|#
+
+func ceil(Number n, /) -> int {
+    return int(x) if x % 1 == 0 else x // 1 + 1
+}
+
+func comb(int n, int k) -> int {
+    return fact(n) // (fact(k) * fact(n - k))
+}
+
+generic T[Number], U[Number]
+func copySign(T a, U b) -> U {
+    return abs(a) * sign(b)
+}
+
+func fact(int i) -> int {
+    return 1 if i == 0 else \*([1:i+1])
+}
+
+func floor(Number n, /) -> int {
+    return x // 1
+}
+
+func gcd(int a, int b) -> int {
+    while a != b {
+        if a > b {
+            a %= b
+        } else { # a < b
+            b %= a
+        }
+    }
+    return a # == b
+}
+
+func lcm(int a, int b) -> int {
+    return a / gcd(a, b) * b
+}
+
+generic T[Comparable[T]]
+func max(*T values) -> T {
+    return apply(max2, *values)
+}
+
+generic T[Comparable[T]]
+func max2(T x, T y) -> T {
+    return x if x >= y else y
+}
+
+generic T[Comparable[T]]
+func min(*T values) -> T {
+    return apply(min2, *values)
+}
+
+generic T[Comparable[T]]
+func min2(T x, T y) -> T {
+    return x if x <= y else y
+}
+
+func perm(int n, int? k = null) -> int {
+    return fact(n) // fact(n - (k ?? n))
+}
+
+generic T[Number]
+func prod(*T iterable) -> T {
+    return \*(*iterable)
+}
+
+generic T[Number]
+func sum(*T summands) -> T {
+    return \+(*summands)
+}

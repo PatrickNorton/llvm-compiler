@@ -1,0 +1,124 @@
+# from interfaces typeget Callable, Iterable
+
+export all, any, count, countEqual, countFalse, countNotEqual, first, last
+
+typedef Any as object
+
+func all(Iterable[Any] values) -> bool {
+    for var i in values {
+        return false if not i
+    }
+    return true
+}
+
+
+func any(Iterable[Any] values) -> bool {
+    for var i in values {
+        return true if i
+    }
+    return false
+}
+
+
+generic T
+func count(Callable[T, [Any]] predicate, Iterable[T] values, /) -> int {
+    mut int x = 0
+    for T i in values {
+        if predicate(i) {
+            x++
+        }
+    }
+    return x
+}
+
+
+generic T
+func countEqual(T sentinel, Iterable[T] values, /) -> int {
+    mut int x = 0
+    for T i in values {
+        if sentinel == i {
+            x++
+        }
+    }
+    return x
+}
+
+
+generic T
+func countFalse(Callable[T, [Any]] predicate, Iterable[T] values, /) -> int {
+    mut int x = 0
+    for T i in values {
+        if not predicate(i) {
+            x++
+        }
+    }
+    return x
+}
+
+
+generic T
+func countNotEqual(T sentinel, Iterable[T] values, /) -> int {
+    mut int x = 0
+    for T i in values {
+        if i != sentinel {
+            x++
+        }
+    }
+    return x
+}
+
+
+generic T
+func first(Callable[T, [Any]] predicate, Iterable[T] values, T fallback) -> T {
+    for T value in values {
+        return value if predicate(value)
+    }
+    return fallback
+}
+
+
+generic T
+func firstIndex(Callable[T, [Any]] predicate, Iterable[T] values) -> int? {
+    for int i, T value in enumerate(values) {
+        return i if predicate(value)
+    }
+    return null
+}
+
+
+generic T
+func flatten(Iterable[T?] values) -> list[T]? {
+    final list[T] result = []
+    for var value in values {
+        if value? as v {
+            result.add(v)
+        } else {
+            return null
+        }
+    }
+    return result
+}
+
+
+generic T
+func last(Callable[T, [Any]] predicate, Iterable[T] values, T fallback) -> T {
+    mut T lastSoFar = fallback
+    for T value in values {
+        if predicate(value) {
+            lastSoFar = value
+        }
+    }
+    return lastSoFar
+}
+
+
+generic T
+func lastIndex(Callable[T, [Any]] predicate, Iterable[T] values) -> int? {
+    mut int? lastSoFar = null
+    for int i, T value in enumerate(values) {
+        if predicate(value) {
+            lastSoFar = i
+        }
+    }
+    return lastSoFar
+}

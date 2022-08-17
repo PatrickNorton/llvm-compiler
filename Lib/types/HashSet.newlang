@@ -1,0 +1,105 @@
+from interfaces typeget Hashable
+
+from collections import AbstractSet
+from numtools import highestOneBit
+
+export HashSet
+
+
+int DEFAULT_ARRAY_SIZE = 1 << 4
+dec RESIZE_THRESHOLD = 0.75
+
+
+const class VarInfo[T] {
+    public int hashCode
+    public T value
+
+    public operator new(int hashCode, T value) {
+        self.hashCode = hashCode
+        self.value = value
+    }
+}
+
+
+union Value[T] {
+    VarInfo[T] Full
+    null Empty
+    null Deleted
+}
+
+
+class HashSet[T[Hashable]] from AbstractSet[T] {
+    private Array[Value[T]] values
+    pubget int length := \+(i.Full? for var i in self.values)
+
+    public operator new (*T items) {
+        self(items)
+    }
+
+    public operator new (Iterable[T] items) {
+        int length = max(highestOneBit(values.length) << 1, DEFAULT_ARRAY_SIZE)
+        self.values = Array(length, Value.Empty())
+        self.resize(values.length)
+        for var item in items {
+            self.add(item)
+        }
+    }
+
+    public operator del[] (T value) {
+        raise ValueError if value not in self
+        self.discard(value)
+    }
+
+    public operator in (T value) {
+        return not self.values[self.arrayIndex(value)].Empty?
+    }
+
+    public method add(E value) -> self {
+        self.resize(self.length + 1)
+        self.values[self.arrayIndex(value, returnDeleted=true)] = VarInfo(hash(value), value)
+    }
+
+    public method discard(T value) {
+        var index = self.arrayIndex(value)
+        if not self.values[index].Empty? {
+            self.values[index] = Value.Deleted()
+        }
+    }
+
+    public method clear() {
+        self.values.fill(Value.Empty())
+    }
+
+    private method arrayIndex(T value, *, bool returnDeleted = false) {
+        int index = hash(key) % self.values.length
+        int? deleted = null
+        while true {
+            var value = self.values[index]
+            if value.Deleted? and returnDeleted {
+                deleted = index
+                returnDeleted = false  # Take the first deleted value for speed
+            }
+            switch value {
+                case Value.Empty {
+                    return index
+                }
+                case Value.Full as v {
+                    return deleted ?? index if v.hashCode == hash(key) and v.value == key
+                    index = (5*index + 1 + (hash(key) >> PERTURB_SHIFT)) % self.values.length
+                }
+            }
+        }
+    }
+
+    public method resize(int newSize) {
+        return if size / self.values.length < RESIZE_THRESHOLD
+        int newSize = self.values.length << 1
+        var old = self.values
+        self.values = Array(newSize, Empty.EMPTY)
+        for var i in old {
+            if i.Full? as v {
+                self.values[self.getInfo(v.value, returnDeleted=true)] = v
+            }
+        }
+    }
+}

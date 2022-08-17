@@ -1,0 +1,90 @@
+from string import StringBuilder
+
+export str
+
+const final class str {
+    private Array[byte] chars
+    private Array[int] qWordIndices
+    private bool isExpanded
+    pubget int length
+
+    operator new {
+        self.isExpanded = false
+        self.chars = Array()
+        self.qWordIndices = Array()
+    }
+
+    operator new (*char chars) {
+        bool isExpanded = false
+        var bytes = Array[byte](chars.length, 0)
+        list[int] qWordIndices = []
+        int qWordCount = 0
+        for int i, char c in enumerate(chars) {
+            if not isExpanded and not c.isAscii() {
+                isExpanded = true
+                var newBytes = Array[byte](bytes.length * 2, 0)
+                newBytes[1::2] = bytes
+                bytes = newBytes
+            }
+            int byteIndex = (i << self.isExpanded) + qWordCount
+            if c.isAscii() {
+                bytes[byteIndex + 1] = c.toBytes()[0]
+            } else {
+                if bytes.length <= byteIndex {
+                    bytes = Array(bytes.length + qWordCount, *bytes, 0)
+                }
+                var charBytes = c.toBytes()
+                if charBytes.length < 2 {
+                    qWordIndices.append(byteIndex)
+                    qWordCount++
+                }
+                bytes[byteIndex:] = charBytes
+            }
+        }
+
+        self.isExpanded = isExpanded
+        self.bytes = bytes
+        self.qWordIndices = Array.of(qWordIndices)
+    }
+
+    operator [] (int index) -> char {
+        if index < 0 {
+            index = self.length + index
+        }
+        if not isExpanded {
+            return char(self.chars[index])
+        } else {
+            var qWordCount = \+(1 for int i in self.qWordIndices while i < index >> 1)
+            var startIndex = (index + qWordCount) << 1
+            var isQWord = self.qWordIndices[qWordCount + 1] == startIndex
+            return char(*self.chars[startIndex : startIndex + 2 << isQWord])
+        }
+    }
+
+    operator iter -> char {
+        if not isExpanded {
+            yield from (char(c) for byte c in self.bytes)
+        } else {
+            int qWordCount = 0
+            for int i in self.length {
+                int startIndex = (i + qWordCount) * 2
+                if self.qWordIndices[qWordCount] == startIndex {
+                    qWordCount++
+                    yield char(*self.chars[startIndex:startIndex + 4])
+                } else {
+                    yield char(*self.chars[startIndex:startIndex + 2])
+                }
+            }
+        }
+    }
+
+    public method join(*str strings) -> str {
+        return '' if not objects
+        var sb = StringBuilder(strings[0])
+        for str string in strings {
+            sb += self
+            sb += str
+        }
+        return str(sb)
+    }
+}

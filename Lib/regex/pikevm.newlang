@@ -1,0 +1,262 @@
+from itertools import all
+
+from .exec import ProgramCache
+from .inputs import Input, InputAt
+from .prog import InstPtr, Program, Inst
+from .trait import Slot
+
+export Fsm, Cache
+
+class Fsm {
+    Program prog
+    final list[FollowEpsilon] stack
+    Input inputVal
+
+    private operator new(Program prog, mut list[FollowEpsilon] stack, Input inputVal) {
+        self.prog = prog
+        self.stack = stack
+        self.inputVal = inputVal
+    }
+
+    public static method exec(
+        Program prog,
+        mut ProgramCache cache,
+        list[bool] matches,
+        list[Slot] slots,
+        bool quitAfterMatch,
+        Input inputVal,
+        int start,
+        int end,
+    ) -> bool {
+        final var vmCache = cache.pikevm
+        vmCache.clist.resize(prog.length, prog.captures.length)
+        vmCache.nlist.resize(prog.length, prog.captures.length)
+        var at = inputVal.at(start)
+        return Fsm(prog, vmCache.stack, inputVal).exec_(
+            vmCache.clist,
+            vmCache.nlist,
+            matches,
+            slots,
+            quitAfterMatch,
+            at,
+            end,
+        )
+    }
+
+    private mut method exec_(
+        mut Threads clist,
+        mut Threads nlist,
+        mut list[bool] matches,
+        mut list[Slot] slots,
+        bool quitAfterMatch,
+        mut InputAt at,
+        mut int end,
+    ) -> bool {
+        mut var matched = false
+        mut var allMatched = false
+        clist.codes.clear()
+        nlist.codes.clear()
+        while true {
+            if not clist.codes {
+                # Three ways to bail out when our current set of threads is
+                # empty.
+                #
+                # 1. We have a match---so we're done exploring any possible
+                #    alternatives. Time to quit. (We can't do this if we're
+                #    looking for matches for multiple regexes, unless we know
+                #    they all matched.)
+                #
+                # 2. If the expression starts with a '^' we can terminate as
+                #    soon as the last thread dies.
+                if ((matched and matches.length <= 1)
+                    or allMatched
+                    or (not at.isStart and self.prog.isAnchoredStart)) {
+                    break
+                }
+
+                # 3. If there's a literal prefix for the program, try to
+                #    jump ahead quickly. If it can't be found, then we can
+                #    bail out early.
+                if self.prog.prefixes {
+                    if self.inputVal.prefixAt(self.prog.prefixes, at)? as a {
+                        at = a
+                    } else {
+                        break
+                    }
+                }
+            }
+
+            # This simulates a preceding '.*?' for every regex by adding
+            # a state starting at the current position in the input for the
+            # beginning of the program only if we don't already have a match.
+            if not clist.codes or (not self.prog.isAnchoredStart and not allMatched) {
+                self.add(clist, slots, 0, at)
+            }
+
+            # The previous call to "add" actually inspects the position just
+            # before the current character. For stepping through the machine,
+            # we can to look at the current character, so we advance the
+            # input.
+            final var atNext = self.inputVal.at(at.nextPos())
+            for int i, var ip in enumerate(clist.codes) {
+                if self.step(
+                    nlist,
+                    matches,
+                    slots,
+                    clist.getCaps(ip),
+                    ip,
+                    at,
+                    atNext,
+                ) {
+                    matched = true
+                    allMatched = allMatched or all(matches)
+                    # If we only care if a match occurs (not its
+                    # position), then we can quit right now.
+                    break 2 if quitAfterMatch
+                    # We don't need to check the rest of the threads
+                    # in this set because we've matched something
+                    # ("leftmost-first"). However, we still need to check
+                    # threads in the next set to support things like
+                    # greedy matching.
+                    #
+                    # This is only true on normal regexes. For regex sets,
+                    # we need to mush on to observe other matches.
+                    break if self.prog.matches.length == 1
+                }
+            }
+            break if at.pos >= end
+            at = atNext
+            clist, nlist = nlist, clist
+            nlist.codes.clear()
+        }
+        return matched
+    }
+
+    mut method step(
+        mut Threads nlist,
+        mut list[bool] matches,
+        mut list[Slot] slots,
+        mut list[int?] threadCaps,
+        int ip,
+        InputAt at,
+        InputAt atNext,
+    ) -> bool {
+        switch self.prog[ip] {
+            case Inst.Match as matchSlot {
+                if matchSlot < matches.length {
+                    matches[matchSlot] = true
+                }
+                slots[0:threadCaps.length] = threadCaps[:slots.length]
+                return true
+            }
+            case Inst.Char as inst {
+                if option(inst.c) == at.chr() {
+                    self.add(nlist, threadCaps, inst.jump, atNext)
+                }
+                return false
+            }
+            case Inst.Ranges as inst {
+                if inst.matches(at.chr()!!) {
+                    self.add(nlist, threadCaps, inst.jump, atNext)
+                }
+                return false
+            }
+            case Inst.Bytes as inst {
+                if at.byte()? as b {
+                    if inst.matches(b) {
+                        self.add(nlist, threadCaps, inst.jump, atNext)
+                    }
+                }
+                return false
+            }
+            default {
+                return false
+            }
+        }
+    }
+
+    mut method add(mut Threads nlist, mut list[int?] threadCaps, int ip, InputAt at) {
+        self.stack.add(FollowEpsilon.IP(ip))
+        for var frame in reversed(self.stack) {
+            switch frame {
+                case FollowEpsilon.IP as ip {
+                    self.addStep(nlist, threadCaps, ip, at)
+                }
+                case FollowEpsilon.Capture as pair {
+                    threadCaps[pair.0] = pair.1
+                }
+            }
+        }
+        self.stack.clear()
+    }
+
+    mut method addStep(mut Threads nlist, mut list[int?] threadCaps, int ip, InputAt at) {
+        while true {
+            return if ip in nlist.codes
+            nlist.codes.add(ip)
+            switch self.prog[ip] {
+                case Inst.EmptyLook as inst {
+                    if self.inputVal.isEmptyMatch(at, inst) {
+                        ip = inst.jump
+                    }
+                }
+                case Inst.Save as inst {
+                    if inst.slot < threadCaps.length {
+                        self.stack.add(FollowEpsilon.Capture((inst.slot, threadCaps[inst.slot])))
+                        threadCaps[inst.slot] = option(at.pos)  # FIXME: Convert this to an option automagically
+                    }
+                    ip = inst.jump
+                }
+                case Inst.Split as inst {
+                    self.stack.add(FollowEpsilon.IP(inst.jump2))
+                    ip = inst.jump1
+                }
+                default {
+                    nlist.caps[:threadCaps.length] = threadCaps[:nlist.caps.length]
+                    return
+                }
+            }
+        }
+    }
+}
+
+class Cache {
+    final Threads clist
+    final Threads nlist
+    final list[FollowEpsilon] stack
+
+    public operator new(Program prog) {
+        self.clist = Threads()
+        self.nlist = Threads()
+        self.stack = []
+    }
+}
+
+class Threads {
+    mut set[int] codes
+    mut list[Slot] caps
+    private mut int slotsPerThread
+
+    public operator new() {
+        self.codes = {}
+        self.caps = []
+        self.slotsPerThread = 0
+    }
+
+    public mut method resize(int numInsts, int ncaps) {
+        self.slotsPerThread = ncaps * 2
+        self.codes = {}
+        Slot nullSlot = null  # FIXME: Type inference this
+        self.caps = [nullSlot] * (self.slotsPerThread * numInsts)
+    }
+
+    public method getCaps(int pc) -> list[int?] {
+        var i = pc * self.slotsPerThread
+        return self.caps[i:i+self.slotsPerThread]
+    }
+}
+
+union FollowEpsilon {
+    InstPtr IP
+    tuple[int, Slot] Capture
+}

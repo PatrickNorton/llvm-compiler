@@ -1,0 +1,116 @@
+from itertools import all
+from numtools import highestOneBit
+
+export IdentityMap
+
+
+int DEFAULT_ARRAY_SIZE = 1 << 4
+dec RESIZE_THRESHOLD = 0.75
+int PERTURB_SHIFT = 8
+
+
+class VarInfo[K, V] {
+    K key
+    mut V value
+
+    public operator new(K key, V value) {
+        self.key = key
+        self.value = value
+    }
+}
+
+
+union Value[K, V] {
+    VarInfo[K, V] Full
+    null Empty
+    null Deleted
+}
+
+
+class IdentityMap[K, V] from dict[K, V] {
+    private Array[Value[K, V]] values
+    pubget int length
+
+    public operator new (dict[K, V] values) {
+        int length = max(highestOneBit(values.length) << 1, DEFAULT_ARRAY_SIZE)
+        self.internal = Array(length, Value.Empty)
+        self.valueList = []
+        self.length = 0
+        self.resize(values.length)
+        for K key, V value in values {
+            self[key] = value
+        }
+    }
+
+    public operator [] (K key) -> V {
+        int index = self.getInfo(key)
+        if self.values[index].Full? as val {
+            return val.value
+        }
+        raise IndexError(f"Key {key} not in dict")
+    }
+
+    public mut operator []= (K key, V value) {
+        self.resize(self.length + 1)
+        int index = self.getInfo(key, returnDeleted=true)
+        self.length += not self.values[index].Full?
+        self.values[index] = Value.Full((key, value))
+    }
+
+    public mut operator del[] (K key) {
+        int oldIndex = self.getInfo(key)
+        raise KeyError if self.values[oldIndex].Empty?
+        self.values[oldIndex] = Value.Deleted()
+        self.length--
+    }
+
+    public operator in (K key) {
+        return self.values[self.getInfo(key)].Full?
+    }
+
+    public operator iter -> K, V {
+        yield from (*i.Full!! for var i in self.values if i.Full?)
+    }
+
+    public operator == (dict[K, V] other) {
+        return other instanceof IdentityMap and super == other
+    }
+
+    public operator repr {
+        str values = ", ".join(f"{i}: {j}" for K i, V j in self)
+        return f"{type(self)}({values})"
+    }
+
+    public method keyOf(V value) -> K {
+        for K key, V val in self {
+            return key if value is val
+        }
+        raise ValueError(f"Value {value} not in dict")
+    }
+
+    public mut method clear() {
+        self.values.fill(Value.Empty())
+    }
+
+    private method getInfo(K key, *, bool returnDeleted = false) -> int {
+        mut int index = id(key) % self.values.length
+        while true {
+            var value = self.values[index]
+            return index if value.Empty? or (returnDeleted and value.Deleted?)
+            continue if value.Deleted?
+            var v = value.Full!!
+            return index if v[0] is key
+            index = (5*index + 1 + (id(key) >> PERTURB_SHIFT)) % self.values.length
+        }
+    }
+
+    private mut method resize(int size) {
+        return if size / self.values.length < RESIZE_THRESHOLD
+        int newSize = self.values.length << 1
+        var old = self.values
+        self.values = Array(newSize, Value.Empty())
+        for var v in (i.Full!! for var i in old if i.Full?) {
+            self.values[self.getInfo(v[1], returnDeleted=true)] = v
+        }
+    }
+}

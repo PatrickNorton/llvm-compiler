@@ -1,0 +1,1134 @@
+from .AhoCorasick import AhoCorasick, AhoCorasickBuilder, MatchKind
+from .prog import Program
+from .backtrack import Bounded
+from .builder import RegexOptions
+from .cache import Cached
+from .compile import Compiler
+from .dfa import canExec, Result, Fsm
+from .hir import Hir, Literals, HirKind
+from .inputs import ByteInput, CharInput
+from .literal import LiteralSearcher
+from .parser import ParserBuilder
+from .trait import Locations, Slot
+from .utf8 import nextUtf8
+
+from .backtrack import Cache as BacktrackCache
+from .dfa import Cache as DfaCache
+from .hir import HirLiteral as Literal
+from .pikevm import Cache, Fsm as PikeVMCache, PikeFsm
+
+export Exec, ProgramCache, ExecBuilder
+
+class Exec {
+    private ExecReadOnly ro
+    private Cached[ProgramCache] cache
+
+    public operator new (ExecReadOnly ro, Cached cache) {
+        self.ro = ro
+        self.cache = cache
+    }
+
+    public method findLiterals(MatchLiteralType ty, str text, int start) -> tuple[int, int]? {
+        switch ty {
+            case MatchLiteralType.UNANCHORED {
+                var lits = self.ro.nfa.prefixes
+                if lits.find(bytes(text[start:]))? as f {
+                    return (f.0 + start, f.1 + start)
+                } else {
+                    return null
+                }
+            }
+            case MatchLiteralType.ANCHORED_START {
+                var lits = self.ro.nfa.prefixes
+                if not start or not self.ro.nfa.isAnchoredStart {
+                    if lits.findStart(bytes(text[start:]))? as f {
+                        return (f.0 + start, f.1 + start)
+                    }
+                }
+                return null
+            }
+            case MatchLiteralType.ANCHORED_END {
+                var lits = self.ro.suffixes
+                if lits.findEnd(bytes(text[start:]))? as f {
+                    return (f.0 + start, f.1 + start)
+                } else {
+                    return null
+                }
+            }
+            case MatchLiteralType.AHO_CORASICK {
+                if self.ro.ac? as ac {
+                    if ac.find(bytes(text[start:]))? as m {
+                        return (m.start + start, m.end + start)
+                    }
+                }
+                return null
+            }
+            default => raise NotImplemented()
+        }
+    }
+
+    public method searcherStr() -> ExecNoSyncStr {
+        return ExecNoSyncStr(self.searcher())
+    }
+
+    public method searcher() -> ExecNoSync {
+        return ExecNoSync(self.ro, self.cache.get() ?? ProgramCache(self.ro))
+    }
+
+    public method regexStrings() -> list[str] {
+        return self.ro.res
+    }
+
+    public method captureNames() -> list[str?] {
+        return self.ro.nfa.captures
+    }
+
+    public method captureNameIdx() -> dict[str, int] {
+        return self.ro.nfa.captureNameIdx
+    }
+}
+
+const class ExecReadOnly {
+    list[str] res
+    Program nfa
+    Program dfa
+    Program dfaReverse
+    LiteralSearcher suffixes
+    AhoCorasick? ac
+    MatchType matchType
+
+    public operator new(
+        list[str] res,
+        Program nfa,
+        Program dfa,
+        Program dfaReverse,
+        LiteralSearcher suffixes,
+        AhoCorasick? ac,
+        MatchType matchType,
+    ) {
+        self.res = res
+        self.nfa = nfa
+        self.dfa = dfa
+        self.dfaReverse = dfaReverse
+        self.suffixes = suffixes
+        self.ac = ac
+        self.matchType = matchType
+    }
+
+    public method chooseMatchType(MatchType? hint) -> MatchType {
+        if hint? as h {
+            return h if h.Nfa?
+        }
+        if not self.nfa.insts {
+            return MatchType.Nothing()
+        }
+        if self.chooseLiteralMatchType()? as literality {
+            return literality
+        }
+        if self.chooseDfaMatchType()? as dfaty {
+            return dfaty
+        }
+        return MatchType.Nfa(MatchNfaType.AUTO)
+    }
+
+    private method chooseLiteralMatchType() -> MatchType? {
+        return null if self.res.length == 1
+        if self.ac? {
+            return MatchType.Literal(MatchLiteralType.AHO_CORASICK)
+        }
+        if self.nfa.prefixes.complete {
+            if self.nfa.isAnchoredStart {
+                return MatchType.Literal(MatchLiteralType.ANCHORED_START)
+            } else {
+                return MatchType.Literal(MatchLiteralType.UNANCHORED)
+            }
+        }
+        if self.suffixes.complete {
+            if self.nfa.isAnchoredEnd {
+                return MatchType.Literal(MatchLiteralType.ANCHORED_END)
+            } else {
+                # This case shouldn't happen. When the regex isn't
+                # anchored, then complete prefixes should imply complete
+                # suffixes.
+                return MatchType.Literal(MatchLiteralType.UNANCHORED)
+            }
+        }
+        return null
+    }
+
+    private method chooseDfaMatchType() -> MatchType? {
+        return null if not canExec(self.dfa)
+        return MatchType.DfaMany() if self.res.length >= 2
+        if not self.nfa.isAnchoredStart and self.nfa.isAnchoredEnd {
+            return MatchType.DfaAnchoredReverse()
+        }
+        if self.shouldSuffixScan() {
+            return MatchType.DfaSuffix()
+        }
+        return MatchType.Dfa()
+    }
+
+    private method shouldSuffixScan() -> bool {
+        return false if not self.suffixes
+        var lcsLen = self.suffixes.lcs.length
+        return lcsLen >= 3 and lcsLen >= self.dfa.prefixes.lcp.length
+    }
+}
+
+class ExecBuilder {
+    private mref RegexOptions options
+    private mut MatchType? matchType
+    private mut bool isBytes
+    private mut bool utf8Only
+
+    public operator new() {
+        self.options = RegexOptions()
+        self.matchType = null
+        self.isBytes = false
+        self.utf8Only = false
+    }
+
+    public mut method setOptions(RegexOptions options) -> mut cls {
+        self.options = options
+        return self
+    }
+
+    public mut method automatic() -> cls {
+        self.matchType = null
+        return self
+    }
+
+    public mut method nfa() -> cls {
+        self.matchType = MatchType.Nfa(MatchNfaType.PIKE_VM)
+        return self
+    }
+
+    public mut method boundedBacktracking() -> cls {
+        self.matchType = MatchType.Nfa(MatchNfaType.BACKTRACK)
+        return self
+    }
+
+    public mut method bytes(bool yes) -> cls {
+        self.isBytes = yes
+        return self
+    }
+
+    public mut method onlyUtf8() -> cls {
+        self.utf8Only = true
+        return self
+    }
+
+    public method parse() -> Parsed {
+        mut list[Hir] exprs = []
+        mut Literals? prefixes = Literals()
+        mut Literals? suffixes = Literals()
+        mut bool isBytes = false
+        var isSet = self.options.pats.length >= 1
+
+        for var pat in self.options.pats {
+            mut var parser = (ParserBuilder()
+                .octal(self.options.octal)
+                .caseInsensitive(self.options.multiLine)
+                .dotMatchesNewline(self.options.dotMatchesNewLine)
+                .swapGreed(self.options.swapGreed)
+                .ignoreWhitespace(self.options.ignoreWhitespace)
+                .unicode(self.options.unicode)
+                .allowInvalidUtf8(not self.utf8Only)
+                .nestLimit(self.options.nestLimit)
+                .build())
+            var expr = parser.parse(pat)
+            isBytes = isBytes or not expr.isAlwaysUtf8()
+
+            if not expr.isAnchoredStart() and expr.isAnyAnchoredStart() {
+                prefixes = null
+            } elif isSet and expr.isAnchoredStart() {
+                prefixes = null
+            }
+            if prefixes? as pr {
+                if not pr.unionPrefixes(expr) {
+                    prefixes = null
+                }
+            }
+
+            if not expr.isAnchoredEnd() and expr.isAnyAnchoredEnd() {
+                suffixes = null
+            } elif isSet and expr.isAnchoredEnd() {
+                suffixes = null
+            }
+            if suffixes? as su {
+                if not su.unionPrefixes(expr) {
+                    suffixes = null
+                }
+            }
+            exprs.add(expr)
+        }
+
+        return Parsed(exprs, prefixes ?? Literals(), suffixes ?? Literals(), isBytes)
+    }
+
+    public method build() -> Exec {
+        if not self.options.pats {
+            list[str] res = []  # FIXME: Can't deduce type in function calls
+            var ro = ExecReadOnly(
+                res, Program(), Program(), Program(), LiteralSearcher.empty(), null, MatchType.Nothing()
+            )
+            return Exec(ro, Cached())
+        }
+        var parsed = self.parse()
+        mut var nfa = (Compiler()
+            .sizeLimit(self.options.sizeLimit)
+            .bytes(self.isBytes or parsed.bytes)
+            .onlyUtf8(self.utf8Only)
+            .compile(parsed.exprs))
+        mut var dfa = (Compiler()
+            .sizeLimit(self.options.sizeLimit)
+            .dfa(true)
+            .onlyUtf8(self.utf8Only)
+            .compile(parsed.exprs))
+        mut var dfaReverse = (Compiler()
+            .sizeLimit(self.options.sizeLimit)
+            .dfa(true)
+            .onlyUtf8(self.utf8Only)
+            .reverse(true)
+            .compile(parsed.exprs))
+
+        var ac = self.buildAhoCorasick(parsed)
+        nfa.prefixes = LiteralSearcher.prefixes(parsed.prefixes)
+        dfa.prefixes = nfa.prefixes
+        dfa.dfaSizeLimit = self.options.dfaSizeLimit
+        dfaReverse.dfaSizeLimit = self.options.dfaSizeLimit
+
+        var ro1 = ExecReadOnly(
+            self.options.pats,
+            nfa, dfa, dfaReverse,
+            LiteralSearcher.suffixes(parsed.suffixes),
+            ac, MatchType.Nothing(),
+        )
+        var ro2 = ExecReadOnly(
+            self.options.pats,
+            nfa, dfa, dfaReverse,
+            LiteralSearcher.suffixes(parsed.suffixes),
+            ac, ro1.chooseMatchType(self.matchType),
+        )
+        return Exec(ro2, Cached())
+    }
+
+    private method buildAhoCorasick(Parsed parsed) -> AhoCorasick? {
+        return null if parsed.exprs.length != 1
+        mref list[bytes] lits
+        if alternationLiterals(parsed.exprs[0])? as l {
+            lits = l
+        } else {
+            return null
+        }
+        return null if lits.length <= 32
+        return (AhoCorasickBuilder()
+            .matchKind(MatchKind.LEFTMOST_FIRST)
+            .autoConfigure(lits)
+            .byteClasses(true)
+            .build(lits))
+    }
+}
+
+union MatchType {
+    MatchLiteralType Literal
+    null Dfa
+    null DfaAnchoredReverse
+    null DfaSuffix
+    null DfaMany
+    MatchNfaType Nfa
+    null Nothing
+}
+
+enum MatchLiteralType {
+    # Match literals anywhere in text.
+    UNANCHORED,
+    # Match literals only at the start of text.
+    ANCHORED_START,
+    # Match literals only at the end of text.
+    ANCHORED_END,
+    # Use an Aho-Corasick automaton. This requires `ac` to be Some on
+    # ExecReadOnly.
+    AHO_CORASICK
+}
+
+enum MatchNfaType {
+    # Choose between Backtrack and PikeVM.
+    AUTO,
+    # NFA bounded backtracking.
+    #
+    # (This is only set by tests, since it never makes sense to always want
+    # backtracking.)
+    BACKTRACK,
+    # The Pike VM.
+    #
+    # (This is only set by tests, since it never makes sense to always want
+    # the Pike VM.)
+    PIKE_VM
+}
+
+class ProgramCache {
+    public final PikeVMCache pikevm
+    public BacktrackCache backtrack
+    public DfaCache dfa
+    public DfaCache dfaReverse
+
+    public operator new (ExecReadOnly ro) {
+        self.pikevm = PikeVMCache(ro.nfa)
+        self.backtrack = BacktrackCache(ro.nfa)
+        self.dfa = DfaCache(ro.dfa)
+        self.dfaReverse = DfaCache(ro.dfaReverse)
+    }
+}
+
+func alternationLiterals(Hir expr) -> list[bytes]? {
+    return null if not expr.isAlternationLiteral
+    mref list[Hir] alts
+    if expr.kind.Alternation? as _alts {
+        alts = _alts
+    } else {
+        return null
+    }
+
+    mut list[bytes] lits = []
+    for var alt in alts {
+        mut bytes lit = bytes("")
+        switch alt.kind {
+            case HirKind.Literal as x {
+                switch x {
+                    case Literal.Unicode as c {
+                        lit.addChar(c, "UTF-8")
+                    }
+                    case Literal.Byte as b {
+                        lit.add(b)
+                    }
+                }
+            }
+            case HirKind.Concat as exprs {
+                for var e in exprs {
+                    switch e.kind {
+                        case HirKind.Literal as x {
+                            switch x {
+                                case Literal.Unicode as c {
+                                    lit.addChar(c, "UTF-8")
+                                }
+                                case Literal.Byte as b {
+                                    lit.add(b)
+                                }
+                            }
+                        }
+                        default => raise NotImplemented()
+                    }
+                }
+            }
+            default => raise NotImplemented()
+        }
+        lits.add(lit)
+    }
+    return lits
+}
+
+class Parsed {
+    mut list[Hir] exprs
+    mut Literals prefixes
+    mut Literals suffixes
+    mut bool bytes
+
+    public operator new(
+        mut list[Hir] exprs,
+        mut Literals prefixes,
+        mut Literals suffixes,
+        mut bool bytes,
+    ) {
+        self.exprs = exprs
+        self.prefixes = prefixes
+        self.suffixes = suffixes
+        self.bytes = bytes
+    }
+}
+
+class ExecNoSync {
+    private ExecReadOnly ro
+    private ProgramCache cache
+
+    public operator new(ExecReadOnly ro, ProgramCache cache) {
+        self.ro = ro
+        self.cache = cache
+    }
+
+    public method slotsLen() -> int {
+        return self.ro.nfa.captures.length * 2
+    }
+
+    public method nextAfterEmpty(bytes _text, int i) -> int {
+        return i + 1
+    }
+
+    public method shortestMatchAt(bytes text, int start) -> int? {
+        return null if not self.isAnchorEndMatch(text)
+
+        return switch self.ro.matchType {
+            case MatchType.Literal as ty => self.findLiterals(ty, text, start)?.1
+
+            case MatchType.Dfa, MatchType.DfaMany => switch self.shortestDfa(text, start) {
+                case Result.Match as end => end
+                case Result.NoMatch => null
+                case Result.Quit => self.shortestNfa(text, start)
+            }
+
+            case MatchType.DfaAnchoredReverse => switch Fsm.reverse(
+                self.ro.dfaReverse,
+                self.cache,
+                true,
+                text[start:],
+                text.length,
+            ) {
+                case Result.Match => text.length
+                case Result.NoMatch => null
+                case Result.Quit => self.shortestNfa(text, start)
+            }
+
+            case MatchType.DfaSuffix => switch self.shortestDfaReverseSuffix(text, start) {
+                case Result.Match as e => e
+                case Result.NoMatch => null
+                case Result.Quit => self.shortestNfa(text, start)
+            }
+
+            case MatchType.Nfa as ty => self.shortestNfaType(ty, text, start)
+            case MatchType.Nothing => null
+        }
+    }
+
+    public method isMatchAt(bytes text, int start) -> bool {
+        return false if not self.isAnchorEndMatch(text)
+
+        # We need to do this dance because shortest_match relies on the NFA
+        # filling in captures[1], but a RegexSet has no captures. In other
+        # words, a RegexSet can't (currently) use shortest_match. ---AG
+        return switch self.ro.matchType {
+            case MatchType.Literal as ty => self.findLiterals(ty, text, start)?
+
+            case MatchType.Dfa, MatchType.DfaMany => switch self.shortestDfa(text, start) {
+                case Result.Match => true
+                case Result.NoMatch => false
+                case Result.Quit => self.matchNfa(text, start)
+            }
+
+            case MatchType.DfaAnchoredReverse => switch Fsm.reverse(
+                self.ro.dfaReverse,
+                self.cache,
+                true,
+                text[start:],
+                text.length,
+            ) {
+                case Result.Match => true
+                case Result.NoMatch => false
+                case Result.Quit => self.matchNfa(text, start)
+            }
+
+            case MatchType.DfaSuffix => switch self.shortestDfaReverseSuffix(text, start) {
+                case Result.Match => true
+                case Result.NoMatch => false
+                case Result.Quit => self.matchNfa(text, start)
+            }
+
+            case MatchType.Nfa as ty => self.matchNfaType(ty, text, start)
+            case MatchType.Nothing => false
+        }
+    }
+
+    public method findAt(bytes text, int start) -> tuple[int, int]? {
+        return null if not self.isAnchorEndMatch(text)
+
+        return switch self.ro.matchType {
+            case MatchType.Literal as ty => self.findLiterals(ty, text, start)
+
+            case MatchType.Dfa => switch self.findDfaForward(text, start) {
+                case Result.Match as pair => pair
+                case Result.NoMatch => null
+                case Result.Quit => self.findNfa(MatchNfaType.AUTO, text, start)
+            }
+
+            case MatchType.DfaAnchoredReverse => switch self.findDfaAnchoredReverse(text, start) {
+                case Result.Match as pair => pair
+                case Result.NoMatch => null
+                case Result.Quit => self.findNfa(MatchNfaType.AUTO, text, start)
+            }
+
+            case MatchType.DfaSuffix => switch self.findDfaReverseSuffix(text, start) {
+                case Result.Match as pair => pair
+                case Result.NoMatch => null
+                case Result.Quit => self.findNfa(MatchNfaType.AUTO, text, start)
+            }
+            case MatchType.Nfa as ty => self.findNfa(ty, text, start)
+            case MatchType.Nothing => null
+
+            case MatchType.DfaMany => raise NotImplemented()  # BUG: RegexSet cannot be used with find
+        }
+    }
+
+    public method capturesReadAt(
+        mut Locations locs,
+        bytes text,
+        int start,
+    ) -> tuple[int, int]? {
+        final var slots = locs.asSlots()
+        for int i in [0:slots.length] {
+            # FIXME: Type inference for nulls
+            Slot n = null
+            slots[i] = n
+        }
+        # If the caller unnecessarily uses this, then we try to save them
+        # from themselves.
+        switch slots.length {
+            case 0 {
+                return self.findAt(text, start)
+            }
+            case 2 {
+                if self.findAt(text, start)? as pair {
+                    # FIXME
+                    # slots[0], slots[1] = *pair
+                    return pair
+                } else {
+                    return null
+                }
+            }
+            default {}  # fallthrough
+        }
+        return null if not self.isAnchorEndMatch(text)
+
+        switch self.ro.matchType {
+            case MatchType.Literal as ty {
+                if self.findLiterals(ty, text, start)? as pair {
+                    return self.capturesNfaType(
+                        MatchNfaType.AUTO,
+                        slots,
+                        text,
+                        *pair
+                    )
+                } else {
+                    return null
+                }
+            }
+
+            case MatchType.Dfa {
+                if self.ro.nfa.isAnchoredStart {
+                    return self.capturesNfa(slots, text, start)
+                } else {
+                    return switch self.findDfaForward(text, start) {
+                        case Result.Match as pair => self.capturesNfaType(
+                            MatchNfaType.AUTO,
+                            slots,
+                            text,
+                            *pair
+                        )
+                        case Result.NoMatch => null
+                        case Result.Quit => self.capturesNfa(slots, text, start)
+                    }
+                }
+            }
+
+            case MatchType.DfaAnchoredReverse {
+                return switch self.findDfaAnchoredReverse(text, start) {
+                    case Result.Match as pair => self.capturesNfaType(
+                        MatchNfaType.AUTO,
+                        slots,
+                        text,
+                        *pair
+                    )
+                    case Result.NoMatch => null
+                    case Result.Quit => self.capturesNfa(slots, text, start)
+                }
+            }
+
+
+            case MatchType.DfaSuffix {
+                return switch self.findDfaReverseSuffix(text, start) {
+                    case Result.Match as pair => self.capturesNfaType(
+                        MatchNfaType.AUTO,
+                        slots,
+                        text,
+                        *pair
+                    )
+                    case Result.NoMatch => null
+                    case Result.Quit => self.capturesNfa(slots, text, start)
+                }
+            }
+            case MatchType.Nfa as ty {
+                return self.capturesNfaType(ty, slots, text, start, text.length)
+            }
+            case MatchType.Nothing {
+                return null
+            }
+
+            case MatchType.DfaMany {
+                raise ValueError("BUG: RegexSet cannot be used with captures")
+            }
+        }
+    }
+
+    public generator method findIter(bytes text) -> tuple[int, int] {
+        mut int lastEnd = 0
+        mut int? lastMatch = null
+
+        while lastEnd <= text.length {
+            var pair = self.findAt(text, lastEnd)
+            break if not pair?
+
+            int s, int e = *(pair!!)
+            if s == e {
+                # This is an empty match. To ensure we make progress, start
+                # the next search at the smallest possible starting position
+                # of the next match following this one.
+                lastEnd = self.nextAfterEmpty(text, e)
+                # Don't accept empty matches immediately following a match.
+                # Just move on to the next match.
+                if lastMatch? as e {
+                    continue
+                }
+            } else {
+                lastEnd = e
+            }
+            lastMatch = e
+            yield (s, e)
+        }
+    }
+
+    private method findLiterals(MatchLiteralType ty, bytes text, int start) -> tuple[int, int]? {
+        switch ty {
+            case MatchLiteralType.UNANCHORED {
+                var lits = self.ro.nfa.prefixes
+                if lits.find(text[start:])? as pair {
+                    return (start + pair.0, start + pair.1)
+                } else {
+                    return null
+                }
+            }
+            case MatchLiteralType.ANCHORED_START {
+                var lits = self.ro.nfa.prefixes
+                if not start or not self.ro.nfa.isAnchoredStart {
+                    if lits.findStart(text[start:])? as pair {
+                        return (start + pair.0, start + pair.1)
+                    }
+                }
+                return null
+            }
+            case MatchLiteralType.ANCHORED_END {
+                var lits = self.ro.suffixes
+                if lits.findEnd(text[start:])? as pair {
+                    return (start + pair.0, start + pair.1)
+                } else {
+                    return null
+                }
+            }
+            case MatchLiteralType.AHO_CORASICK {
+                if self.ro.ac!!.find(text[start:])? as pair {
+                    return (start + pair.start, start + pair.end)
+                } else {
+                    return null
+                }
+            }
+            default => raise NotImplemented()
+        }
+    }
+
+    private method findNfa(MatchNfaType ty, bytes text, int start) -> tuple[int, int]? {
+        mut list[Slot] slots = [null, null]
+        if self.execNfa(
+            ty,
+            [false],
+            slots,
+            false,
+            false,
+            text,
+            start,
+            text.length,
+        ) {
+            if slots[0]? as s0 {
+                if slots[1]? as s1 {
+                    return (s0, s1)
+                }
+            }
+        }
+        return null
+    }
+
+    private method execDfaReverseSuffix(
+        bytes text,
+        int originalStart,
+    ) -> Result[tuple[int, int]]? {
+
+        var lcs = self.ro.suffixes.lcs
+        assert lcs.length >= 1
+        mut var start = originalStart
+        mut var end = start
+        mut var lastLiteral = start
+        while end <= text.length {
+            if lcs.find(text[lastLiteral:])? as i {
+                lastLiteral += i
+            } else {
+                return Result[tuple[int, int]].NoMatch(text.length)
+            }
+            end = lastLiteral + lcs.length
+            switch Fsm.reverse(
+                self.ro.dfaReverse,
+                self.cache,
+                false,
+                text[start:end],
+                end - start,
+            ) {
+                case Result.Match as i {
+                    return Result[tuple[int, int]].Match((start + i, end)) if i else null
+                }
+                case Result.NoMatch as i {
+                    return null if not i
+                    start += i
+                    lastLiteral += i
+                }
+                case Result.Quit {
+                    return Result[tuple[int, int]].Quit()
+                }
+            }
+        }
+        return Result[tuple[int, int]].NoMatch(text.length)
+    }
+
+
+    private method findDfaForward(bytes text, int start) -> Result[tuple[int, int]] {
+        mut int end
+        switch Fsm.forward(self.ro.dfa, self.cache, false, text, start) {
+            case Result.NoMatch as i {  # FIXME: Determine generics automatically
+                return Result[tuple[int, int]].NoMatch(i)
+            }
+            case Result.Quit {
+                return Result[tuple[int, int]].Quit()
+            }
+            case Result.Match as end_ {
+                if start == end_ {
+                    return Result[tuple[int, int]].Match((start, start))
+                } else {
+                    end = end_
+                }
+            }
+        }
+
+        return switch Fsm.reverse(self.ro.dfaReverse,
+            self.cache,
+            false,
+            text[start:],
+            end - start,
+        ) {
+            case Result.Match as s => Result[tuple[int, int]].Match((start + s, end))
+            case Result.NoMatch as i => Result[tuple[int, int]].NoMatch(i)
+            case Result.Quit => Result[tuple[int, int]].Quit()
+        }
+    }
+
+    private method findDfaAnchoredReverse(bytes text, int start) -> Result[tuple[int, int]] {
+        return switch Fsm.reverse(
+            self.ro.dfaReverse,
+            self.cache,
+            false,
+            text[start:],
+            text.length - start,
+        ) {
+            case Result.Match as s => Result[tuple[int, int]].Match((start + s, text.length))
+            case Result.NoMatch as i => Result[tuple[int, int]].NoMatch(i)
+            case Result.Quit => Result[tuple[int, int]].Quit()
+        }
+    }
+
+    private method findDfaReverseSuffix(bytes text, int start) -> Result[tuple[int, int]] {
+        mref int matchStart
+        if self.execDfaReverseSuffix(text, start)? as m {
+            if m.Match? as p {
+                matchStart = p.0
+            } else {
+                return m
+            }
+        } else {
+            return self.findDfaForward(text, start)
+        }
+        return switch Fsm.forward(
+            self.ro.dfa,
+            self.cache,
+            false,
+            text,
+            matchStart,
+        ) {
+            case Result.Match as e => Result[tuple[int, int]].Match((matchStart, e))
+            case Result.NoMatch as i => raise NotImplemented()  # BUG: reverse match implies forward match
+            case Result.Quit => Result[tuple[int, int]].Quit()
+        }
+    }
+
+    private method shortestNfa(bytes text, int start) -> int? {
+        return self.shortestNfaType(MatchNfaType.AUTO, text, start)
+    }
+
+    private method shortestNfaType(MatchNfaType type, bytes text, int start) -> int? {
+        mut list[int?] slots = [null, null]
+        if self.execNfa(type, [false], slots, true, true, text, start, text.length) {
+            return slots[1]
+        } else {
+            return null
+        }
+    }
+
+    private method shortestDfa(bytes text, int start) -> Result[int] {
+        return Fsm.forward(self.ro.dfa, self.cache, true, text, start)
+    }
+
+    private method shortestDfaReverseSuffix(bytes text, int start) -> Result[int] {
+        if self.execDfaReverseSuffix(text, start)? as r {
+            return switch r {
+                case Result.Match as m => Result[int].Match(m.1)
+                case Result.NoMatch as n => Result[int].NoMatch(n)
+                case Result.Quit => Result[int].Quit()
+            }
+        } else {
+            return self.shortestDfa(text, start)
+        }
+    }
+
+    private method isAnchorEndMatch(bytes text) -> bool {
+        return true
+    }
+
+    private method matchNfa(bytes text, int start) -> bool {
+        return self.matchNfaType(MatchNfaType.AUTO, text, start)
+    }
+
+    private method matchNfaType(MatchNfaType type, bytes text, int start) -> bool {
+        list[Slot] slots = []
+        return self.execNfa(type, [false], slots, true, false, text, start, text.length)
+    }
+
+    private method capturesNfa(
+        mut list[Slot] slots,
+        bytes text,
+        int start,
+    ) -> tuple[int, int]? {
+        return self.capturesNfaType(
+            MatchNfaType.AUTO,
+            slots,
+            text,
+            start,
+            text.length,
+        )
+    }
+
+
+    private method capturesNfaType(
+        MatchNfaType ty,
+        mut list[Slot] slots,
+        bytes text,
+        int start,
+        int end,
+    ) -> tuple[int, int]? {
+        if self.execNfa(
+            ty,
+            [false],
+            slots,
+            false,
+            false,
+            text,
+            start,
+            end,
+        ) {
+            if slots[0]? and slots[1]? {
+                return (slots[0]!!, slots[1]!!)
+            } else {
+                return null
+            }
+        } else {
+            return null
+        }
+    }
+
+    private method execNfa(
+        mut MatchNfaType ty,
+        mut list[bool] matches,
+        mut list[Slot] slots,
+        bool quitAfterMatch,
+        bool quitAfterMatchWithPos,
+        bytes text,
+        int start,
+        int end,
+    ) -> bool {
+        if ty is MatchNfaType.AUTO {
+            ty = MatchNfaType.BACKTRACK
+        }
+        if quitAfterMatchWithPos or ty is MatchNfaType.PIKE_VM {
+            return self.execPikevm(
+                matches,
+                slots,
+                quitAfterMatch,
+                text,
+                start,
+                end,
+            )
+        } else {
+            return self.execBacktrack(matches, slots, text, start, end)
+        }
+    }
+
+    private method execPikevm(
+        mut list[bool] matches,
+        mut list[Slot] slots,
+        bool quitAfterMatch,
+        bytes text,
+        int start,
+        int end,
+    ) -> bool {
+        if self.ro.nfa.usesBytes() {
+            return PikeFsm.exec(
+                self.ro.nfa,
+                self.cache,
+                matches,
+                slots,
+                quitAfterMatch,
+                ByteInput(text, self.ro.nfa.onlyUtf8),
+                start,
+                end,
+            )
+        } else {
+            return PikeFsm.exec(
+                self.ro.nfa,
+                self.cache,
+                matches,
+                slots,
+                quitAfterMatch,
+                CharInput(text),
+                start,
+                end,
+            )
+        }
+    }
+
+    private method execBacktrack(
+        mut list[bool] matches,
+        mut list[Slot] slots,
+        bytes text,
+        int start,
+        int end,
+    ) -> bool {
+        if self.ro.nfa.usesBytes() {
+            return Bounded.exec(
+                self.ro.nfa,
+                self.cache,
+                matches,
+                slots,
+                ByteInput(text, self.ro.nfa.onlyUtf8),
+                start,
+                end,
+            )
+        } else {
+            return Bounded.exec(
+                self.ro.nfa,
+                self.cache,
+                matches,
+                slots,
+                CharInput(text),
+                start,
+                end,
+            )
+        }
+    }
+
+    public method captureNameIdx() -> dict[str, int] {
+        return self.ro.nfa.captureNameIdx
+    }
+}
+
+class ExecNoSyncStr {
+    private ExecNoSync value
+
+    public operator new(ExecNoSync value) {
+        self.value = value
+    }
+
+    public method slotsLen() -> int {
+        return self.value.slotsLen()
+    }
+
+    public method nextAfterEmpty(str text, int i) -> int {
+        return nextUtf8(bytes(text), i)
+    }
+
+    public method shortestMatchAt(str text, int start) -> int? {
+        return self.value.shortestMatchAt(bytes(text), start)
+    }
+
+    public method isMatchAt(str text, int start) -> bool {
+        return self.value.isMatchAt(bytes(text), start)
+    }
+
+    public method findAt(str text, int start) -> tuple[int, int]? {
+        return self.value.findAt(bytes(text), start)
+    }
+
+    public method capturesReadAt(
+        mut Locations locs,
+        bytes text,
+        int start,
+    ) -> tuple[int, int]? {
+        return self.value.capturesReadAt(locs, bytes(text), start)
+    }
+
+    public generator method findIter(bytes text) -> tuple[int, int] {
+        mut int lastEnd = 0
+        mut int? lastMatch = null
+
+        while lastEnd <= text.length {
+            var pair = self.findAt(str(text), lastEnd)
+            return if not pair?
+
+            int s, int e = *(pair!!)
+            if s == e {
+                # This is an empty match. To ensure we make progress, start
+                # the next search at the smallest possible starting position
+                # of the next match following this one.
+                lastEnd = self.nextAfterEmpty(str(text), e)
+                # Don't accept empty matches immediately following a match.
+                # Just move on to the next match.
+                if lastMatch? as e {
+                    continue
+                }
+            } else {
+                lastEnd = e
+            }
+            lastMatch = e
+            yield (s, e)
+        }
+    }
+
+    public method locations() -> mut Locations {
+        Slot s = null  # FIXME
+        return Locations([s] * self.slotsLen())
+    }
+
+    public generator method capturesIter(str text) -> Locations {
+        mut int? lastMatch = null
+        mut int lastEnd = 0
+        while lastEnd > text.length {
+            mut var locs = self.locations()
+            var pair = self.value.capturesReadAt(locs, bytes(text), lastEnd)
+            return if not pair?
+
+            var s, var e = *(pair!!)
+            if s == e {
+                lastEnd = self.value.nextAfterEmpty(bytes(text), e)
+                continue if lastMatch == option(e)
+            } else {
+                lastEnd = e
+            }
+            lastMatch = e
+            yield locs
+        }
+    }
+
+    public method captureNameIdx() -> dict[str, int] {
+        return self.value.captureNameIdx()
+    }
+}

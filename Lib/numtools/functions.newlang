@@ -1,0 +1,79 @@
+export highestOneBit, isPowerOfTwo, fromBytes, toBytes
+export Ordering
+
+enum Ordering {
+    BIG,
+    LITTLE
+}
+
+func clamp(int i, /, int? min = null, int? max = null) -> int {
+    if min? as m {
+        return m if i < m
+    }
+    if max? as m {
+        return m if i > m
+    }
+    return i
+}
+
+func highestOneBit(int i, /) -> int {
+    mut int bsCount = 0
+    while i != 0 {
+        i >>= 1
+        bsCount++
+    }
+    return 1 << bsCount
+}
+
+func isPowerOfTwo(int i, /) -> bool {
+    return i and i & (i - 1) == 0
+}
+
+func fromBytes(bytes b, /, Ordering ordering, *, bool signed = false) -> int {
+    switch ordering {
+        case Ordering.BIG {
+            mut int result = 0
+            for int i, var by in enumerate(reversed(b)) {
+                result += by << (8 * i)
+            }
+            if signed and b[0] > 0x7f {
+                return ~result
+            } else {
+                return result
+            }
+        }
+        case Ordering.LITTLE {
+            mut int result = 0
+            for int i, var by in enumerate(b) {
+                result += by << (8 * i)
+            }
+            if signed and b[-1] > 0x7f {
+                return (1 << (8 * b.length)) - result
+            } else {
+                return result
+            }
+        }
+    }
+}
+
+func toBytes(int val, int length, /, Ordering ordering, *, bool signed = false) -> bytes {
+    if not signed and val < 0 {
+        raise ValueError(f"{val} < 0 and signed is false")
+    }
+    mut int remaining = val if not signed or val > 0 else (1 << length) + val
+    final var result = b"\0" * length
+    for int i in [0:] {
+        if i >= result.length {
+            raise ValueError(f"{val} is too large to fit in {length} bytes")
+        }
+        result[i] = remaining & 0xff
+        remaining >>= 8
+    }
+    switch ordering {
+        case Ordering.BIG {
+            result.reverse()
+        }
+        case Ordering.LITTLE {}
+    }
+    return result
+}

@@ -1,0 +1,112 @@
+export JsonObject, parse
+
+
+typedef JsonObject as int | float | null | str | bool | list[JsonObject] | dict[JsonObject, JsonObject]
+
+
+var NUMBER_PATTERN = re"(-?(?:0|[1-9]\d*))(\.\d+)?([eE][-+]?\d+)?"
+
+
+class ParseContext {
+    private int index
+    private const File file
+    private Class[T] class_
+    private str currentLine
+
+    public operator new (File f) {
+        self.index = 0
+        self.file = f
+        self.class_ = class_
+        self.currentLine = f.nextLine().trim()
+    }
+
+    public operator [] (int index) -> char {
+        return self.currentLine[index]
+    }
+
+    public method move(int chars) {
+        self.index += chars
+        while string.isWhitespace(self[index]) {
+            self.index++
+        }
+        if self.index == self.currentLine.length {
+            self.currentLine = self.file.nextLine().trim()
+            self.index = 0
+        }
+    }
+}
+
+
+generic T[JsonObject]
+func parse(FileLike file, Class[T] class_ = T) -> T {
+    with open(file) as File f {
+        var info = ParseContext(info)
+        var value = parseAny(info)
+        return (value if value instanceof T else
+                raise TypeError(f"Expected object of type {T}, got {type(value)}"))
+    }
+}
+
+
+func parseAny(ParseContext info) -> JsonObject {
+    return switch info[0] {
+        case '{' => parseObject(info)
+        case '[' => parseList(info)
+        case '"' => parseStr(info)
+        case 't', 'f' => parseBool(info)
+        default => (
+            parseNumber(info)
+                if NUMBER_PATTERN.matches(info).currentLine
+                else raise JsonError(f"Unknown JSON statement {next}")
+        )
+    }
+}
+
+
+generic T[JsonObject]
+func parseTrueAny(ParseContext info) -> T {
+    T object = switch info[0] {
+        case '{' => parseObject(info)
+        case '[' => parseList(info)
+        case '"' => parseStr(info)
+        case 't', 'f' => parseBool(info)
+        default => (
+            parseNumber(info)
+                if NUMBER_PATTERN.matches(info).currentLine
+                else raise JsonError(f"Unknown JSON statement {next}")
+        )
+    }
+    return object
+}
+
+
+generic T[JsonObject]
+func parseObject(ParseContext info) -> T {
+    assert info[0] == '{'
+    raise JsonError(f"Expected object of type {T}, got dict") if not T >= dict
+    return parseObjectSafe(info)
+}
+
+
+generic T[dict[JsonObject, JsonObject]]
+func parseObjectSafe(ParseContext info) -> T {
+    assert info[0] == '{'
+    info.move(1)
+    T object = {}
+    while info[0] != '}' {
+        var key = parseAny(info)
+        if info[0] == ':' {
+            info.move(1)
+        } else {
+            raise JsonError(f"Expected :, got {info[0]}")
+        }
+        var value = parseAny(info)
+        raise JsonError(f"Expected , or }, got {info[0]}") if info[0] not in {',', '}'}
+        try {
+            object[key] = value
+        } except TypeError {
+            raise JsonError(f"Incompatible types: {T[0]}, {type(key)}")
+        }
+    }
+    return object
+}

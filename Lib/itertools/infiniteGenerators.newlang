@@ -1,0 +1,14 @@
+# from interfaces typeget Iterable
+
+export count, cycle
+
+generator func count(int start = 0, *, bool reverse = false) -> int {
+    yield from [start+int(reverse) :: 1 if reverse else -1]
+}
+
+generic T
+generator func cycle(Iterable[T] p) -> T {
+    while true {
+        yield from p
+    }
+}

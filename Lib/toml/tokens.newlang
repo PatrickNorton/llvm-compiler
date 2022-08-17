@@ -1,0 +1,454 @@
+export Span, Token, StringToken, Error, WantedError, Tokenizer
+
+$derive(repr)
+const class Span {
+    int start
+    int end
+
+    public operator new (int start, int end) {
+        self.start = start
+        self.end = end
+    }
+}
+
+$derive(repr)
+union Token {
+    str Whitespace
+    null Newline
+    str Comment
+
+    null Equals
+    null Period
+    null Comma
+    null Colon
+    null Plus
+    null LeftBrace
+    null RightBrace
+    null LeftBracket
+    null RightBracket
+
+    str Keylike
+    StringToken String
+
+    public method describe() -> str {
+        return switch self {
+            case Token.Keylike => "an identifier"
+            case Token.Equals => "an equals"
+            case Token.Period => "a period"
+            case Token.Comment => "a comment"
+            case Token.Newline => "a newline"
+            case Token.Whitespace => "whitespace"
+            case Token.Comma => "a comma"
+            case Token.RightBrace => "a right brace"
+            case Token.LeftBrace => "a left brace"
+            case Token.RightBracket => "a right bracket"
+            case Token.LeftBracket => "a left bracket"
+            case Token.String as s => "a multiline string" if s.multiline else "a string"
+            case Token.Colon => "a colon"
+            case Token.Plus => "a plus"
+        }
+    }
+}
+
+$derive(repr)
+const class StringToken {
+    str src
+    str val
+    bool multiline
+    int index
+
+    public operator new(
+        str src,
+        str val,
+        bool multiline,
+        int index,
+    ) {
+        self.src = src
+        self.val = val
+        self.multiline = multiline
+        self.index = index
+    }
+}
+
+union Error from Throwable {
+    tuple[int, char] InvalidChar
+    tuple[int, char] InvalidEscape
+    tuple[int, char] InvalidHexEscape
+    tuple[int, int] InvalidEscapeValue
+    int NewlineInString
+    tuple[int, char] Unexpected
+    int UnterminatedString
+    int NewlineInTableKey
+    int MultilineStringKey
+    WantedError Wanted
+
+    public method msg() -> str {
+        return switch self {
+            case Error.InvalidChar as c => f"Invalid char {c.1} at position {c.0}"
+            case Error.InvalidEscape as e => f"Invalid escape {e.1} at position {e.0}"
+            case Error.InvalidHexEscape as h => f"Invalid hex escape {h.1} (\\x{h.1 !x}) at position {h.0}"
+            case Error.InvalidEscapeValue as v => f"Invalid escape {v.1 !x} at position {v.0}"
+            case Error.NewlineInString as n => f"Invalid newline in string literal: position {n}"
+            case Error.Unexpected as u => f"Unexpected character {u.1} at position {u.0}"
+            case Error.UnterminatedString as s => f"Unterminated string beginning at position {s}"
+            case Error.NewlineInTableKey as n => f"Newline in table key at position {n}"
+            case Error.MultilineStringKey as m => f"Multiple lines in string key at position {m}"
+            case Error.Wanted as w => w.msg()
+        }
+    }
+
+    public static method wanted(int at, str expected, str found) -> cls {
+        return Error.Wanted(WantedError(at, expected, found))
+    }
+}
+
+const class WantedError {
+    int at
+    str expected
+    str found
+
+    public operator new (int at, str expected, str found) {
+        self.at = at
+        self.expected = expected
+        self.found = found
+    }
+
+    public method msg() -> str {
+        return f"Error: At position {self.at}, expected character {self.expected}, but got {self.found}"
+    }
+}
+
+$derive(repr)
+class Tokenizer {
+    private str input
+    private final CrlfFold chars
+
+    public operator new (str input) {
+        self.input = input
+        self.chars = CrlfFold(input)
+    }
+
+    public mut method next() -> tuple[Span, Token]? {
+        if self.one()? as one {
+            return self.convertPair(*one)
+        } else {
+            return null
+        }
+    }
+
+    public mut method peek() -> tuple[Span, Token]? {
+        if self.peekOne()? as one {
+            return self.convertPair(*one)
+        } else {
+            return null
+        }
+    }
+
+    private mut method convertPair(int start, char ch) -> tuple[Span, Token] {
+        var token = switch ch {
+            case c'\n' => Token.Newline()
+            case c' ' => self.whitespaceToken(start)
+            case c'\t' => self.whitespaceToken(start)
+            case c'#' => self.commentToken(start)
+            case c'=' => Token.Equals()
+            case c'.' => Token.Period()
+            case c',' => Token.Comma()
+            case c':' => Token.Colon()
+            case c'+' => Token.Plus()
+            case c'{' => Token.LeftBrace()
+            case c'}' => Token.RightBrace()
+            case c'[' => Token.LeftBracket()
+            case c']' => Token.RightBracket()
+            case c'\'' => self.literalString(start)
+            default => self.keylike(start) if isKeylike(ch) else raise Error.Unexpected((start, ch))
+        }
+        return (self.stepSpan(start), token)
+    }
+
+    public mut method eat(Token expected) -> bool {
+        return self.eatSpanned(expected)?
+    }
+
+    public mut method eatSpanned(Token expected) -> Span? {
+        if self.peek()? as pair {
+            if pair.1 == expected {
+                self.next()
+                return pair.0
+            }
+        }
+        return null
+    }
+
+    public mut method expect(Token expected) {
+        self.expectSpanned(expected)
+    }
+
+    public mut method expectSpanned(Token expected) -> Span {
+        var current = self.current()
+        if self.next()? as pair {
+            var span, var found = *pair
+            if expected == found {
+                return span
+            } else {
+                raise Error.wanted(current, expected.describe(), found.describe())
+            }
+        } else {
+            raise Error.wanted(self.input.length, expected.describe(), "eof")
+        }
+    }
+
+    public mut method tableKey() -> tuple[Span, str] {
+        var current = self.current()
+        if self.next()? as pair {
+            var span, var token = *pair
+            switch token {
+                case Token.Keylike as k {return (span, k)}
+                case Token.String as s {
+                    var offset = s.index
+                    if s.multiline {
+                        raise Error.MultilineStringKey(offset)
+                    }
+                    if s.src.indexOf('\n')? as i {
+                        raise Error.NewlineInTableKey(offset + i)
+                    } else {
+                        return (span, s.val)
+                    }
+                }
+                default => raise Error.wanted(current, "a table key", token.describe())
+            }
+        } else {
+            raise Error.wanted(self.input.length, "a table key", "eof")
+        }
+    }
+
+    public mut method eatWhitespace() {
+        while self.eatc(c' ') or self.eatc(c'\t') {}
+    }
+
+    public mut method eatComment() -> bool {
+        if not self.eatc(c'#') {
+            return false
+        } else {
+            self.commentToken(0)
+            self.eatNewlineOrEof()
+            return true
+        }
+    }
+
+    public mut method eatNewlineOrEof() {
+        var current = self.current()
+        if self.next()? as pair {
+            if not pair.1.Newline? {
+                raise Error.wanted(current, "newline", pair.1.describe())
+            }
+        }
+    }
+
+    public mut method skipToNewline() {
+        while true {
+            if self.one()? as pair {
+                break if pair.1 == c'\n'
+            } else {
+                break
+            }
+        }
+    }
+
+    private mut method eatc(char ch) -> bool {
+        if self.chars.peek()? as pair {
+            if pair.1 == ch {
+                self.one()
+                return true
+            } else {
+                return false
+            }
+        } else {
+            return false
+        }
+    }
+
+    public mut method current() -> int {
+        return self.chars.peek()?.0 ?? self.input.length
+    }
+
+    private mut method whitespaceToken(int start) -> Token {
+        while self.eatc(c' ') or self.eatc(c'\t') {}
+        return Token.Whitespace(self.input[start:self.current()])
+    }
+
+    private mut method commentToken(int start) -> Token {
+        while self.peekOne()? as pair {
+            var ch = pair.1
+            break if ch != c'\t' and int(ch) in [0x20:0x110000]
+            self.one()
+        }
+        return Token.Comment(self.input[start:self.current()])
+    }
+
+    private mut method readString(char delim, int start, null newCh) -> Token {  # TODO: Get type
+        mut var multiline = false
+        if self.eatc(delim) {
+            if self.eatc(delim) {
+                multiline = true
+            } else {
+                return Token.String(StringToken(
+                        self.input[start:start + 2],
+                        "",
+                        false,
+                        start,
+                ))
+            }
+        }
+        mut var val = MaybeString.NotEscaped(self.current())
+        mut var n = 0
+        while true {
+            n++
+            if self.one()? as pair {
+                mut var i, var ch = *pair
+                if ch == c'\n' {
+                    if multiline {
+                        if self.input[i] == c'\r' {
+                            val = val.toOwned(self.input[:i])
+                        }
+                        if n == 1 {
+                            val = MaybeString.NotEscaped(self.current())
+                        } else {
+                            val += "\n"
+                        }
+                    } else {
+                        raise Error.NewlineInString(i)
+                    }
+                } elif ch == delim {
+                    if multiline {
+                        if not self.eatc(delim) {
+                            val += str(delim)
+                            continue
+                        }
+                        if not self.eatc(delim) {
+                            val += str(delim) * 2
+                            continue
+                        }
+                        if self.eatc(delim) {
+                            val += str(delim)
+                            i++
+                        }
+                        if self.eatc(delim) {
+                            val += str(delim)
+                            i++
+                        }
+                        return Token.String(StringToken(
+                                self.input[start:self.current()],
+                                val.intoStr(self.input[:i]),  # val.into_cow
+                                multiline,
+                                start,
+                        ))
+                    }
+                } else {
+                    # FIXME
+                    # newCh(self, val, multiline, i, c)
+                }
+            } else {
+                raise Error.UnterminatedString(start)
+            }
+        }
+    }
+
+    private mut method literalString(int start) -> Token {
+        raise NotImplemented()
+    }
+
+    private mut method keylike(int start) -> Token {
+        while self.peekOne()? as pair {
+            var _, var ch = *pair
+            break if not isKeylike(ch)
+            self.one()
+        }
+        return Token.Keylike(self.input[start:self.current()])
+    }
+
+    private mut method stepSpan(int start) -> Span {
+        var end = self.peekOne()?.0 ?? self.input.length
+        return Span(start, end)
+    }
+
+    public mut method peekOne() -> tuple[int, char]? {
+        return self.chars.peek()
+    }
+
+    public mut method one() -> tuple[int, char]? {
+        return self.chars.next()
+    }
+}
+
+class CrlfFold from Iterator[tuple[int, char]] {
+    private mut tuple[int, char]? peeked
+    private final Iterator[tuple[int, char]] iter
+
+    public operator new (str text) {
+        self.peeked = null
+        self.iter = crlfFold(text)
+    }
+
+    public mut method next() -> tuple[int, char]? {
+        return self.takePeeked() ?? self.iter.next()
+    }
+
+    public mut method peek() -> tuple[int, char]? {
+        if self.takePeeked()? as peek {
+            return peek
+        } else {
+            self.peeked = self.iter.next()
+            return self.peeked
+        }
+    }
+
+    private mut method takePeeked() -> tuple[int, char]? {
+        var result = self.peeked
+        self.peeked = null
+        return result
+    }
+}
+
+generator func crlfFold(str text) -> tuple[int, char] {
+    for var i, var ch in enumerate(text) {
+        if ch == '\r' and text.get(i + 1) == option(c'\n') {
+            continue
+        } else {
+            yield (i, ch)
+        }
+    }
+}
+
+const union MaybeString {
+    int NotEscaped
+    str Owned
+
+    operator + (str text) -> mut MaybeString {
+        return switch self {
+            case MaybeString.NotEscaped as i => self
+            case MaybeString.Owned as o => MaybeString.Owned(o + text)
+        }
+    }
+
+    method toOwned(str text) -> MaybeString {
+        return switch self {
+            case MaybeString.NotEscaped as i => MaybeString.Owned(text[i:])
+            case MaybeString.Owned as o => MaybeString.Owned(o)
+        }
+    }
+
+    method intoStr(str text) -> str {
+        return switch self {
+            case MaybeString.NotEscaped as start => text[start:]
+            case MaybeString.Owned as s => s
+        }
+    }
+}
+
+func isKeylike(char ch) -> bool {
+    return (int(ch) in [int(c'A'):int(c'Z')+1]
+        or int(ch) in [int(c'a'):int(c'z')+1]
+        or int(ch) in [int(c'0'):int(c'9')+1]
+        or ch == c'-'
+        or ch == c'_')
+}

@@ -1,0 +1,39 @@
+from itertools import any, all
+
+export AbstractList
+
+
+interface AbstractList[T] from list[T] {
+    operator == (list[T] other) {
+        return all(i == j for T i, T j in self, other)
+    }
+
+    operator in (T value) {
+        return any(value == val for T value in self)
+    }
+
+    method extend(Iterable[T] values, /) {
+        for T i in values {
+            self.append(values)
+        }
+    }
+
+    method remove(T value, /) -> int {
+        int index = self.index(value)
+        self.pop(index)
+        return index
+    }
+
+    method index(T value, /) -> int {
+        for int i, T v in enumerate(self) {
+            return i if value == v
+        }
+        raise ValueError(f"Value {value} not found")
+    }
+
+    # Commented out until keyword change gets merged in
+    protected method checkIndex(int value) {
+        raise IndexError(f"Invalid index {value} for list of length {self.length}") \
+            if value >= self.length or ~value >= self.length
+    }
+}

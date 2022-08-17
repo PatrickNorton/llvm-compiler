@@ -1,0 +1,29 @@
+export Datetime, Date, Time, Offset
+
+$derive(\==, repr)
+const class Datetime {
+    private Date? date
+    private Time? time
+    private Offset? offset
+}
+
+$derive(\==, repr)
+const class Date {
+    private int year
+    private int month
+    private int day
+}
+
+$derive(\==, repr)
+const class Time {
+    private int hour
+    private int minute
+    private int second
+    private int nanosecond
+}
+
+$derive(\==, repr)
+const union Offset {
+    null Z
+    tuple[int, int] Custom
+}

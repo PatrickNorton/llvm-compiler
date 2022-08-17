@@ -1,0 +1,38 @@
+from itertools import all
+
+export AbstractSet
+
+interface AbstractSet[T] from set[T] {
+    operator + (set[T] other) -> cls {
+        return {*self, *other}
+    }
+
+    operator & (set[T] other) -> cls {
+        return {i for E i in other if i in self}
+    }
+
+    operator ^ (set[T] other) -> cls {
+        return {i for E i in self if i not in other} + {i for E i in other if i not in self}
+    }
+
+    operator == (set[T] other) {
+        return self.length == other.length and all(value in other for T value in self)
+    }
+
+    operator bool {
+        return self.length
+    }
+
+    method remove(T value) {
+        del self[value]
+    }
+
+    method discard(T value) {
+        return if value not in self
+        del self[value]
+    }
+
+    public method pop() -> T {
+        return iter(self).next() ?? raise ValueError("Cannot pop() from empty set")
+    }
+}

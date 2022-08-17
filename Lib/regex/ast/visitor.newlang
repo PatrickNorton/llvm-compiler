@@ -1,0 +1,275 @@
+from .ast import Ast, ClassSetBinaryOp, ClassSetItem, ClassSet, Repetition, Group, ClassBracketed
+
+export Visitor, visit
+
+interface Visitor[O] {
+    public mut method finish() -> O
+
+    public method start() {}
+
+    public mut method visitPre(Ast _ast) {}
+
+    public mut method visitPost(Ast _ast) {}
+
+    public mut method visitAlternationIn() {}
+
+    public mut method visitClassSetItemPre(ClassSetItem _ast) {}
+
+    public mut method visitClassSetItemPost(ClassSetItem _ast) {}
+
+    public mut method visitClassSetBinaryOpPre(ClassSetBinaryOp _ast) {}
+
+    public mut method visitClassSetBinaryOpPost(ClassSetBinaryOp _ast) {}
+
+    public mut method visitClassSetBinaryOpIn(ClassSetBinaryOp _ast) {}
+}
+
+class HeapVisitor {
+    final list[tuple[Ast, Frame]] stack
+    final list[tuple[ClassInduct, ClassFrame]] stackClass
+
+    public operator new {
+        self.stack = []
+        self.stackClass = []
+    }
+
+    generic O
+    public mut method visit(Ast _ast, mut Visitor[O] visitor) -> O {
+        mref var ast = _ast
+        self.stack.clear()
+        self.stackClass.clear()
+
+        visitor.start()
+        while true {
+            visitor.visitPre(ast)
+            if self.induct(ast, visitor)? as x {
+                var child = x.child
+                self.stack.add((ast, x))
+                ast = child
+                continue
+            }
+            visitor.visitPost(ast)
+
+            while true {
+                if self.stack.pop()? as pair {
+                    var postAst, var frame = *pair
+                    if self.pop(frame)? as x {
+                        if x.Alternation? {
+                            visitor.visitAlternationIn()
+                        }
+                        ast = x.child
+                        self.stack.add((postAst, x))
+                        break
+                    }
+                    visitor.visitPost(postAst)
+                } else {
+                    return visitor.finish()
+                }
+            }
+        }
+    }
+
+    private mut method induct(Ast ast, Visitor visitor) -> Frame? {
+        switch ast {
+            case Ast.Class as x {
+                if x.Bracketed? as b {
+                    self.visitClass(b, visitor)
+                }
+                return null
+            }
+            case Ast.Repetition as x {
+                return Frame.Repetition(x)
+            }
+            case Ast.Group as x {
+                return Frame.Group(x)
+            }
+            case Ast.Concat as x {
+                if not x.asts {
+                    return null
+                } else {
+                    return Frame.Concat((x.asts[0], x.asts[1:]))
+                }
+            }
+            case Ast.Alternation as x {
+                if not x.asts {
+                    return null
+                } else {
+                    return Frame.Alternation((x.asts[0], x.asts[1:]))
+                }
+            }
+            default {
+                return null
+            }
+        }
+    }
+
+    private method pop(Frame induct) -> Frame? {
+        switch induct {
+            case Frame.Repetition {
+                return null
+            }
+            case Frame.Group {
+                return null
+            }
+            case Frame.Concat as concat {
+                if not concat.1 {
+                    return null
+                } else {
+                    return Frame.Concat((concat.1[0], concat.1[1:]))
+                }
+            }
+            case Frame.Alternation as alt {
+                if not alt.1 {
+                    return null
+                } else {
+                    return Frame.Alternation((alt.1[0], alt.1[1:]))
+                }
+            }
+        }
+    }
+
+    private mut method visitClass(ClassBracketed ast_, mut Visitor visitor) {
+        mref var ast = ClassInduct.fromBracketed(ast_)
+        while true {
+            self.visitClassPre(ast, visitor)
+            if self.inductClass(ast)? as x {
+                var child = x.child
+                self.stackClass.add((ast, x))
+                ast = child
+                continue
+            }
+            self.visitClassPost(ast, visitor)
+
+            while true {
+                if self.stackClass.pop()? as pair {
+                    var postAst, var frame = *pair
+                    if self.popClass(frame)? as x {
+                        if x.BinaryRHS? as op {
+                            visitor.visitClassSetBinaryOpIn(op.0)
+                        }
+                        ast = x.child
+                        self.stackClass.add((postAst, x))
+                        break
+                    }
+                    self.visitClassPost(postAst, visitor)
+                } else {
+                    return
+                }
+            }
+        }
+    }
+
+    private method visitClassPre(ClassInduct ast, mut Visitor visitor) {
+        switch ast {
+            case ClassInduct.Item as item {
+                visitor.visitClassSetItemPre(item)
+            }
+            case ClassInduct.BinaryOp as op {
+                visitor.visitClassSetBinaryOpPre(op)
+            }
+        }
+    }
+
+    private method visitClassPost(ClassInduct ast, mut Visitor visitor) {
+        switch ast {
+            case ClassInduct.Item as item {
+                visitor.visitClassSetItemPost(item)
+            }
+            case ClassInduct.BinaryOp as op {
+                visitor.visitClassSetBinaryOpPost(op)
+            }
+        }
+    }
+
+    private method inductClass(ClassInduct ast) -> ClassFrame? {
+        list[ClassSetItem] empty = []  # FIXME
+        return switch ast {
+            case ClassInduct.Item as i => switch i {
+                case ClassSetItem.Bracketed as x => switch x.kind {
+                    case ClassSet.Item as item => ClassFrame.Union((item, empty))
+                    case ClassSet.BinaryOp as op => ClassFrame.Binary(op)
+                }
+                case ClassSetItem.Union as x => (
+                    ClassFrame.Union((x.items[0], x.items[1:])) if x.items else null
+                )
+                default => null
+            }
+            case ClassInduct.BinaryOp as op => ClassFrame.BinaryLHS((op, op.lhs, op.rhs))
+        }
+    }
+
+    private method popClass(ClassFrame induct) -> ClassFrame? {
+        switch induct {
+            case ClassFrame.Union as tup {
+                if not tup.1 {
+                    return null
+                } else {
+                    return ClassFrame.Union((tup.1[0], tup.1[1:]))
+                }
+            }
+            case ClassFrame.Binary, ClassFrame.BinaryRHS {
+                return null
+            }
+            case ClassFrame.BinaryLHS as tup {
+                return ClassFrame.BinaryRHS((tup.0, tup.1))
+            }
+        }
+    }
+}
+
+union Frame {
+    Repetition Repetition
+    Group Group
+    tuple[Ast, list[Ast]] Concat
+    tuple[Ast, list[Ast]] Alternation
+
+    public property Ast child {
+        get {
+            return switch self {
+                case Frame.Repetition as rep => rep.ast
+                case Frame.Group as group => group.ast
+                case Frame.Concat as concat => concat.0
+                case Frame.Alternation as alternation => alternation.0
+            }
+        }
+    }
+}
+
+union ClassFrame {
+    tuple[ClassSetItem, list[ClassSetItem]] Union
+    ClassSetBinaryOp Binary
+    tuple[ClassSetBinaryOp, ClassSet, ClassSet] BinaryLHS
+    tuple[ClassSetBinaryOp, ClassSet] BinaryRHS
+
+    public property ClassInduct child {
+        get {
+            return switch self {
+                case ClassFrame.Union as tup => ClassInduct.Item(tup.0)
+                case ClassFrame.Binary as op => ClassInduct.BinaryOp(op)
+                case ClassFrame.BinaryLHS as tup => ClassInduct.fromSet(tup.1)
+                case ClassFrame.BinaryRHS as tup => ClassInduct.fromSet(tup.1)
+            }
+        }
+    }
+}
+
+union ClassInduct {
+    ClassSetItem Item
+    ClassSetBinaryOp BinaryOp
+
+    public static method fromBracketed(ClassBracketed ast) -> mut ClassInduct {
+        return ClassInduct.fromSet(ast.kind)
+    }
+
+    public static method fromSet(ClassSet ast) -> mut ClassInduct {
+        return switch ast {
+            case ClassSet.Item as item => ClassInduct.Item(item)
+            case ClassSet.BinaryOp as op => ClassInduct.BinaryOp(op)
+        }
+    }
+}
+
+generic T
+func visit(Ast ast, Visitor[T] visitor) -> T {
+    return HeapVisitor().visit(ast, visitor)
+}

@@ -1,0 +1,61 @@
+export DefaultDict
+
+
+class DefaultDict[K, V] from AbstractDict[K, V] {
+    private final dict[K, V] internal
+    private final Callable[[V]] fallback
+
+    # Typical dict constructors disallowed, as they're nonsensical for this
+#    public operator new (*tuple[K, V] items, /) = NotImplemented
+#    public operator new (dict[K, V] items, /) = NotImplemented
+
+#     public operator new (Callable[V] function) {
+#         self.internal = {:}
+#         self.fallback = function
+#     }
+
+    public operator new (dict[K, V] items, Callable[[V]] function, int length = 0) {
+        self.internal = dict(items)
+        self.fallback = function
+    }
+
+    public operator [] (K key) -> V {
+        return self.internal.get(key) ?? self.fallback()
+    }
+
+    public mut operator []= (K key, V value) {
+        self.internal[key] = value
+    }
+
+    public mut operator del[] (K key) {
+        del self.internal[key]
+    }
+
+    operator == (dict[K, V] other) {
+        return other instanceof DefaultDict and super.operator == (other)
+    }
+
+    operator in (K key) {
+        return key in self.internal
+    }
+
+    operator iter -> K, V {
+        yield from self.internal
+    }
+
+    operator bool {
+        return self.internal
+    }
+
+    operator repr {
+        return f"{type(self)}({self.internal})"
+    }
+
+    generator method keys() -> K {
+        yield from (key for K key in self.internal)
+    }
+
+    public mut method clear() {
+        self.internal.clear()
+    }
+}

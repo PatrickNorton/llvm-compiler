@@ -1,0 +1,131 @@
+export int8, int16, int32, int64, int128
+
+$native("int")
+public class int8 {
+    public operator int -> int {}
+    public operator hash {}
+
+    public operator + (int8 other, /) -> int8 {}
+    public operator - (int8 other, /) -> int8 {}
+    public operator * (int8 other, /) -> int8 {}
+    public operator // (int8 other, /) -> int8 {}
+    public operator u- -> int8 {}
+    public operator ** (int8 other, /) -> int8 {}
+    public operator % (int8 other, /) -> int8 {}
+    public operator << (int8 other, /) -> int8 {}
+    public operator >> (int8 other, /) -> int8 {}
+    public operator & (int8 other, /) -> int8 {}
+    public operator | (int8 other, /) -> int8 {}
+    public operator ^ (int8 other, /) -> int8 {}
+    public operator ~ -> int8 {}
+
+    public operator == (int8 other, /) -> bool {}
+    public operator < (int8 other, /) -> bool {}
+    public operator <= (int8 other, /) -> bool {}
+    public operator > (int8 other, /) -> bool {}
+    public operator >= (int8 other, /) -> bool {}
+}
+
+$native("int")
+public class int16 {
+    public operator int -> int {}
+    public operator hash {}
+
+    public operator + (int16 other, /) -> int16 {}
+    public operator - (int16 other, /) -> int16 {}
+    public operator * (int16 other, /) -> int16 {}
+    public operator // (int16 other, /) -> int16 {}
+    public operator u- -> int16 {}
+    public operator ** (int16 other, /) -> int16 {}
+    public operator % (int16 other, /) -> int16 {}
+    public operator << (int16 other, /) -> int16 {}
+    public operator >> (int16 other, /) -> int16 {}
+    public operator & (int16 other, /) -> int16 {}
+    public operator | (int16 other, /) -> int16 {}
+    public operator ^ (int16 other, /) -> int16 {}
+    public operator ~ -> int16 {}
+
+    public operator == (int16 other, /) -> bool {}
+    public operator < (int16 other, /) -> bool {}
+    public operator <= (int16 other, /) -> bool {}
+    public operator > (int16 other, /) -> bool {}
+    public operator >= (int16 other, /) -> bool {}
+}
+
+$native("int")
+public class int32 {
+    public operator int -> int {}
+    public operator hash {}
+
+    public operator + (int32 other, /) -> int32 {}
+    public operator - (int32 other, /) -> int32 {}
+    public operator * (int32 other, /) -> int32 {}
+    public operator // (int32 other, /) -> int32 {}
+    public operator u- -> int32 {}
+    public operator ** (int32 other, /) -> int32 {}
+    public operator % (int32 other, /) -> int32 {}
+    public operator << (int32 other, /) -> int32 {}
+    public operator >> (int32 other, /) -> int32 {}
+    public operator & (int32 other, /) -> int32 {}
+    public operator | (int32 other, /) -> int32 {}
+    public operator ^ (int32 other, /) -> int32 {}
+    public operator ~ -> int32 {}
+
+    public operator == (int32 other, /) -> bool {}
+    public operator < (int32 other, /) -> bool {}
+    public operator <= (int32 other, /) -> bool {}
+    public operator > (int32 other, /) -> bool {}
+    public operator >= (int32 other, /) -> bool {}
+}
+
+$native("int")
+public class int64 {
+    public operator int -> int {}
+    public operator hash {}
+
+    public operator + (int64 other, /) -> int64 {}
+    public operator - (int64 other, /) -> int64 {}
+    public operator * (int64 other, /) -> int64 {}
+    public operator // (int64 other, /) -> int64 {}
+    public operator u- -> int64 {}
+    public operator ** (int64 other, /) -> int64 {}
+    public operator % (int64 other, /) -> int64 {}
+    public operator << (int64 other, /) -> int64 {}
+    public operator >> (int64 other, /) -> int64 {}
+    public operator & (int64 other, /) -> int64 {}
+    public operator | (int64 other, /) -> int64 {}
+    public operator ^ (int64 other, /) -> int64 {}
+    public operator ~ -> int64 {}
+
+    public operator == (int64 other, /) -> bool {}
+    public operator < (int64 other, /) -> bool {}
+    public operator <= (int64 other, /) -> bool {}
+    public operator > (int64 other, /) -> bool {}
+    public operator >= (int64 other, /) -> bool {}
+}
+
+$native("int")
+public class int128 {
+    public operator int -> int {}
+    public operator hash {}
+
+    public operator + (int128 other, /) -> int128 {}
+    public operator - (int128 other, /) -> int128 {}
+    public operator * (int128 other, /) -> int128 {}
+    public operator // (int128 other, /) -> int128 {}
+    public operator u- -> int128 {}
+    public operator ** (int128 other, /) -> int128 {}
+    public operator % (int128 other, /) -> int128 {}
+    public operator << (int128 other, /) -> int128 {}
+    public operator >> (int128 other, /) -> int128 {}
+    public operator & (int128 other, /) -> int128 {}
+    public operator | (int128 other, /) -> int128 {}
+    public operator ^ (int128 other, /) -> int128 {}
+    public operator ~ -> int128 {}
+
+    public operator == (int128 other, /) -> bool {}
+    public operator < (int128 other, /) -> bool {}
+    public operator <= (int128 other, /) -> bool {}
+    public operator > (int128 other, /) -> bool {}
+    public operator >= (int128 other, /) -> bool {}
+}

@@ -1,0 +1,61 @@
+export Boolable, Comparable, singleComparable, triComparable, Hashable, Iterable, Indexable, Sliceable
+
+auto interface Boolable {
+    public operator bool
+}
+
+auto interface Comparable[T] {
+    public operator <=> (T other, /)
+    public operator < (T other, /)
+    public operator > (T other, /)
+    public operator == (T other, /)
+
+    public operator <= (T other, /) {
+        return self == other or self < other
+    }
+    public operator >= (T other, /) {
+        return self == other or self > other
+    }
+}
+
+auto interface singleComparable[T] from Comparable[T] {
+    public operator <=> (T other, /)
+
+    public operator < (T other, /) {
+        return (self <=> other) == -1
+    }
+
+    public operator == (T other, /) {
+        return (self <=> other) == 0
+    }
+
+    public operator > (T other, /) {
+        return (self <=> other) == 1
+    }
+}
+
+auto interface triComparable[T] from Comparable[T] {
+    public operator < (T other, /)
+    public operator > (T other, /)
+    public operator == (T other, /)
+
+    public operator <=> (T other, /) {
+        return 0 if self == other
+        return 1 if self > other
+        return -1
+    }
+}
+
+auto interface Hashable {
+    public operator hash
+}
+
+auto interface Indexable[K, V] {
+    public operator [] (K key, /) -> V
+    public operator []= (K key, V value, /)
+}
+
+auto interface Sliceable[V] {
+    public operator [:] (int start, int stop, int step, /) -> Iterable[V]
+    public operator [:]= (int start, int stop, int step, Iterable[V] values, /)
+}

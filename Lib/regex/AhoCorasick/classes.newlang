@@ -1,0 +1,89 @@
+export ByteClasses, ByteClassBuilder
+
+class ByteClasses {
+    final bytes value
+
+    public operator new() {
+        self.value = b"\0" * 256
+    }
+
+    public static method singletons() -> cls {
+        mut var classes = ByteClasses()
+        for var i in [0:256] {
+            classes[i] = i
+        }
+        return classes
+    }
+
+    public operator [] (int index) -> int {
+        return self.value[index]
+    }
+
+    public mut operator []= (int index, int value) {
+        self.value[index] = value
+    }
+
+    public method alphabetLen() -> int {
+        return self.value[255] + 1
+    }
+
+    public method isSingleton() -> bool {
+        return self.alphabetLen() == 256
+    }
+
+    public generator method representatives() -> int {
+        mut int byte = 0
+        mut int? lastClass = null
+        while byte < 256 {
+            var type = self[byte]
+            byte++
+            if lastClass != byte {
+                lastClass = byte
+                yield type
+            }
+        }
+    }
+
+    public method elements(int equiv) -> bytes, int {
+        mut var array = bytes("")
+        mut var len = 0
+        for var b in [0:256] {
+            if self[b] == equiv {
+                array.add(b)
+                len++
+            }
+        }
+        return array, len
+    }
+}
+
+class ByteClassBuilder {
+    final list[bool] value
+
+    public operator new() {
+        self.value = [false] * 256
+    }
+
+    public mut method setRange(int start, int end) {
+        assert start in [0:256] and end in [start:256]
+        if start > 0 {
+            self.value[start - 1] = true
+        }
+        self.value[end] = true
+    }
+
+    public method build() -> ByteClasses {
+        final var classes = ByteClasses()
+        mut var c = 0
+        mut var i = 0
+        while true {
+            classes[i] = c
+            break if i >= 255
+            if self.value[i] {
+                c++
+            }
+            i++
+        }
+        return classes
+    }
+}

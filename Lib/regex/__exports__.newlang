@@ -1,0 +1,18 @@
+from .unicode export Regex, CaptureLocations, Captures
+from .Match export Match
+
+$test
+func simple() {
+    var x = Regex("a.")
+    assert x.isMatch("ab") as "First failed"
+    assert not x.isMatch("bc") as "Second failed"
+}
+
+$test
+func lessSimple() {
+    var x = Regex("ab+")
+    assert x.isMatch("ab") as "First failed"
+    assert x.isMatch("abb") as "Second failed"
+    assert not x.isMatch("a") as "Third failed"
+    assert not x.isMatch("ac") as "Fourth failed"
+}

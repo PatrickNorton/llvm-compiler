@@ -1,0 +1,74 @@
+# from interfaces typeget Iterable
+
+export product, repeat, repeatWith
+
+# FIXME: Types for product, etc.
+
+generic T
+generator func combinations(Iterable[T] value, int n, /, bool replacement = false) -> list[T] {
+    yield from combinationsInner(iter(value), n, replacement)
+}
+
+generic T
+generator func combinationsInner(Iterator[T] value, int n, bool replacement) -> list[T] {
+    if n > 0 {
+        if value.next()? as next {
+            if replacement {
+                yield [value] * n
+                # FIXME: Won't yield replacement values properly
+            }
+            for combination in combinationsInner(value, n - 1, replacement) {
+                yield [value, *combination]
+            }
+        }
+    }
+}
+
+generic T
+generator func permutations(Iterable[T] value, int n) -> list[T] {
+    # TODO
+}
+
+generic T, U
+generator func product(Iterable[T] value1, Iterable[U] value2) -> T, U {
+    for T value in value1 {
+        for U i in value2 {
+            yield value, i
+        }
+    }
+}
+
+#| FIXME: Function overloading
+generic T, U, V
+generator func product(Iterable[T] value1, Iterable[U] value2, Iterable[V] value3) -> T, U, V {
+    for T value in value1 {
+        yield from (value, i, j for U i, V j in product(value2, value3))
+    }
+}
+|#
+
+generic T
+generator func repeat(T value, int? times = null) -> T {
+    if times? as t {
+        dotimes t {
+            yield value
+        }
+    } else {
+        while true {
+            yield value
+        }
+    }
+}
+
+generic T
+generator func repeatWith(Callable[[T]] value, int? times = null) -> T {
+    if times? as t {
+        dotimes t {
+            yield value()
+        }
+    } else {
+        while true {
+            yield value()
+        }
+    }
+}

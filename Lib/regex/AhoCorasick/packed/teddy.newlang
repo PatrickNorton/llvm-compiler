@@ -1,0 +1,32 @@
+from .patterns import Patterns
+
+from ..match import Match
+
+export Builder, Teddy
+
+# Placeholder classes since this doesn't seem to be necessary
+class Builder {
+    public operator new {}
+
+    public method build(Patterns pats) -> Teddy? {
+        return null
+    }
+
+    public mut method fat(bool? val) -> mut cls {
+        return self
+    }
+
+    public mut method avx(bool? val) -> mut cls {
+        return self
+    }
+}
+
+class Teddy {
+    public method findAt(Patterns pats, bytes val, int index) -> Match? {
+        return null
+    }
+
+    public method minimumLen() -> int {
+        return 0
+    }
+}

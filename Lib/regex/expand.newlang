@@ -1,0 +1,95 @@
+from string import StringBuilder, ASCII_LETTERS, DIGITS
+
+from .unicode import Captures
+
+export expandStr
+
+func expandStr(Captures caps, str replacement) -> str {
+    final var dst = StringBuilder()
+    mut int index = 0
+    while index < replacement.length {
+        mut var repl = replacement[index:]
+        if bytes(repl).indexOf(y"$")? as i {
+            dst.add(repl[:i])
+            index += i
+            repl = repl[i:]
+        } else {
+            break
+        }
+        if bytes(repl).get(index)? as b {
+            if b == y"$" {
+                dst.add("$")
+                index += 2
+                continue
+            }
+        }
+        assert repl
+        mref CaptureRef capRef
+        if findCapRef(repl)? as c {
+            capRef = c
+        } else {
+            dst.add("$")
+            index++
+            continue
+        }
+        repl = repl[capRef.end:]
+        switch capRef.cap {
+            case Ref.Number as i {
+                dst.add(caps.get(i)?.operator str() ?? "")
+            }
+            case Ref.Named as name {
+                dst.add(caps.name(name)?.operator str() ?? "")
+            }
+        }
+    }
+    return str(dst)
+}
+
+class CaptureRef {
+    Ref cap
+    int end
+
+    public operator new(Ref cap, int end) {
+        self.cap = cap
+        self.end = end
+    }
+}
+
+union Ref {
+    str Named
+    int Number
+}
+
+func findCapRef(str replacement) -> CaptureRef? {
+    mut var i = 0
+    var rep = bytes(replacement)
+    return null if rep.length <= 1 or rep[0] != y'$'
+
+    mut bool brace = false
+    i++
+    if rep[i] == y'{' {
+        brace = true
+        i++
+    }
+    mut var capEnd = i
+    while isValidCapLetter(rep[capEnd]) {
+        capEnd++
+    }
+    return null if capEnd == i
+
+    var cap = str(rep[i:capEnd])
+    if brace {
+        return null if rep.get(capEnd) != option(y"}")
+        capEnd++
+    }
+    if cap.asInt()? as i {
+        return CaptureRef(Ref.Number(i), capEnd)
+    } else {
+        return CaptureRef(Ref.Named(cap), capEnd)
+    }
+}
+
+func isValidCapLetter(int b) -> bool {
+    var c = char(b)
+    return c in (DIGITS + ASCII_LETTERS + "_")
+}

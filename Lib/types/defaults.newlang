@@ -1,0 +1,78 @@
+export Addable, Subtractable, Multiplicable, Dividable, FloorDividable, Negatable, Powable, FullArithmetic
+export Hashable, Iterable
+export Indexable, IndexSettable, Sliceable, SliceSettable
+
+# Arithmetic operators
+
+auto interface Addable[T, U] {
+    public operator + (T other, /) -> U
+}
+
+auto interface Subtractable[T, U] {
+    public operator - (T other, /) -> U
+}
+
+auto interface Multiplicable[T, U] {
+    public operator * (T other, /) -> U
+}
+
+auto interface Dividable[T, U] {
+    public operator / (T other, /) -> U
+}
+
+auto interface FloorDividable[T, U] {
+    public operator // (T other, /) -> U
+}
+
+auto interface Negatable[T] {
+    public operator u- () -> T
+}
+
+auto interface Powable[T, U] {
+    public operator ** (T other, /) -> U
+}
+
+auto interface FullArithmetic[T, U] {
+    public operator + (T other, /) -> U
+    public operator - (T other, /) -> U
+    public operator * (T other, /) -> U
+    public operator / (T other, /) -> U
+    public operator // (T other, /) -> U
+    public operator u- () -> U
+    public operator ** (T other, /) -> U
+}
+
+# Hash and iter
+
+auto interface Hashable {
+    public operator hash -> int
+}
+
+auto interface Iterable[T] {
+    public operator iter () -> T
+}
+
+# Indexing/slicing
+
+auto interface Indexable[T, U] {
+    public operator [] (T value, /) -> U
+}
+
+auto interface IndexSettable[T, U] {
+    public operator []= (T index, U value, /)
+}
+
+auto interface Sliceable[T] {
+    public operator [:] (slice index, /) -> T
+}
+
+auto interface SliceSettable[T] {
+    public operator [:]= (slice index, T value, /)
+}
+
+# Comparisons
+
+auto interface Comparable[T] {
+    public operator < (T other, /) -> bool
+    public operator > (T other, ?) -> bool
+}

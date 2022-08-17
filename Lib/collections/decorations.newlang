@@ -1,0 +1,20 @@
+from math import min
+
+export normalizeIndices
+
+generic T
+func normalizeIndices(Sequence[Any] iterable,
+        Callable[int, int, int, T] function) -> Callable[int, int, int, T] {
+    return lambda start, stop, step -> T {
+        if start < 0 {
+            start = iterable.length + start
+        }
+        if stop < 0 {
+            stop = iterable.length + stop
+        }
+        start = min(iterable.length, start)
+        stop = min(iterable.length, stop)
+
+        return function(start, stop, step)
+    }
+}

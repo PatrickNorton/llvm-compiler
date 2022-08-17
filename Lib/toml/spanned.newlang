@@ -1,0 +1,11 @@
+export Spanned
+
+class Spanned[T] {
+    public int start
+    public int end
+    private T value
+
+    public method span() -> tuple[int, int] {
+        return (self.start, self.end)
+    }
+}

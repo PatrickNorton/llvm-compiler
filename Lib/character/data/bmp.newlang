@@ -1,0 +1,19 @@
+from .. import Directionality
+
+export directionality
+
+func directionality(char c) {
+    assert int(c) < 0x10000
+    return switch c {
+        case c"\u202A" => Directionality.LEFT_TO_RIGHT_EMBEDDING
+        case c"\u202B" => Directionality.RIGHT_TO_LEFT_EMBEDDING
+        case c"\u202C" => Directionality.POP_DIRECTIONAL_FORMAT
+        case c"\u202D" => Directionality.LEFT_TO_RIGHT_OVERRIDE
+        case c"\u202E" => Directionality.RIGHT_TO_LEFT_OVERRIDE
+        case c"\u2066" => Directionality.LEFT_TO_RIGHT_ISOLATE
+        case c"\u2067" => Directionality.RIGHT_TO_LEFT_ISOLATE
+        case c"\u2068" => Directionality.FIRST_STRONG_ISOLATE
+        case c"\u2069" => Directionality.POP_DIRECTIONAL_ISOLATE
+        default => Directionality.UNNDEFINED
+    }
+}

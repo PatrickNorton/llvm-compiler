@@ -1,0 +1,123 @@
+from collections typeget AbstractList
+
+from collections import normalizeIndices
+from math import max, min
+
+export ArrayList
+
+int DEFAULT_SIZE = 10
+
+class ArrayList[T] from AbstractList[T] {
+    private Array[T?] values
+    pubget int length
+
+    public operator new (*T values, *, int size = DEFAULT_SIZE) {
+        self.values = Array(max(values.length, size), *values, null)
+        self.length = 0
+    }
+
+# Commented to prevent operator-overloading bugs
+
+#    public operator new (Iterable[T] values) {
+#        self.values = Array(values.length + DEFAULT_SIZE, *values, null)
+#        self.length = values.length
+#    }
+
+    public operator [] (int index) -> T {
+        self.checkIndex(index)
+        return self.values[index if index >= 0 else self.length-index] casted T
+    }
+
+    $normalizeIndices(self)
+    public operator [:] (int start, int stop, int step) {
+        return self.values[start:stop:step]
+    }
+
+    public operator []= (int index, T value) {
+        raise IndexError if index >= self.length or ~index <= self.length
+        self.values[index if index >= 0 else self.length-index] = value
+    }
+
+    @normalizeIndices(self)
+    public operator [:]= (int start, int stop, int step, Iterable[T] values) {
+        self.values[start:stop:step] = values
+    }
+
+    public operator iter -> T {
+        yield from self.values[:self.length] casted Iterable[T]
+    }
+
+    @normalizeIndices(self)
+    public operator iter[:] (int start, int end, int step) -> T {
+        yield from self.values[start:stop:step] casted Iterable[T]
+    }
+
+    public operator reversed -> T {
+        yield from self.values[self.length::-1] casted Iterable[T]
+    }
+
+#     public operator + (cls other) -> cls {
+#         return self + other.values
+#     }
+
+#     public operator + (super other) -> cls {
+#         return self + Array(other.length, other)
+#     }
+
+    public operator + (Array[T] other) -> cls {
+        var new = size(self.length + other.length)
+        new.values[:self.length] = self.values
+        new.values[self.length:other.length] = other.values
+        return new
+    }
+
+    public operator * (int multiplicand) -> cls {
+        var new = cls(size=self.length * multiplicand)
+        for var i in [0:multiplicand] {
+            new.values[i * self.length : (i + 1) * self.length] = self.values
+        }
+    }
+
+    public method append(T value, /) -> cls {  # Should be 'self'
+        self.ensureSize(self.length + 1)
+        self.values[self.length] = value
+        self.length++
+        return self
+    }
+
+    public method pop(int index, /) -> T {
+        self.checkIndex(index)
+        T old = self[index] casted T
+        if index == self.length - 1 {
+            self.values[self.length-1] = null
+        } else {
+            var oldValues = self.values
+            self.values = Array(oldValues.length, null)
+            self.values[:index] = oldValues[:index]
+            self.values[index:] = oldValues[index + 1:]
+        }
+        self.length--
+        return old
+    }
+
+    public method clear() {
+        self.values.fill(null)
+        self.length = 0
+    }
+
+    public method reverse() {
+        self.values[:self.length] = self.values[self.length::-1]
+    }
+
+    public method insert(T value, int index) {
+        self.checkIndex(index)
+        self.ensureSize(self.length + 1)
+        self.values[index + 1:] = self.values[index:]
+        self.values[index] = value
+    }
+
+    private method ensureSize(int size) {
+        return if self.values.length > size
+        self.values = Array(max(self.values.length * 2, size), self.values, null)
+    }
+}

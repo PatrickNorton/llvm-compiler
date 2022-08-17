@@ -1,0 +1,160 @@
+# from interfaces typeget Iterable, #|Sequence|#
+
+from .decorations import normalizeIndices
+from itertools import map
+from math import max, min
+from numtools import highestOneBit
+
+export Deque
+
+int DEFAULT_SIZE = 8
+
+final class Deque[V] {
+    private Array[V?] values
+    private int start = 0
+    pubget int length = 0
+
+    private property int end {
+        get {
+            return (self.start + self.length) % self.values.length
+        }
+    }
+
+#     public operator new (*V values) {
+#         self.values = Array(max(DEFAULT_SIZE, highestOneBit(values.length) << 1), null)
+#         self.values[0:] = values
+#         self.length = values.length
+#     }
+
+    public operator new (Iterable[V] values, int length = 0) {
+        self.values = Array(max(DEFAULT_SIZE if length == 0 else length, highestOneBit(values.length) << 1), null)
+        self.values[0:] = map(option, values)
+        self.length = values.length
+    }
+
+    public operator [] (int index) -> V {
+        self.checkIndex(index)
+        return self.values[self.internalIndex(index)] casted V
+    }
+
+    public operator [:] (int start, int end, int step) -> cls {
+        start = min(start, self.length) if start >= 0 else max(start, ~self.length)
+        end = min(end, self.length) if end >= 0 else max(end, ~self.length)
+        int startIndex = self.internalIndex(start)
+        int stopIndex = self.internalIndex(end)
+
+        if startIndex < stopIndex {
+            return cls(*self.values[startIndex:stopIndex:step])
+        } else {
+            int secondHalfStart = ~(self.values.length - stopIndex) % step
+            return cls(*self.values[startIndex::step],
+                        *self.values[secondHalfStart:stopIndex:step])
+        }
+    }
+
+    @normalizeIndices(self)
+    public operator iter[:] -> V {
+        int startIndex = self.internalIndex(start)
+        int stopIndex = self.internalIndex(end)
+
+        if startIndex < stopIndex {
+            yield from self.values[startIndex:stopIndex:step]
+        } else {
+            int secondHalfStart = ~(self.values.length - stopIndex) % step
+            yield from self.values[startIndex::step]
+            yield from self.values[secondHalfStart:stopIndex:step]
+        }
+    }
+
+    public operator iter -> V {
+        if self.start + self.length <= self.values.length {
+            yield from self.values[self.start:self.end]
+        } else {
+            yield from self.values[self.start:]
+            yield from self.values[:self.end]
+        }
+    }
+
+    public operator reversed -> V {
+        if self.start + self.length <= self.values.length {
+            yield from self.values[self.end:self.start:-1]
+        } else {
+            yield from self.values[self.end::-1]
+            yield from self.values[:self.start:-1]
+        }
+    }
+
+    public operator bool {
+        return self.length
+    }
+
+    public operator repr {
+        return f"{type(self)}({list(self.values)})"
+    }
+
+    public mut method popLeft() -> V {
+        V value = self.values[self.start]
+        self.start = (self.start + 1) % values.length
+        self.length--
+        return value
+    }
+
+    public mut method pop() -> V {
+        V value = self.values[(self.start + self.size) % values.length]
+        self.length--
+        return value
+    }
+
+    public mut method push(V value) {
+        self.ensureSize(self.length + 1)
+        self.values[self.end] = value
+        self.length++
+    }
+
+    public mut method pushLeft(V value) {
+        self.ensureSize(self.length + 1)
+        self.values[(self.start - 1) % self.values.length] = value
+        self.length++
+    }
+
+    public mut method extend(Iterable[V] values) {
+        # if values instanceof Sequence {  # Prevent multiple array resizes
+        #     self.ensureSize(self.length + values.length)
+        # }
+        for V value in values {
+            self.push(value)
+        }
+    }
+
+    public mut method extendLeft(Iterable[V] values) {
+        # if values instanceof Sequence {  # Prevent multiple array resizes
+        #     self.ensureSize(self.length + values.length)
+        # }
+        for V value in values {
+            self.pushLeft(value)
+        }
+    }
+
+    private mut method ensureSize(int length) {
+        return if size <= self.values.length
+        var new = Array[V?](highestOneBit(length) << 1, null)
+        if self.start <= self.end {
+            new[0:] = self.values[self.start:self.end]
+        } else {
+            new[0:] = self.values[self.start:]
+            new[self.values.length - self.start:] = self.values[:self.end]
+        }
+        self.values = new
+        self.start = 0
+    }
+
+    private method internalIndex(int index) {
+        return ((self.start if index >= 0 else self.end) + index) % self.values.length
+    }
+
+    private method checkIndex(int index) {
+        raise IndexError(
+            f"Index {index} out of bounds for deque of length {self.length}"
+        ) if (index if index >= 0 else ~index) >= self.length
+    }
+}

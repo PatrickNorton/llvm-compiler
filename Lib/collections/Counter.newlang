@@ -1,0 +1,102 @@
+from itertools import chain, firstN, repeat
+
+export Counter
+
+class Counter[T] {
+    private final dict[T, int] values
+
+    public property int length {
+        get {
+            return self.values.length
+        }
+    }
+
+    public operator new (*T items, int length = 0) {
+        self.values = {:}
+        for T i in items {
+            if i in self.values {
+                self.values[i]++
+            } else {
+                self.values[i] = 1
+            }
+        }
+    }
+
+#     public operator new (dict[T, int] items) {
+#         self.values = {i: j for var i, var j in items}
+#     }
+
+    public operator [] (T value) -> int {
+        return self.values.get(value) ?? 0
+    }
+
+    # Methods that are simply delegated to self.values
+    public mut operator []= (T index, int value) {
+        self.values[index] = value
+    }
+
+    public mut operator del[] (T key) {
+        del self.values[key]
+    }
+
+    public operator iter -> T, int {
+        for T key, int value in self.values {
+            yield key, value
+        }
+    }
+
+    public operator in (T key) -> bool {
+        return key in self.values
+    }
+
+    public operator == (dict[T, int] other) -> bool {
+        return self.values == other
+    }
+
+    public operator bool {
+        return bool(self.values)
+    }
+
+    public operator + (cls other) -> cls {
+        return {i: self[i] + other[i] for T i in chain(self.keys(), other.keys())}
+    }
+
+    public operator repr {
+        return f"{type(self)}({self.values})"
+    }
+
+    public generator method keys() -> T {
+        yield from self.values.keys()
+    }
+
+    public mut method remove(int value) {
+        self.values.remove(value)
+    }
+
+    public mut method keyOf(int value) -> T {
+        return self.values.keyOf(value)
+    }
+
+    public generator method elements() -> T {
+        for T value, int count in self {
+            yield from repeat(value, count)
+        }
+    }
+
+    public generator method mostCommon(int count = 0) -> T {
+        var sorted = sorted(self.values.keys(), key=self.values.operator [])
+        yield from firstN(count, sorted) if count else sorted
+    }
+
+    public mut method clear() {
+        self.values.clear()
+    }
+
+    public mut method increment(T key, int value = 0) {
+        self[key] += value
+    }
+
+    public method total() -> int {
+        return \+(v for var _, var v in self.values)
+    }
+}

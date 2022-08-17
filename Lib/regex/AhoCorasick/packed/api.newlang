@@ -1,0 +1,210 @@
+from .patterns import Patterns
+from .teddy import Teddy
+from .teddy import Builder as TeddyBuilder
+from .rabinkarp import RabinKarp
+
+from ..match import Match
+
+export Config, PackedMatch, Builder, ForceAlgorithm, Searcher
+
+int PATTERN_LIMIT = 128
+
+enum PackedMatch {
+    LEFTMOST_FIRST,
+    LEFTMOST_LONGEST
+}
+
+class Config {
+    mut PackedMatch kind
+    mut ForceAlgorithm? force
+    mut bool? forceTeddyFat_
+    mut bool? forceAvx_
+
+    public operator new() {
+        self.kind = PackedMatch.LEFTMOST_FIRST
+        self.force = null
+        self.forceTeddyFat_ = null
+        self.forceAvx_ = null
+    }
+
+    public method builder() -> mut Builder {
+        return Builder(self)
+    }
+
+    public mut method matchKind(PackedMatch kind) -> cls {
+        self.kind = kind
+        return self
+    }
+
+    public mut method forceTeddy(bool yes) -> cls {
+        self.force = ForceAlgorithm.TEDDY if yes else null
+        return self
+    }
+
+    public mut method forceTeddyFat(bool yes) -> cls {
+        self.forceTeddyFat_ = yes
+        return self
+    }
+
+    public mut method forceAvx(bool yes) -> cls {
+        self.forceAvx_ = yes
+        return self
+    }
+
+    public mut method forceRabinKarp(bool yes) -> cls {
+        self.force = ForceAlgorithm.RABIN_KARP if yes else null
+        return self
+    }
+
+    public method clone() -> cls {
+        mut var result = cls()
+        result.kind = self.kind
+        result.force = self.force
+        result.forceTeddyFat_ = self.forceTeddyFat_
+        result.forceAvx_ = self.forceAvx_
+        return result
+    }
+}
+
+enum ForceAlgorithm {
+    TEDDY,
+    RABIN_KARP
+}
+
+class Builder {
+    Config config
+    mut bool inert
+    final Patterns patterns
+
+    public operator new(Config config = Config()) {
+        self.config = config
+        self.inert = false
+        self.patterns = Patterns()
+    }
+
+    public method build() -> Searcher? {
+        return null if self.inert or not self.patterns
+
+        mut var patterns = self.patterns.clone()
+        patterns.setMatchKind(self.config.kind)
+        var rabinKarp = RabinKarp(patterns)
+        mref SearchKind searchKind
+        mut int minimumLen
+        if self.config.force? as f {
+            switch f {
+                case ForceAlgorithm.TEDDY {
+                    if self.buildTeddy(patterns)? as teddy {
+                        minimumLen = teddy.minimumLen()
+                        searchKind = SearchKind.Teddy(teddy)
+                    } else {
+                        return null
+                    }
+                }
+                case ForceAlgorithm.RABIN_KARP {
+                    minimumLen = 0
+                    searchKind = SearchKind.RabinKarp()
+                }
+            }
+        } else {
+            if self.buildTeddy(patterns)? as teddy {
+                minimumLen = teddy.minimumLen()
+                searchKind = SearchKind.Teddy(teddy)
+            } else {
+                return null
+            }
+        }
+        return Searcher(self.config.clone(), patterns, rabinKarp, searchKind, minimumLen)
+    }
+
+    public method buildTeddy(Patterns patterns) -> Teddy? {
+        return (TeddyBuilder()
+            .avx(self.config.forceAvx_)
+            .fat(self.config.forceTeddyFat_)
+            .build(patterns))
+    }
+
+    public mut method add(bytes pattern) -> cls {
+        return self if self.inert
+        if self.patterns.length >= PATTERN_LIMIT {
+            self.inert = true
+            self.patterns.reset()
+            return self
+        }
+
+        if not pattern {
+            self.inert = true
+            self.patterns.reset()
+            return self
+        }
+        self.patterns.add(pattern)
+        return self
+    }
+
+    public mut method extend(Iterable[bytes] patterns) -> cls {
+        for var p in patterns {
+            self.add(p)
+        }
+        return self
+    }
+}
+
+union SearchKind {
+    Teddy Teddy
+    null RabinKarp
+}
+
+class Searcher {
+    Config config
+    Patterns patterns
+    RabinKarp rabinKarp
+    SearchKind searchKind
+    int minimumLen
+
+    public operator new (
+        Config config,
+        Patterns patterns,
+        RabinKarp rabinKarp,
+        SearchKind searchKind,
+        int minimumLen,
+    ) {
+        self.config = config
+        self.patterns = patterns
+        self.rabinKarp = rabinKarp
+        self.searchKind = searchKind
+        self.minimumLen = minimumLen
+    }
+
+    public method find(bytes haystack) -> Match? {
+        return self.findAt(haystack, 0)
+    }
+
+    public method findAt(bytes haystack, int at) -> Match? {
+        switch self.searchKind {
+            case SearchKind.Teddy as teddy {
+                if haystack[at:].length < teddy.minimumLen() {
+                    return self.slowAt(haystack, at)
+                }
+                return teddy.findAt(self.patterns, haystack, at)
+            }
+            case SearchKind.RabinKarp {
+                return self.rabinKarp.findAt(self.patterns, haystack, at)
+            }
+        }
+    }
+
+    public generator method findIter(bytes haystack) -> Match {
+        mut var at = 0
+        while at < haystack.length {
+            if self.findAt(haystack, at)? as c {
+                at = c.end
+                yield c
+            } else {
+                return
+            }
+        }
+    }
+
+    private method slowAt(bytes haystack, int at) -> Match? {
+        return self.rabinKarp.findAt(self.patterns, haystack, at)
+    }
+}

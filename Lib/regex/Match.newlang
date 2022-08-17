@@ -1,0 +1,17 @@
+export Match
+
+const class Match {
+    private str value
+    public int start
+    public int end
+
+    public operator new(str value, int start, int end) {
+        self.value = value
+        self.start = start
+        self.end = end
+    }
+
+    public operator str() {
+        return self.value[self.start:self.end]
+    }
+}

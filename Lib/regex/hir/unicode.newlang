@@ -1,0 +1,306 @@
+from .hir import ClassUnicode, ClassUnicodeRange
+from ..unicodeTables import caseFoldingSimple
+
+export ClassQuery, containsSimpleCaseMapping, perlDigit, perlSpace, perlWord, simpleFold, UnicodeError, unicodeType
+
+func simpleFold(char c) -> Iterable[char]? {
+    return null
+}
+
+func hirClass(list[tuple[char, char]] ranges) -> ClassUnicode {
+    var hirRanges = [ClassUnicodeRange(*pair) for var pair in ranges]
+    return ClassUnicode(hirRanges)
+}
+
+func containsSimpleCaseMapping(char start, char end) -> bool {
+    assert int(start) <= int(end)
+    return binarySearchBy(caseFoldingSimple(), lambda tuple[char, list[char]] x -> int {
+        var c = x.0
+        if int(start) <= int(c) and int(c) <= int(end) {
+            return 0
+        } elif int(c) > int(end) {
+            return 1
+        } else {
+            return -1
+        }
+    }).Exact?
+}
+
+func perlDigit() -> mut ClassUnicode {
+    raise UnicodeError.PerlClassNotFound()
+}
+
+func perlSpace() -> mut ClassUnicode {
+    raise UnicodeError.PerlClassNotFound()
+}
+
+func perlWord() -> mut ClassUnicode {
+    raise UnicodeError.PerlClassNotFound()
+}
+
+typedef Range as list[tuple[char, char]]
+
+union ClassQuery {
+    char OneLetter
+    str Binary
+    tuple[str, str] ByValue
+
+    method canonicalize() -> CanonicalClassQuery {
+        switch self {
+            case ClassQuery.OneLetter as c {
+                return self.canonicalBinary(str(c))
+            }
+            case ClassQuery.Binary as name {
+                return self.canonicalBinary(name)
+            }
+            case ClassQuery.ByValue as pair {
+                var propertyName = symbolicNameNormalize(pair.0)
+                var propertyValue = symbolicNameNormalize(pair.1)
+
+                if canonicalProp(propertyName)? as canonName {
+                    switch canonName {
+                        case "General_Category" {
+                            if canonicalGencat(propertyValue)? as canon {
+                                return CanonicalClassQuery.GeneralCategory(canon)
+                            } else {
+                                raise UnicodeError.PropertyValueNotFound()
+                            }
+                        }
+                        case "Script" {
+                            if canonicalScript(propertyValue)? as canon {
+                                return CanonicalClassQuery.Script(canon)
+                            } else {
+                                raise UnicodeError.PropertyValueNotFound()
+                            }
+                        }
+                        default {
+                            if propertyValues(canonName)? as vals {
+                                if canonicalValue(vals, propertyValue)? as canonVal {
+                                    return CanonicalClassQuery.ByValue((canonName, canonVal))
+                                }
+                            }
+                            raise UnicodeError.PropertyValueNotFound()
+                        }
+                    }
+                } else {
+                    raise UnicodeError.PropertyNotFound()
+                }
+            }
+        }
+    }
+
+    private method canonicalBinary(str name) -> CanonicalClassQuery {
+        var norm = symbolicNameNormalize(name)
+        if norm != "cf" {
+            if canonicalProp(norm)? as canon {
+                return CanonicalClassQuery.Binary(canon)
+            }
+        }
+        if canonicalGencat(norm)? as canon {
+            return CanonicalClassQuery.GeneralCategory(canon)
+        }
+        if canonicalScript(norm)? as canon {
+            return CanonicalClassQuery.Script(canon)
+        }
+        raise UnicodeError.PropertyNotFound()
+    }
+}
+
+union CanonicalClassQuery {
+    str Binary
+    str GeneralCategory
+    str Script
+    tuple[str, str] ByValue
+}
+
+union UnicodeError from Throwable {
+    null PropertyNotFound
+    null PropertyValueNotFound
+    null PerlClassNotFound
+
+    public method msg() -> str {
+        return switch self {
+            case UnicodeError.PropertyNotFound => "Property not found"
+            case UnicodeError.PropertyValueNotFound => "Property value not found"
+            case UnicodeError.PerlClassNotFound => "Perl class not found"
+        }
+    }
+}
+
+class CaseFoldError from Throwable {
+    public operator new {}
+
+    public method msg() -> str {
+        return ""
+    }
+}
+
+func unicodeType(ClassQuery query) -> ClassUnicode {
+    switch query.canonicalize() {
+        case CanonicalClassQuery.Binary as name {
+            return boolProperty(name)
+        }
+        case CanonicalClassQuery.GeneralCategory as name {
+            return gencat(name)
+        }
+        case CanonicalClassQuery.Script as name {
+            return script(name)
+        }
+        case CanonicalClassQuery.ByValue as pair {
+            var propertyName, var propertyValue = *pair
+            switch propertyName {
+                case "Age" {
+                    mut var typ = ClassUnicode.empty()
+                    for var s in ages(propertyValue) {
+                        typ.unionWith(hirClass(s))
+                    }
+                    return typ
+                }
+                case "Script_Extensions" {
+                    return scriptExtension(propertyValue)
+                }
+                case "Grapheme_Cluster_Break" {
+                    return gcb(propertyValue)
+                }
+                case "Sentence_Break" {
+                    return sb(propertyValue)
+                }
+                case "Word_Break" {
+                    return wb(propertyValue)
+                }
+                default {
+                    raise UnicodeError.PropertyNotFound()
+                }
+            }
+        }
+    }
+}
+
+func boolProperty(str canonicalName) -> ClassUnicode {
+   raise UnicodeError.PropertyNotFound()
+}
+
+func gencat(str canonicalName) -> ClassUnicode {
+    raise UnicodeError.PropertyNotFound()
+}
+
+func script(str canonicalName) -> ClassUnicode {
+    raise UnicodeError.PropertyNotFound()
+}
+
+func scriptExtension(str canonicalName) -> ClassUnicode {
+    raise UnicodeError.PropertyNotFound()
+}
+
+func gcb(str canonicalName) -> ClassUnicode {
+    raise UnicodeError.PropertyNotFound()
+}
+
+func wb(str canonicalName) -> ClassUnicode {
+    raise UnicodeError.PropertyNotFound()
+}
+
+func sb(str canonicalName) -> ClassUnicode {
+    raise UnicodeError.PropertyNotFound()
+}
+
+generator func ages(str canonicalName) -> Range {
+    raise UnicodeError.PropertyNotFound()
+}
+
+func canonicalGencat(str normalizedValue) -> str? {
+    return switch normalizedValue {
+        case "any" => "Any"
+        case "assigned" => "Assigned"
+        case "ascii" => "ASCII"
+        default => canonicalValue(propertyValues("General_Category")!!, normalizedValue)
+    }
+}
+
+func canonicalValue(list[tuple[char, char]] values, str normalizedValue) -> str? {
+    for var pair in values {
+        if pair.0 == normalizedValue {
+            return str(pair.1)
+        }
+    }
+    return null
+}
+
+
+func canonicalScript(str normalizedValue) -> str? {
+    return canonicalValue(propertyValues("Script")!!, normalizedValue)
+}
+
+func canonicalProp(str normalizedName) -> str? {
+    raise UnicodeError.PropertyNotFound()
+}
+
+func propertyValues(str canonicalPropertyName) -> list[tuple[char, char]]? {
+    raise UnicodeError.PropertyValueNotFound()
+}
+
+func symbolicNameNormalize(str x) -> str {
+    mut var tmp = x.encode("UTF-8")
+    var len = symbolicNameNormalizeBytes(tmp).length
+    return tmp[:len].encode("UTF-8")
+}
+
+func symbolicNameNormalizeBytes(mut bytes val) -> bytes {
+    mut int start = 0
+    mut bool startsWithIs = false
+    if val.length >= 2 {
+        # Ignore any "is" prefix.
+        startsWithIs = (val.startsWith(b"is") or val.startsWith(b"IS")
+            or val.startsWith(b"iS") or val.startsWith(b"Is"))
+        if startsWithIs {
+            start = 2
+        }
+    }
+    mut int nextWrite = 0
+    for var i in [start:val.length] {
+        var b = val[i]
+        if b in b" _-" {
+            continue
+        } elif y'A' <= b and b <= y'Z' {
+            val[nextWrite] = b + (y'a' - y'A')
+            nextWrite++
+        } elif b <= 0x7F {
+            val[nextWrite] = b
+            nextWrite += 1
+        }
+    }
+    if startsWithIs and nextWrite == 1 and val[0] == y'c' {
+        val[0] = y'i'
+        val[1] = y's'
+        val[2] = y'c'
+        nextWrite = 3
+    }
+    return val[:nextWrite]
+}
+
+# TODO: Move to stdlib
+
+union BinarySearchResult {
+    int Exact
+    int Inexact
+}
+
+func binarySearchBy(
+    list[tuple[char, list[char]]] values, Callable[tuple[char, list[char]], [int]] order
+) -> BinarySearchResult {
+    mut var size = values.length
+    mut var left = 0
+    mut var right = size
+    while left < right {
+        var mid = left + size // 2
+        var cmp = order(values[mid])
+        if cmp < 0 {
+            left = mid + 1
+        } elif cmp > 0 {
+            right = mid
+        } else {
+            return BinarySearchResult.Exact(mid)
+        }
+    }
+    return BinarySearchResult.Inexact(left)
+}

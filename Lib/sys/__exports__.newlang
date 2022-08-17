@@ -1,0 +1,25 @@
+from path import Path
+
+$native("sys")
+func args() -> list[str] {}
+
+func chdir(Path path) {
+    chdir_(bytes(path))
+}
+
+$native("sys")
+func chdir_(bytes path) {}
+
+func mkdir(Path path) {
+    mkdir_(bytes(path))
+}
+
+$native("sys")
+func mkdir_(bytes path) {}
+
+generator func listdir(Path path) {
+    listdir_(bytes(path))
+}
+
+$native("sys")
+generator func listdir_(bytes path) {}

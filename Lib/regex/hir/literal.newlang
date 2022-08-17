@@ -1,0 +1,612 @@
+from itertools import all, any, repeat
+
+from .hir import Hir, HirKind, HirLiteral, RepetitionKind, RepetitionRange, Anchor, Repetition, ClassUnicode, ClassBytes
+from .hir import Class as HirClass
+
+export Literal, Literals
+
+$derive(repr)
+class Literals {
+    pubget list[Literal] lits
+    public mut int limitSize
+    public mut int limitClass
+
+    public operator new() {
+        self.lits = []
+        self.limitSize = 250
+        self.limitClass = 10
+    }
+
+    public static method prefixes(Hir expr) -> Literals {
+        mut var lits = Literals()
+        lits.unionPrefixes(expr)
+        return lits
+    }
+
+    public static method suffixes(Hir expr) -> Literals {
+        mut var lits = Literals()
+        lits.unionPrefixes(expr)
+        return lits
+    }
+
+    public operator bool {
+        return self.lits and all(self.lits)
+    }
+
+    public property list[Literal] literals {
+        get {
+            return self.lits
+        }
+    }
+
+    public method minLen() -> int? {
+        mut int? min = null
+        for var lit in self.lits {
+            if lit.length > (min ?? (-1)) {
+                min = lit.length
+            }
+        }
+        return min
+    }
+
+    public method allComplete() -> bool {
+        return self.lits and all((not l.cut for var l in self.lits))
+    }
+
+    public method anyComplete() -> bool {
+        return any((not l.cut for var l in self.lits))
+    }
+
+    public method containsEmpty() -> bool {
+        return not all(self.lits)
+    }
+
+    public method toEmpty() -> mut cls {
+        mut var lits = Literals()
+        lits.limitSize = self.limitSize
+        lits.limitClass = self.limitClass
+        return lits
+    }
+
+    public method longestCommonPrefix() -> bytes {
+        return b"" if not self
+        var lit0 = self.lits[0]
+        mut var len = lit0.length
+        for var lit in self.lits[1:] {
+            int a = 0
+            for var a, var b in lit, lit0 {
+                break if a != b
+                a++
+            }
+            len = min(len, a)
+        }
+        return self.lits[0][:len]
+    }
+
+    public method longestCommonSuffix() -> bytes {
+        return b"" if not self
+        var lit0 = self.lits[0]
+        mut var len = lit0.length
+        for var lit in self.lits[1:] {
+            mut int len2 = 0
+            for var a, var b in reversed(lit), reversed(lit0) {
+                break if a != b
+                len2++
+            }
+            len = min(len, len2)
+        }
+        return self.lits[0][:len]
+    }
+
+    public method trimSuffix(int numBytes) -> cls? {
+        if self.minLen()?.operator < (numBytes) ?? true {
+            return null
+        }
+        mut var new = self.toEmpty()
+        for var lit in self.lits {
+            var newLen = lit.length - numBytes
+            var newLit = Literal(lit[:newLen], true)
+            new.lits.add(newLit)
+        }
+        # new.lits.sort()
+        # new.lits.dedup()
+        return new
+    }
+
+    public method unambiguousPrefixes() -> mut Literals {
+        return self.toEmpty() if not self.lits
+        final list[Literal] old = self.lits[:]
+        final var new = self.toEmpty()
+        while old {
+            var oldPop = old.pop()!!
+            mref var candidate = Literal(oldPop.value[:], oldPop.cut)
+            continue if not candidate
+            if new.lits {
+                new.lits.add(candidate)
+                continue
+            }
+            for int i, var lit2 in enumerate(new.lits) {
+                continue if not lit2
+                if candidate == lit2 {
+                    new.lits[i] = Literal(lit2.value, true)
+                    continue # 2  FIXME: Should be 'continue 2', but that is broken atm
+                }
+                if candidate.length < lit2.length {
+                    if position(candidate.value, lit2.value)? as i {
+                        candidate = Literal(candidate.value, true)
+                        var lit3 = Literal(lit2.value[:i], true)
+                        old.add(lit3)
+                        new.lits[i] = Literal(bytes(""), lit2.cut)
+                    }
+                } else {
+                    if position(lit2.value, candidate.value)? as i {
+                        new.lits[i] = Literal(lit2.value, true)
+                        mut var newCandidate = Literal(candidate.value[:i], true)
+                        old.add(newCandidate)
+                        candidate = Literal(bytes(""), candidate.cut)
+                    }
+                }
+                continue #|2|# if not candidate
+            }
+            new.lits.add(candidate)
+        }
+        new.lits = [i for var i in new.lits if i]
+        # new.lits.sort()
+        # new.lits.dedup()
+        return new
+    }
+
+    public method unambiguousSuffixes() -> Literals {
+        final var lits = cls()
+        lits.limitSize = self.limitSize
+        lits.limitClass = self.limitClass
+        lits.lits = [reversed(i) for var i in self.lits]
+        final var unamb = lits.unambiguousPrefixes()
+        unamb.reverse()
+        return unamb
+    }
+
+    public mut method unionPrefixes(Hir expr) -> bool {
+        mut var lits = self.toEmpty()
+        prefixes(expr, lits)
+        return lits and not lits.containsEmpty() and self.unionWith(lits)
+    }
+
+    public mut method unionSuffixes(Hir expr) -> bool {
+        mut var lits = self.toEmpty()
+        suffixes(expr, lits)
+        lits.reverse()
+        return lits and not lits.containsEmpty() and self.unionWith(lits)
+    }
+
+    public mut method unionWith(cls lits) -> bool {
+        if self.numBytes() + lits.numBytes() > self.limitSize {
+            return false
+        }
+        if not lits {
+            self.lits.add(Literal(bytes(""), false))
+        } else {
+            self.lits.addAll(lits.lits)
+        }
+        return true
+    }
+
+    public mut method crossProduct(cls lits) -> bool {
+        return true if not lits
+        mut int sizeAfter
+        if not self or not self.anyComplete() {
+            sizeAfter = self.numBytes()
+            for var litsLit in lits.literals {
+                sizeAfter += litsLit.length
+            }
+        } else {
+            sizeAfter = sum([lit.length if lit.cut else 0 for var lit in self.lits])
+            for var litsLit in lits.literals {
+                for var selfLit in self.literals {
+                    if not selfLit.cut {
+                        sizeAfter += selfLit.length + litsLit.length
+                    }
+                }
+            }
+        }
+        return false if sizeAfter > self.limitSize
+
+        mut var base = self.removeComplete()
+        if not base {
+            base = [Literal(bytes(""), false)]
+        }
+        for var litsLit in lits.literals {
+            for var selfLit in base {
+                self.lits.add(Literal(selfLit.value + litsLit.value, litsLit.cut))
+            }
+        }
+        return true
+    }
+
+    public mut method crossAdd(bytes b) -> bool {
+        return true if not b
+
+        if not self.lits {
+            var i = min(self.limitSize, b.length)
+            self.lits.add(Literal(b[:i], false))
+            self.lits[0] = Literal(self.lits[0].value, i < b.length)
+            return not self.lits[0].cut
+        }
+        var size = self.numBytes()
+        return false if size + self.lits.length >= self.limitSize
+
+        mut var i = 1
+        while size + (i * self.lits.length) <= self.limitSize and i < b.length {
+            i++
+        }
+        for int i, var lit in enumerate(self.lits) {
+            if not lit.cut {
+                self.lits[i] = Literal(lit.value + b[:i], lit.cut)
+            }
+        }
+        return true
+    }
+
+    public mut method addCharClass(ClassUnicode type) -> bool {
+        return self._addCharClass(type, false)
+    }
+
+    public mut method addCharClassReversed(ClassUnicode type) -> bool {
+        return self._addCharClass(type, true)
+    }
+
+    private mut method _addCharClass(ClassUnicode type, bool reverse) -> bool {
+        return false if self.classExceedsLimits(clsCharCount(type))
+
+        mut var base = self.removeComplete()
+        if not base {
+            base = [Literal.empty()]
+        }
+        for var r in type {
+            var s, var e = int(r.start), int(r.end) + 1
+            for var c in filterMap([s:e], char.fromInt) {
+                for var lit in base {
+                    final var byteVal = str(c).encode("UTF-8")
+                    if reverse {
+                        byteVal.reverse()
+                    }
+                    self.lits.add(lit.cloneAdd(byteVal))
+                }
+            }
+        }
+        return true
+    }
+
+    public mut method addByteClass(ClassBytes type) -> bool {
+        raise NotImplemented()
+    }
+
+    public mut method cut() {
+        self.lits = [Literal(l.value, true) for var l in self.lits]
+    }
+
+    public mut method reverse() {
+        self.lits.reverse()
+    }
+
+    public mut method add(Literal lit) -> bool {
+        return false if self.numBytes() + lit.length > self.limitSize
+
+        self.lits.add(lit)
+        return true
+    }
+
+    public method clone() -> mut Literals {
+        mut var result = Literals()
+        result.lits = self.lits[:]
+        result.limitSize = self.limitSize
+        result.limitClass = self.limitClass
+        return result
+    }
+
+    private method numBytes() -> int {
+        return sum((i.length for var i in self.literals))
+    }
+
+    private method classExceedsLimits(int size) -> bool {
+        return true if size > self.limitClass
+
+        if not self.lits {
+            return size > self.limitSize
+        } else {
+            return sum(((lit.length + 1) * size for var lit in self.lits)) > self.limitSize
+        }
+    }
+
+    private mut method removeComplete() -> mut list[Literal] {
+        mut list[Literal] base = []
+        var lits = self.lits
+        self.lits = []
+        for var lit in lits {
+            if lit.cut {
+                self.lits.add(lit)
+            } else {
+                base.add(lit)
+            }
+        }
+        return base
+    }
+}
+
+const class Literal {
+    public bytes value
+    bool cut
+
+    public operator new (bytes value, bool cut) {
+        self.value = value
+        self.cut = cut
+    }
+
+    public static method empty() -> Literal {
+        return Literal(bytes(""), false)
+    }
+
+    public operator iter -> int {
+        yield from self.value
+    }
+
+    public operator [:] (slice s) -> bytes {
+        return self.value.operator[:](s)
+    }
+
+    public operator reversed -> int {
+        yield from cls(self.value[::-1], self.cut)
+    }
+
+    public operator repr {
+        if self.cut {
+            return f"Cut({self.value !r})"
+        } else {
+            return f"Complete({self.value !r})"
+        }
+    }
+
+    public property int length {
+        get {
+            return self.value.length
+        }
+    }
+
+    public method get(int i) -> int? {
+        return self.value.get(i)
+    }
+
+    public method cloneAdd(bytes value) -> mut Literal {
+        return Literal(self.value + value, self.cut)
+    }
+}
+
+func suffixes(Hir expr, mut Literals lits) {
+    raise NotImplemented()
+}
+
+func prefixes(Hir expr, mut Literals lits) {
+    switch expr.kind {
+        case HirKind.Literal as l {
+            switch l {
+                case HirLiteral.Unicode as c {
+                    lits.crossAdd(bytes(c))
+                }
+                case HirLiteral.Byte as b {
+                    lits.crossAdd(bytes(b))
+                }
+            }
+        }
+        case HirKind.Class as c {
+            switch c {
+                case HirClass.Unicode as c {
+                    if not lits.addCharClass(c) {
+                        lits.cut()
+                    }
+                }
+                case HirClass.Bytes as c {
+                    if not lits.addByteClass(c) {
+                        lits.cut()
+                    }
+                }
+            }
+        }
+        case HirKind.Group as pair {
+            prefixes(pair.hir, lits)
+        }
+        case HirKind.Repetition as x {
+            switch x.kind {
+                case RepetitionKind.ZeroOrOne {
+                    repeatZeroOrOneLiterals(x.hir, lits, prefixes)
+                }
+                case RepetitionKind.ZeroOrMore {
+                    repeatZeroOrMoreLiterals(x.hir, lits, prefixes)
+                }
+                case RepetitionKind.OneOrMore {
+                    repeatOneOrMoreLiterals(x.hir, lits, prefixes)
+                }
+                case RepetitionKind.Range as rng {
+                    switch rng {
+                        case RepetitionRange.Exactly as m {
+                            repeatRangeLiterals(x.hir, m, m, x.greedy, lits, prefixes)
+                        }
+                        case RepetitionRange.AtLeast as m {
+                            repeatRangeLiterals(x.hir, m, null, x.greedy, lits, prefixes)
+                        }
+                        case RepetitionRange.Bounded as pair {
+                            repeatRangeLiterals(x.hir, *pair, x.greedy, lits, prefixes)
+                        }
+                    }
+                }
+            }
+        }
+        case HirKind.Concat as es {
+            if es.length == 1 {
+                prefixes(es[0], lits)
+            } elif es {
+                for var e in es {
+                    if e.kind.Anchor? as a {
+                        if a is Anchor.START_TEXT {
+                            if not lits {
+                                # lits.cut()
+                                break
+                            }
+                            lits.add(Literal.empty())
+                            continue
+                        }
+                    }
+                    mut var lits2 = lits.toEmpty()
+                    prefixes(e, lits2)
+                    if not lits.crossProduct(lits2) or not lits2.anyComplete() {
+                        lits.cut()
+                        break
+                    }
+                }
+            }
+        }
+        case HirKind.Alternation as es {
+            alternateLiterals(es, lits, prefixes)
+        }
+        default {
+            lits.cut()
+        }
+    }
+}
+
+func position(bytes needle, bytes haystack) -> int? {
+    mut int i = 0
+    while haystack.length >= needle.length {
+        if needle == haystack[:needle.length] {
+            return i
+        }
+        i++
+        haystack = haystack[1:]
+    }
+    return null
+}
+
+func repeatZeroOrOneLiterals(
+    Hir e, mut Literals lits, Callable[Hir, mut Literals, []] f
+) {
+    final var lits2 = lits.clone()
+    final var lits3 = lits.toEmpty()
+    lits3.limitSize = lits.limitSize // 2
+    f(e, lits3)
+
+    if not lits3 or not lits2.crossProduct(lits3) {
+        lits.cut()
+        return
+    }
+    lits2.add(Literal.empty())
+    if not lits.unionWith(lits2) {
+        lits.cut()
+    }
+}
+
+func repeatZeroOrMoreLiterals(
+    Hir e, mut Literals lits, Callable[Hir, mut Literals, []] f
+) {
+    final var lits2 = lits.clone()
+    final var lits3 = lits.toEmpty()
+    lits3.limitSize = lits.limitSize // 2
+    f(e, lits3)
+
+    if not lits3 or not lits2.crossProduct(lits3) {
+        lits.cut()
+        return
+    }
+    lits2.cut()
+    lits2.add(Literal.empty())
+    if not lits.unionWith(lits2) {
+        lits.cut()
+    }
+}
+
+func repeatOneOrMoreLiterals(
+    Hir e, mut Literals lits, Callable[Hir, mut Literals, []] f
+) {
+    f(e, lits)
+    lits.cut()
+}
+
+func repeatRangeLiterals(
+    Hir e, int minimum, int? maximum, bool greedy,
+    mut Literals lits,
+    Callable[Hir, mut Literals, []] f,
+) {
+    if not minimum {
+        # This is a bit conservative. If `max` is set, then we could
+        # treat this as a finite set of alternations. For now, we
+        # just treat it as `e*`.
+        f(
+            Hir.repetition(
+                Repetition(RepetitionKind.ZeroOrMore(), greedy, e)
+            ),
+            lits,
+        )
+    } else {
+        if minimum > 0 {
+            var n = min(lits.limitSize, minimum)
+            var es = list[Hir](repeat(e, n))
+            f(Hir.concat(es), lits)
+            if n < minimum or lits.containsEmpty() {
+                lits.cut()
+            }
+        }
+        if minimum < (maximum ?? minimum + 1) {
+            lits.cut()
+        }
+    }
+}
+
+func alternateLiterals(
+    list[Hir] es,
+    mut Literals lits,
+    Callable[Hir, mut Literals, []] f,
+) {
+    mut var lits2 = lits.toEmpty()
+    for var e in es {
+        mut var lits3 = lits.toEmpty()
+        lits3.limitSize = lits.limitSize // 5
+        f(e, lits3)
+        if not lits3 or not lits2.unionWith(lits3) {
+            # If we couldn't find suffixes for *any* of the
+            # alternates, then the entire alternation has to be thrown
+            # away and any existing members must be frozen. Similarly,
+            # if the union couldn't complete, stop and freeze.
+            lits.cut()
+            return
+        }
+    }
+    if not lits.crossProduct(lits2) {
+        lits.cut()
+    }
+}
+
+func clsCharCount(ClassUnicode type) -> int {
+    return sum((1 + int(r.end) - int(r.start) for var r in type))
+}
+
+# TODO: Pull in stdlib functions for this
+
+func sum(Iterable[int] vars) -> int {
+    mut int result = 0
+    for var val in vars {
+        result += val
+    }
+    return result
+}
+
+func min(int a, int b) -> int {
+    return a if a < b else b
+}
+
+# FIXME: Get generification of Callable working
+
+generator func filterMap(Iterable[int] iter, Callable[int, [char?]] transform) -> char {
+    for var i in iter {
+        if transform(i)? as val {
+            yield val
+        }
+    }
+}

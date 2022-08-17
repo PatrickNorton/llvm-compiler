@@ -1,0 +1,44 @@
+from .constants import MIN_SURROGATE, MAX_SURROGATE
+
+export CharRange
+
+$derive(\==)
+const class CharRange {
+    private char start
+    private char stop
+
+    public operator new (char start, char stop) {
+        self.start = start
+        self.stop = stop
+    }
+
+    public operator in (char c) -> bool {
+        return int(c) >= int(self.start) and int(c) < int(self.stop)
+    }
+
+    public operator iter -> char {
+        mut var i = int(self.start)
+        while i < int(self.stop) {
+            yield char(i)
+            i++
+            if i == int(MIN_SURROGATE) {
+                i = int(MAX_SURROGATE) + 1
+            }
+        }
+    }
+
+    public operator reversed -> char {
+        mut var i = int(self.stop)
+        while i < int(self.start) {
+            i--
+            yield char(i)
+            if i == int(MAX_SURROGATE) + 1 {
+                i = int(MIN_SURROGATE)
+            }
+        }
+    }
+
+    public operator repr {
+        return f"CharRange([{self.start !r}:{self.stop !r}])"
+    }
+}

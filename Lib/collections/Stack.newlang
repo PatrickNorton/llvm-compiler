@@ -1,0 +1,47 @@
+# from interfaces typeget Iterable
+
+export Stack
+
+
+int DEFAULT_SIZE = 16
+
+
+final class Stack[T] from Iterable[T] {
+    private Array[T?] values
+    pubget int length
+
+    public operator new {
+        self.values = Array(DEFAULT_SIZE, null)
+    }
+
+    public operator iter -> T {
+        yield from reversed(self.values)
+    }
+
+    public operator repr {
+        return f"{type(self)}({list(self.values[:self.length])})"
+    }
+
+    public mut method push(T value) {
+        if self.length == self.values.length {
+            self.values = Array.copy(self.values, size=self.values.length*2)
+        }
+        self.values[self.length] = value
+        self.length++
+    }
+
+    public mut method pushAll(Iterable[T] values) {
+        for T value in values {
+            self.push(value)
+        }
+    }
+
+    public mut method pop() -> T {
+        self.length--
+        return self.values[self.length]!!
+    }
+
+    public method peek() -> T {
+        return self.values[self.length]!!
+    }
+}

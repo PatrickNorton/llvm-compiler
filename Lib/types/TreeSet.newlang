@@ -1,0 +1,43 @@
+from collections import AbstractSet
+from interfaces import Iterable
+from .TreeMap import TreeMap
+
+export TreeSet
+
+class TreeSet[T[Comparable[T]]] from AbstractSet[T] {
+    private TreeMap[T, null] internal
+    pubget int length := internal.length
+
+    public operator new (*T values) {
+        self.internal = {i: null for T i in values}
+    }
+
+    public operator new (Iterable[T] items) {
+        self.internal = {i: null for T i in values}
+    }
+
+    public operator del[] (T value) {
+        del self.internal[value]
+    }
+
+    public operator in (T value) {
+        return value in self.internal
+    }
+
+    public method add(T value) {
+        self.internal[value] = true
+    }
+
+    public method remove(T value) {
+        del self.internal[value]
+    }
+
+    public method discard(T value) {
+        return if value not in self
+        del self[value]
+    }
+
+    public method clear() {
+        self.internal.clear()
+    }
+}

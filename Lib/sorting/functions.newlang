@@ -1,0 +1,135 @@
+from itertools import all, withNext
+import random
+from interfaces typeget Iterable, Comparable
+
+from collections import Deque
+
+export bogoSort, heapSort, mergeSort, quickSort
+
+
+generic T[Comparable[T]]
+func bogoSort(Iterable[T] iterable) -> list[T] {
+    var values = Array.of(iterable)
+    while not isSorted(values) {
+        random.iShuffle(values)
+    }
+    return list(values)
+}
+
+
+generic T[Comparable[T]]
+func isSorted(Array[T] values) -> bool {
+    return values.length <= 1 or all(i < j for T i, T j in withNext(values))
+}
+
+
+generic T[Comparable[T]]
+func heapSort(Iterable[T] iterable) -> list[T] {
+    var values = Array.of(iterable)
+    # Build the heap in array a so that largest value is at the root
+    heapify(values)
+    #|
+     The following loop maintains the invariants that a[0:end] is a heap and
+     every element beyond end is greater than everything before it (so
+     a[end:count] is in sorted order)
+     |#
+    for int end in [count:0:-1] {  # Remember: [count:0:-1] will output count-1, ..., 0
+        a[end], values[0] = values[0], values[end]
+        siftDown(values, 0, end)
+    }
+    return list(values)
+}
+
+
+generic T[Comparable[T]]
+func heapify(Array[T] values) {
+    for int start in [values.length // 2 : 0 : -1] {
+        siftDown(values, start, values.length - 1)
+    }
+}
+
+
+generic T[Comparable[T]]
+func siftDown(Array[T] values, int start, int end) {
+    int root = start
+    while 2*root < end {
+        int child = 2*root - 1
+        int swap = root
+        if a[swap] < a[child] {
+            swap = child
+        }
+        if child < end and values[swap] < values[child + 1] {
+            swap = child + 1
+        }
+        return if swap == root
+        a[root], a[swap] = a[swap], a[root]
+        root = swap
+    }
+}
+
+
+generic T[Comparable[T]]
+func mergeSort(Iterable[T] iterable) -> list[T] {
+    return list(msInner(Deque(iterable)))
+}
+
+
+generic T[Comparable[T]]
+func msInner(Deque[T] values) -> Deque[T] {
+    return values if values.length < 2
+
+    # Recursive case. First, divide the list into equal-sized sub-lists
+    # consisting of the first half and second half of the list.
+    var left = values[:values.length//2]
+    var right = values[values.length//2:]
+
+    left = msInner(left)
+    right = msInner(right)
+
+    return merge(left, right)
+}
+
+
+generic T[Comparable[T]]
+func merge(Deque[T] left, Deque[T] right) -> Deque[T] {
+    var result = Deque[T]()
+
+    while left and right {
+        result.append((left if left[0] < right[0] else right).pop())
+    }
+    # Either left or right may have elements left; consume them.
+    return result + (left if left else right)
+}
+
+
+generic T[Comparable[T]]
+func quickSort(Iterable[T] iterable) -> list[T] {
+    var values = Array.of(iterable)
+    qsInner(iterable, 0, iterable.length - 1)
+    return list(values)
+}
+
+
+generic T[Comparable[T]]
+func qsInner(Array[T] values, int low, int high) {
+    if low < high {
+        int p = partition(values, low, high)
+        qsInner(values, low, p - 1)
+        qsInner(values, p + 1, high)
+    }
+}
+
+
+generic T[Comparable[T]]
+func partition(Array[T] values, int low, int high) -> int {
+    var pivot = values[high]
+    int i = low
+    for int j in [low:high+1] {
+        if values[j] < pivot {
+            values[i], values[j] = values[j], values[i]
+            i++
+        }
+    }
+    a[i], a[j] = a[j], a[i]
+    return i
+}

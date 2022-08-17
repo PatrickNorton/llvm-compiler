@@ -1,0 +1,121 @@
+from .Abstracts typeget AbstractDict
+
+from math import min
+
+export OrderedDict
+
+
+dec RESIZE_THRESHOLD = 1.5
+
+
+class OrderedDict[K, V] from AbstractDict[K, V] {
+    private mut list[tuple[int, K, V]?] items
+    private mut dict[K, int] values
+
+    public property int length {
+        get {
+            return self.values.length
+        }
+    }
+
+    public operator new (*tuple[K, V] values) {
+        self.items = list(values)
+        self.values = {kv[0]: i for int i, var kv in enumerate(values)}
+        self.nextOpen = values.length
+    }
+
+    public operator [] (K key) -> V {
+        return (self.items[self.values[K]]!!).2
+    }
+
+    public mut operator []= (K key, V value) {
+        if self.values.get(key)? as idx {
+            self.items[idx] = (hash(key), key, value)
+        } else {
+            # Resize if there are too many nulls
+            if self.items.length >= RESIZE_THRESHOLD * self.values.length {
+                self.shrink()
+            }
+            int itemIndex = self.items.length
+            self.items[itemIndex] = value
+            self.values[key] = itemIndex
+        }
+    }
+
+    private mut method shrink() {
+        mut int reduceIndex = 0
+        var tmpItems = self.items
+        self.items = []
+        for int i, var keyVal in enumerate(tmpItems) {
+            if keyVal? as kvNotNull {
+                self.items.append(kvNotNull)
+                self.values[kvNotNull.1] = i - reduceIndex
+            } else {
+                reduceIndex++
+            }
+        }
+    }
+
+    public mut operator del[] (K key) {
+        self.items[self.values[key]] = null
+        del self.values[key]
+    }
+
+    public operator iter -> K, V {
+        for var entry in self.values {
+            if entry? as e {
+                yield e.1, e.2
+            }
+        }
+    }
+
+    public operator in (K key) {
+        return key in self.values
+    }
+
+    public operator == (dict[K, V] other) {
+        return other instanceof OrderedDict and (other casted OrderedDict).items == self.items
+    }
+
+    public operator hash {
+        return hash(f"dict[{K}, {V}]", self.values)
+    }
+
+    public operator repr {
+        str values = ", ".join(f"{i}: {j}" for K i, V j in self)
+        return f"{type(self)}({values})"
+    }
+
+    public method get() -> V? {
+        if self.values.get(k)? as idx {
+            return self.items[idx]?.2
+        } else {
+            return null
+        }
+    }
+
+    public generator method keys() -> K {
+        yield from self.values.keys()
+    }
+
+    public method clear() {
+        self.values.clear()
+        self.items.fill(null)
+    }
+
+    public method setDefault(K key, V value, /) -> V {
+        if self.get(value)? as val {
+            return val
+        } else {
+            self[value] = val
+        }
+    }
+
+    public method replace(K key, V value, /) -> V? {
+        if self.values.get(key)? as idx {
+            return self.items.replace(idx, value)!!.2
+        } else {
+            return null
+        }
+    }
+}

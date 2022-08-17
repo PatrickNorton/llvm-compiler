@@ -1,0 +1,218 @@
+from .literal import LiteralSearcher
+
+export Program, Inst, InstSave, InstSplit, InstEmptyLook
+export InstChar, InstRanges, InstBytes, EmptyLook, InstPtr
+
+typedef InstPtr as int
+
+class Program {
+    public mref list[Inst] insts
+    public mut list[InstPtr] matches
+    public mut list[str?] captures
+    public mref dict[str, int] captureNameIdx
+    public mut InstPtr start
+    public mref bytes byteClasses
+    public mut bool onlyUtf8
+    public mut bool isBytes
+    public mut bool isDfa
+    public mut bool isReverse
+    public mut bool isAnchoredStart
+    public mut bool isAnchoredEnd
+    public mut bool hasUnicodeWordBoundary
+    public mut LiteralSearcher prefixes
+    public mut int dfaSizeLimit
+
+    public operator new() {
+        self.insts = []
+        self.matches = []
+        self.captures = []
+        self.captureNameIdx = {:}
+        self.start = 0
+        self.byteClasses = bytes("")
+        self.onlyUtf8 = true
+        self.isBytes = false
+        self.isDfa = false
+        self.isReverse = false
+        self.isAnchoredStart = false
+        self.isAnchoredEnd = false
+        self.hasUnicodeWordBoundary = false
+        self.prefixes = LiteralSearcher.empty()
+        self.dfaSizeLimit = 2 * (1 << 20)
+    }
+
+    public operator [] (int index) -> Inst {
+        return self.insts[index]
+    }
+
+    public operator iter () -> Inst {
+        yield from self.insts
+    }
+
+    public property int length {
+        get {
+            return self.insts.length
+        }
+    }
+
+    public method skip(int pc) -> int {
+        mut int pc2 = pc
+        while true {
+            switch self[pc2] {
+                case Inst.Save as i {
+                    pc2 = i.jump
+                }
+                default {
+                    return pc2
+                }
+            }
+        }
+    }
+
+    public method leadsToMatch(int pc) -> bool {
+        if self.matches.length > 1 {
+            # If we have a regex set, then we have more than one ending
+            # state, so leading to one of those states is generally
+            # meaningless.
+            return false
+        }
+        return self[self.skip(pc)].Match?
+    }
+
+    public method needsDotstar() -> bool {
+        return self.isDfa and not self.isReverse and not self.isAnchoredStart
+    }
+
+    public method usesBytes() -> bool {
+        return self.isBytes or self.isDfa
+    }
+}
+
+union Inst {
+    int Match
+    InstSave Save
+    InstSplit Split
+    InstEmptyLook EmptyLook
+    InstChar Char
+    InstRanges Ranges
+    InstBytes Bytes
+
+    public method isMatch() -> bool {
+        return self.Match?
+    }
+}
+
+$derive(repr)
+class InstSave {
+    public InstPtr jump
+    public int slot
+
+    public operator new(InstPtr jump, int slot) {
+        self.jump = jump
+        self.slot = slot
+    }
+}
+
+$derive(repr)
+class InstSplit {
+    public InstPtr jump1
+    public InstPtr jump2
+
+    public operator new(InstPtr jump1, InstPtr jump2) {
+        self.jump1 = jump1
+        self.jump2 = jump2
+    }
+}
+
+$derive(repr)
+class InstEmptyLook {
+    public InstPtr jump
+    public EmptyLook look
+
+    public operator new(InstPtr jump, EmptyLook look) {
+        self.jump = jump
+        self.look = look
+    }
+}
+
+enum EmptyLook {
+    # Start of line or input.
+    START_LINE,
+    # End of line or input.
+    END_LINE,
+    # Start of input.
+    START_TEXT,
+    # End of input.
+    END_TEXT,
+    # Word character on one side and non-word character on other.
+    WORD_BOUNDARY,
+    # Word character on both sides or non-word character on both sides.
+    NOT_WORD_BOUNDARY,
+    # ASCII word boundary.
+    WORD_BOUNDARY_ASCII,
+    # Not ASCII word boundary.
+    NOT_WORD_BOUNDARY_ASCII
+}
+
+$derive(repr)
+class InstChar {
+    public InstPtr jump
+    public char c
+
+    public operator new(InstPtr jump, char c) {
+        self.jump = jump
+        self.c = c
+    }
+}
+
+$derive(repr)
+class InstRanges {
+    public InstPtr jump
+    public list[tuple[char, char]] ranges
+
+    public operator new(InstPtr jump, list[tuple[char, char]] ranges) {
+        self.jump = jump
+        self.ranges = ranges
+    }
+
+    public method matches(char c) -> bool {
+        for var r in self.ranges[:4] {
+            return false if int(c) < int(r.0)
+            return true if int(c) <= int(r.1)
+        }
+        for var r in self.ranges {
+            if int(c) in [int(r.0):int(r.1)] {
+                return true
+            }
+        }
+        return false
+    }
+
+    public method numChars() -> int {
+        return sum((1 + int(x.0) - int(x.1) for var x in self.ranges))
+    }
+}
+
+$derive(repr)
+class InstBytes {
+    public InstPtr jump
+    public int start
+    public int end
+
+    public operator new(InstPtr jump, int start, int end) {
+        self.jump = jump
+        self.start = start
+        self.end = end
+    }
+
+    public method matches(int b) -> bool {
+        return b in [self.start:self.end+1]
+    }
+}
+
+func sum(Iterable[int] values) -> int {
+    mut int result = 0
+    for var i in values {
+        result += i
+    }
+    return result
+}

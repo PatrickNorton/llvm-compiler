@@ -1,0 +1,919 @@
+from itertools import all
+
+from .hir import Hir, Class, Literal, Anchor, ClassUnicodeRange, WordBoundary, GroupKind, RepetitionKind
+from .hir import Repetition, ClassBytesRange, HirKind, HirLiteral, RepetitionRange
+from .prog import InstPtr, Program, EmptyLook, Inst, InstSplit, InstSave, InstEmptyLook, InstChar, InstRanges, InstBytes
+from .utf8 import Utf8Sequences, Utf8Sequence, Utf8Range
+
+export Compiler
+
+class Patch {
+    Hole hole
+    InstPtr entry
+
+    public operator new (Hole hole, InstPtr entry) {
+        self.hole = hole
+        self.entry = entry
+    }
+}
+
+class Compiler {
+    final list[MaybeInst] insts
+    mut Program compiled
+    final dict[str, int] captureNameIdx
+    int numExprs
+    mut int sizeLimit_
+    final SuffixCache suffixCache
+    mut Utf8Sequences? utf8Seqs
+    final ByteClassSet byteClasses
+
+    public operator new() {
+        self.insts = []
+        self.compiled = Program()
+        self.captureNameIdx = {:}
+        self.numExprs = 0
+        self.sizeLimit_ = 10 * (1 << 20)
+        self.suffixCache = SuffixCache(1000)
+        self.utf8Seqs = Utf8Sequences(c'\x00', c'\x00')
+        self.byteClasses = ByteClassSet()
+    }
+
+    public mut method sizeLimit(int sizeLimit) -> mut cls {
+        self.sizeLimit_ = sizeLimit
+        return self
+    }
+
+    public mut method bytes(bool yes) -> mut cls {
+        self.compiled.isBytes = yes
+        return self
+    }
+
+    public mut method onlyUtf8(bool yes) -> mut cls {
+        self.compiled.onlyUtf8 = yes
+        return self
+    }
+
+    public mut method dfa(bool yes) -> mut cls {
+        self.compiled.isDfa = yes
+        return self
+    }
+
+    public mut method reverse(bool yes) -> mut cls {
+        self.compiled.isReverse = yes
+        return self
+    }
+
+    public mut method compile(list[Hir] exprs) -> mut Program {
+        assert exprs
+        if exprs.length == 1 {
+            return self.compileOne(exprs[0])
+        } else {
+            return self.compileMany(exprs)
+        }
+    }
+
+    private mut method compileOne(Hir expr) -> mut Program {
+        mref var dotstarPatch = Patch(Hole.None(), 0)
+        self.compiled.isAnchoredStart = expr.isAnchoredStart()
+        self.compiled.isAnchoredEnd = expr.isAnchoredEnd()
+        if self.compiled.needsDotstar() {
+            dotstarPatch = self.cDotstar()
+            self.compiled.start = dotstarPatch.entry
+        }
+        self.compiled.captures = [null]
+        var patch = self.cCapture(0, expr) ?? self.nextInst()
+        if self.compiled.needsDotstar() {
+            self.fill(dotstarPatch.hole, patch.entry)
+        } else {
+            self.compiled.start = patch.entry
+        }
+        self.fillToNext(patch.hole)
+        self.compiled.matches = [self.insts.length]
+        self.pushCompiled(Inst.Match(0))
+        return self.compileFinish()
+    }
+
+    private mut method compileMany(list[Hir] exprs) -> mut Program {
+        assert exprs.length > 1
+
+        self.compiled.isAnchoredStart = all(e.isAnchoredStart() for var e in exprs)
+        self.compiled.isAnchoredEnd = all(e.isAnchoredEnd() for var e in exprs)
+        mref var dotstarPatch = Patch(Hole.None(), 0)
+        if self.compiled.needsDotstar() {
+            dotstarPatch = self.cDotstar()
+            self.compiled.start = dotstarPatch.entry
+        } else {
+            self.compiled.start = 0 # first instruction is always split
+        }
+        self.fillToNext(dotstarPatch.hole)
+
+        mut var prevHole = Hole.None()
+        for var i, var expr in enumerate(exprs[:-1]) {
+            self.fillToNext(prevHole)
+            var split = self.pushSplitHole()
+            var patch = self.cCapture(0, expr) ?? self.nextInst()
+            self.fillToNext(patch.hole)
+            self.compiled.matches.add(self.insts.length)
+            self.pushCompiled(Inst.Match(i))
+            prevHole = self.fillSplit(split, patch.entry, null)
+        }
+        var i = exprs.length - 1
+        var patch = self.cCapture(0, exprs[-1]) ?? self.nextInst()
+        self.fill(prevHole, patch.entry)
+        self.fillToNext(patch.hole)
+        self.compiled.matches.add(self.insts.length)
+        self.pushCompiled(Inst.Match(i))
+        return self.compileFinish()
+    }
+
+    private mut method compileFinish() -> mut Program {
+        self.compiled.insts = [inst.unwrap() for var inst in self.insts]
+        self.compiled.byteClasses = self.byteClasses.byteClasses()
+        self.compiled.captureNameIdx = self.captureNameIdx
+        return self.compiled
+    }
+
+    private mut method c(Hir expr) -> Patch? {
+        self.checkSize()
+        switch expr.kind {
+            case HirKind.Empty { return null }
+            case HirKind.Literal as l {
+                switch l {
+                    case HirLiteral.Unicode as c { return self.cChar(c) }
+                    case HirLiteral.Byte as b {
+                        assert self.compiled.usesBytes()
+                        return self.cByte(b)
+                    }
+                }
+            }
+            case HirKind.Class as c {
+                switch c {
+                    case Class.Unicode as typ {
+                        return self.cClass(typ.ranges)
+                    }
+                    case Class.Bytes as typ {
+                        if self.compiled.usesBytes() {
+                            raise NotImplemented()
+                            # return self.cClassBytes(typ.ranges())
+                        } else {
+                            assert typ.isAllAscii()
+                            final list[ClassUnicodeRange] charRanges = []
+                            for var r in typ {
+                                var s, var e = char(r.lower), char(r.upper)
+                                charRanges.add(ClassUnicodeRange(s, e))
+                            }
+                            return self.cClass(charRanges)
+                        }
+                    }
+                }
+            }
+            case HirKind.Anchor as a {
+                switch a {
+                    case Anchor.START_LINE {
+                        self.byteClasses.setRange(y"\n", y"\n")
+                        return self.cEmptyLook(
+                            EmptyLook.END_LINE if self.compiled.isReverse else EmptyLook.START_LINE
+                        )
+                    }
+                    case Anchor.END_LINE {
+                        self.byteClasses.setRange(y"\n", y"\n")
+                        return self.cEmptyLook(
+                            EmptyLook.START_LINE if self.compiled.isReverse else EmptyLook.END_LINE
+                        )
+                    }
+                    case Anchor.START_TEXT {
+                        return self.cEmptyLook(
+                            EmptyLook.END_LINE if self.compiled.isReverse else EmptyLook.START_LINE
+                        )
+                    }
+                    case Anchor.END_TEXT {
+                        return self.cEmptyLook(
+                            EmptyLook.START_LINE if self.compiled.isReverse else EmptyLook.END_LINE
+                        )
+                    }
+                    default => raise NotImplemented()
+                }
+            }
+            case HirKind.WordBoundary as w {
+                switch w {
+                    case WordBoundary.UNICODE_NEGATE {
+                        self.compiled.hasUnicodeWordBoundary = true
+                        self.byteClasses.setWordBoundary()
+                        return self.cEmptyLook(EmptyLook.NOT_WORD_BOUNDARY)
+                    }
+                    case WordBoundary.ASCII {
+                        self.byteClasses.setWordBoundary()
+                        return self.cEmptyLook(EmptyLook.WORD_BOUNDARY_ASCII)
+                    }
+                    case WordBoundary.ASCII_NEGATE {
+                        self.byteClasses.setWordBoundary()
+                        return self.cEmptyLook(EmptyLook.NOT_WORD_BOUNDARY_ASCII)
+                    }
+                    default => raise NotImplemented()
+                }
+            }
+            case HirKind.Group as g {
+                switch g.kind {
+                    case GroupKind.NonCapturing {
+                        return self.c(g.hir)
+                    }
+                    case GroupKind.CaptureIndex as index {
+                        if index >= self.compiled.captures.length {
+                            self.compiled.captures.add(null)
+                        }
+                        return self.cCapture(index * 2, g.hir)
+                    }
+                    case GroupKind.CaptureName as t {
+                        var index = t.1
+                        if index >= self.compiled.captures.length {
+                            var n = t.0
+                            self.compiled.captures.add(n)
+                            self.captureNameIdx[n] = index
+                        }
+                        return self.cCapture(index * 2, g.hir)
+                    }
+                }
+            }
+            case HirKind.Concat as es {
+                return self.cConcat(reversed(es) if self.compiled.isReverse else es)
+            }
+            case HirKind.Alternation as es {
+                return self.cAlternate(es)
+            }
+            case HirKind.Repetition as rep {
+                return self.cRepeat(rep)
+            }
+        }
+    }
+
+    private mut method cCapture(int firstSlot, Hir expr) -> Patch? {
+        if self.numExprs >= 1 or self.compiled.isDfa {
+            return self.c(expr)
+        } else {
+            var entry = self.insts.length
+            var hole = self.pushHole(InstHole.Save(firstSlot))
+            var patch = self.c(expr) ?? self.nextInst()
+            self.fill(hole, patch.entry)
+            self.fillToNext(patch.hole)
+            var hole2 = self.pushHole(InstHole.Save(firstSlot + 1))
+            return Patch(hole2, entry)
+        }
+    }
+
+    private mut method cDotstar() -> Patch {
+        return self.c(
+            Hir.repetition(
+                Repetition(
+                    RepetitionKind.ZeroOrMore(),
+                    false,
+                    Hir.any(not self.compiled.onlyUtf8),
+                )
+            )
+        )!!
+    }
+
+    private mut method cChar(char c) -> Patch? {
+        if self.compiled.usesBytes() {
+            if int(c) in [0:256] {
+                var b = bytes(c)[0]
+                var hole = self.pushHole(InstHole.Bytes((b, b)))
+                self.byteClasses.setRange(b, b)
+                return Patch(hole, self.insts.length - 1)
+            } else {
+                return self.cClass([ClassUnicodeRange(c, c)])
+            }
+        } else {
+            var hole = self.pushHole(InstHole.Char(c))
+            return Patch(hole, self.insts.length - 1)
+        }
+    }
+
+    private mut method cClass(list[ClassUnicodeRange] ranges) -> Patch? {
+        assert ranges
+        if self.compiled.usesBytes() {
+            return CompileClass(self, ranges).compile()
+        } else {
+            var ranges = [(r.start, r.end) for var r in ranges]
+            var hole = self.pushHole(
+                InstHole.Char(ranges[0].0)
+                    if ranges.length == 1 and ranges[0].0 == ranges[0].1
+                    else InstHole.Ranges(ranges)
+            )
+            return Patch(hole, self.insts.length - 1)
+        }
+    }
+
+    private mut method cByte(int b) -> Patch? {
+        return self.cClassBytes([ClassBytesRange(b, b)])
+    }
+
+    private mut method cClassBytes(list[ClassBytesRange] ranges) -> Patch? {
+        assert ranges
+
+        var firstSplitEntry = self.insts.length
+        mut list[Hole] holes = []
+        mut var prevHole = Hole.None()
+        for var r in ranges[:-1] {
+            self.fillToNext(prevHole)
+            var split = self.pushSplitHole()
+            var next = self.insts.length
+            self.byteClasses.setRange(r.lower, r.upper)
+            holes.add(self.pushHole(InstHole.Bytes((r.lower, r.upper))))
+            prevHole = self.fillSplit(split, next, null)
+        }
+        var next = self.insts.length
+        var r = ranges[-1]
+        self.byteClasses.setRange(r.lower, r.upper)
+        holes.add(self.pushHole(InstHole.Bytes((r.lower, r.upper))))
+        self.fill(prevHole, next)
+        return Patch(Hole.Many(holes), firstSplitEntry)
+    }
+
+    private mut method cEmptyLook(EmptyLook look) -> Patch {
+        var hole = self.pushHole(InstHole.EmptyLook(look))
+        return Patch(hole, self.insts.length - 1)
+    }
+
+    private mut method cConcat(Iterable[Hir] exprs) -> Patch? {
+        mut var exprs = iter(exprs)
+        mref Patch patch
+        while true {
+            if exprs.next()? as n {
+                if self.c(n)? as p {
+                    patch = p
+                    break
+                }
+            } else {
+                return null
+            }
+        }
+        mref var hole = patch.hole
+        for var e in exprs {
+            if self.c(e)? as p {
+                self.fill(hole, p.entry)
+                hole = p.hole
+            }
+        }
+        return Patch(hole, patch.entry)
+    }
+
+    private mut method cAlternate(list[Hir] exprs) -> Patch? {
+        assert exprs.length == 2
+
+        var firstSplitEntry = self.insts.length
+
+        mut list[Hole] holes = []
+        mut var prevHole = (Hole.None(), false)
+        for var e in exprs[:-1] {
+            if prevHole.1 {
+                var next = self.insts.length
+                self.fillSplit(prevHole.0, null, next)
+            } else {
+                self.fillToNext(prevHole.0)
+            }
+            var split = self.pushSplitHole()
+            if self.c(e)? as patch {
+                holes.add(patch.hole)
+                prevHole = (self.fillSplit(split, patch.entry, null), false)
+            } else {
+                var split1, var split2 = split.dupOne()
+                holes.add(split1)
+                prevHole = (split2, true)
+            }
+        }
+        if self.c(exprs[-1])? as patch {
+            holes.add(patch.hole)
+            if prevHole.1 {
+                self.fillSplit(prevHole.0, null, patch.entry)
+            } else {
+                self.fill(prevHole.0, patch.entry)
+            }
+        } else {
+            holes.add(prevHole.0)
+        }
+        return Patch(Hole.Many(holes), firstSplitEntry)
+    }
+
+    private mut method cRepeat(Repetition rep) -> Patch? {
+        return switch rep.kind {
+            case RepetitionKind.ZeroOrOne => self.cRepeatZeroOrOne(rep.hir, rep.greedy)
+            case RepetitionKind.ZeroOrMore => self.cRepeatZeroOrMore(rep.hir, rep.greedy)
+            case RepetitionKind.OneOrMore => self.cRepeatOneOrMore(rep.hir, rep.greedy)
+            case RepetitionKind.Range as r => switch r {
+                case RepetitionRange.Exactly as minMax => self.cRepeatRange(
+                    rep.hir, rep.greedy, minMax, minMax
+                )
+                case RepetitionRange.AtLeast as min => self.cRepeatRangeMinOrMore(
+                    rep.hir, rep.greedy, min
+                )
+                case RepetitionRange.Bounded as minMax => self.cRepeatRange(
+                    rep.hir, rep.greedy, minMax.0, minMax.1
+                )
+            }
+        }
+    }
+
+    private mut method cRepeatZeroOrOne(Hir expr, bool greedy) -> Patch? {
+        var splitEntry = self.insts.length
+        var split = self.pushSplitHole()
+        mref Patch patch
+        if self.c(expr)? as p {
+            patch = p
+        } else {
+            return self.popSplitHole()
+        }
+        mref Hole splitHole
+        if greedy {
+            splitHole = self.fillSplit(split, patch.entry, null)
+        } else {
+            splitHole = self.fillSplit(split, null, patch.entry)
+        }
+        var holes = [patch.hole, splitHole]
+        return Patch(Hole.Many(holes), splitEntry)
+    }
+
+    private mut method cRepeatZeroOrMore(Hir expr, bool greedy) -> Patch? {
+        var splitEntry = self.insts.length
+        var split = self.pushSplitHole()
+        mref Patch patch
+        if self.c(expr)? as p {
+            patch = p
+        } else {
+            return self.popSplitHole()
+        }
+        self.fill(patch.hole, splitEntry)
+        mref Hole splitHole
+        if greedy {
+            splitHole = self.fillSplit(split, patch.entry, null)
+        } else {
+            splitHole = self.fillSplit(split, null, patch.entry)
+        }
+        return Patch(splitHole, splitEntry)
+    }
+
+    private mut method cRepeatOneOrMore(Hir expr, bool greedy) -> Patch? {
+        mref Patch patch
+        if self.c(expr)? as p {
+            patch = p
+        } else {
+            return self.popSplitHole()
+        }
+        self.fillToNext(patch.hole)
+        var split = self.pushSplitHole()
+        mref Hole splitHole
+        if greedy {
+            splitHole = self.fillSplit(split, patch.entry, null)
+        } else {
+            splitHole = self.fillSplit(split, null, patch.entry)
+        }
+        return Patch(splitHole, patch.entry)
+    }
+
+    private mut method cRepeatRangeMinOrMore(Hir expr, bool greedy, int min) -> Patch? {
+        var patchConcat = self.cConcat([expr] * min) ?? self.nextInst()
+        if self.cRepeatZeroOrMore(expr, greedy)? as patchRep {
+            self.fill(patchRep.hole, patchConcat.entry)
+            return Patch(patchRep.hole, patchConcat.entry)
+        } else {
+            return null
+        }
+    }
+
+    private mut method cRepeatRange(Hir expr, bool greedy, int min, int max) -> Patch? {
+        var patchConcat0 = self.cConcat([expr] * min)
+        return patchConcat0 if min == max
+        var patchConcat = patchConcat0 ?? self.nextInst()
+        var initialEntry = patchConcat.entry
+        mut list[Hole] holes = []
+        mref var prevHole = patchConcat.hole
+        dotimes max - min {
+            self.fillToNext(prevHole)
+            mref Patch patch
+            var split = self.pushSplitHole()
+            if self.c(expr)? as p {
+                patch = p
+            } else {
+                return self.popSplitHole()
+            }
+            prevHole = patch.hole
+            if greedy {
+                holes.add(self.fillSplit(split, patch.entry, null))
+            } else {
+                holes.add(self.fillSplit(split, null, patch.entry))
+            }
+        }
+        holes.add(prevHole)
+        return Patch(Hole.Many(holes), initialEntry)
+    }
+
+    private method nextInst() -> Patch {
+        return Patch(Hole.None(), self.insts.length)
+    }
+
+    private mut method fill(Hole hole, InstPtr jump) {
+        switch hole {
+            case Hole.None {}
+            case Hole.One as pc {
+                self.insts[pc] = self.insts[pc].fill(jump)
+            }
+            case Hole.Many as holes {
+                for var hole in holes {
+                    self.fill(hole, jump)
+                }
+            }
+        }
+    }
+
+    private mut method fillToNext(Hole hole) {
+        var next = self.insts.length
+        self.fill(hole, next)
+    }
+
+    private mut method fillSplit(Hole hole, InstPtr? jump1, InstPtr? jump2) -> mut Hole {
+        switch hole {
+            case Hole.None {
+                return Hole.None()
+            }
+            case Hole.One as pc {
+                if jump1? as j1 {
+                    if jump2? as j2 {
+                        self.insts[pc] = self.insts[pc].fillSplit(j1, j2)
+                        return Hole.None()
+                    } else {
+                        self.insts[pc] = self.insts[pc].halfFillSplitJump1(j1)
+                        return Hole.One(pc)
+                    }
+                } else {
+                    if jump2? as j2 {
+                        self.insts[pc] = self.insts[pc].halfFillSplitJump2(j2)
+                        return Hole.One(pc)
+                    } else {
+                        raise NotImplemented()  # "at least one of the split holes must be filled"
+                    }
+                }
+            }
+            case Hole.Many as holes {
+                var newHoles = [self.fillSplit(hole, jump1, jump2) for var hole in holes]
+                if not newHoles {
+                    return Hole.None()
+                } elif newHoles.length == 1 {
+                    return newHoles[0]
+                } else {
+                    return Hole.Many(newHoles)
+                }
+            }
+        }
+    }
+
+    private mut method pushCompiled(Inst inst) {
+        self.insts.add(MaybeInst.Compiled(inst))
+    }
+
+    private mut method pushHole(InstHole inst) -> mut Hole {
+        var hole = self.insts.length
+        self.insts.add(MaybeInst.Uncompiled(inst))
+        return Hole.One(hole)
+    }
+
+    private mut method pushSplitHole() -> mut Hole {
+        var hole = self.insts.length
+        self.insts.add(MaybeInst.Split())
+        return Hole.One(hole)
+    }
+
+    private mut method popSplitHole() -> Patch? {
+        self.insts.pop()
+        return null
+    }
+
+    private method checkSize() {
+        # FIXME: RegexError
+        # raise RegexError(Error.CompiledTooBig(self.sizeLimit_)) if self.insts.length > self.sizeLimit_
+    }
+}
+
+union Hole {
+    null None
+    InstPtr One
+    list[Hole] Many
+
+    method dupOne() -> cls, cls {
+        switch self {
+            case Hole.One as pc {
+                return Hole.One(pc), Hole.One(pc)
+            }
+            default {
+                raise NotImplemented()
+            }
+        }
+    }
+}
+
+union MaybeInst {
+    Inst Compiled
+    InstHole Uncompiled
+    null Split
+    InstPtr Split1
+    InstPtr Split2
+
+    public method fill(InstPtr jump) -> cls {
+        return switch self {
+            case MaybeInst.Split => MaybeInst.Split1(jump)
+            case MaybeInst.Uncompiled as inst => MaybeInst.Compiled(inst.fill(jump))
+            case MaybeInst.Split1 as jump1 => MaybeInst.Compiled(
+                Inst.Split(InstSplit(jump1, jump))
+            )
+            case MaybeInst.Split2 as jump2 => MaybeInst.Compiled(
+                Inst.Split(InstSplit(jump, jump2))
+            )
+            default => raise Unreachable("")
+        }
+    }
+
+    method fillSplit(InstPtr jump1, InstPtr jump2) -> cls {
+        var filled = switch self {
+            case MaybeInst.Split => Inst.Split(InstSplit(jump1, jump2))
+
+            default => raise Unreachable(
+                f"must be called on Split instruction, instead it was called on: {self}",
+            )
+        }
+        return MaybeInst.Compiled(filled)
+    }
+
+    method halfFillSplitJump1(InstPtr jump1) -> cls {
+        var halfFilled = switch self {
+            case MaybeInst.Split => jump1
+            default => raise Unreachable(
+                f"must be called on Split instruction, instead it was called on: {self}",
+            )
+        }
+        return MaybeInst.Split1(halfFilled)
+    }
+
+    method halfFillSplitJump2(InstPtr jump2) -> cls {
+        var halfFilled = switch self {
+            case MaybeInst.Split => jump2
+            default => raise Unreachable(
+                f"must be called on Split instruction, instead it was called on: {self}",
+            )
+        }
+        return MaybeInst.Split2(halfFilled)
+    }
+
+    method unwrap() -> Inst {
+        return switch self {
+            case MaybeInst.Compiled as inst => inst
+            default => raise Unreachable(
+                f"must be called on a compiled instruction, instead it was called on: {self}",
+            )
+        }
+    }
+}
+
+union InstHole {
+    int Save
+    EmptyLook EmptyLook
+    char Char
+    list[tuple[char, char]] Ranges
+    tuple[int, int] Bytes
+
+    public method fill(InstPtr jump) -> Inst {
+        return switch self {
+            case InstHole.Save as slot => Inst.Save(InstSave(jump, slot))
+            case InstHole.EmptyLook as look => Inst.EmptyLook(InstEmptyLook(jump, look))
+            case InstHole.Char as c => Inst.Char(InstChar(jump, c))
+            case InstHole.Ranges as ranges => Inst.Ranges(InstRanges(jump, ranges))
+            case InstHole.Bytes as p => Inst.Bytes(InstBytes(jump, *p))
+        }
+    }
+}
+
+class CompileClass {
+    final Compiler c
+    list[ClassUnicodeRange] ranges
+
+    public operator new(mut Compiler c, list[ClassUnicodeRange] ranges) {
+        self.c = c
+        self.ranges = ranges
+    }
+
+    public mut method compile() -> Patch {
+        mut list[Hole] holes = []
+        mut int? initialEntry = null
+        mref Hole lastSplit = Hole.None()
+        mut Utf8Sequences utf8Seqs = self.c.utf8Seqs!!
+        self.c.suffixCache.clear()
+
+        for int i, var r in enumerate(self.ranges) {
+            var isLastRange = i + 1 == self.ranges.length
+            utf8Seqs.reset(r.start, r.end)
+            final var it = iter(utf8Seqs)
+            mref var next = it.next()
+            while next? as utf8Seq {
+                next = it.next()
+                if isLastRange and not next? {
+                    var patch = self.cUtf8Seq(utf8Seq)
+                    holes.add(patch.hole)
+                    self.c.fill(lastSplit, patch.entry)
+                    lastSplit = Hole.None()
+                    initialEntry ??= patch.entry
+                } else {
+                    initialEntry ??= self.c.insts.length
+                    self.c.fillToNext(lastSplit)
+                    lastSplit = self.c.pushSplitHole()
+                    var patch = self.cUtf8Seq(utf8Seq)
+                    holes.add(patch.hole)
+                    lastSplit = self.c.fillSplit(lastSplit, patch.entry, null)
+                }
+            }
+        }
+        self.c.utf8Seqs = utf8Seqs
+        return Patch(Hole.Many(holes), initialEntry!!)
+    }
+
+    private mut method cUtf8Seq(Utf8Sequence seq) -> Patch {
+        return self.cUtf8Seq_(seq if self.c.compiled.isReverse else reversed(seq))
+    }
+
+    private mut method cUtf8Seq_(Iterable[Utf8Range] seq) -> Patch {
+        mut var fromInst = 1 << 64
+        mref var lastHole = Hole.None()
+        for var byteRange in seq {
+            var key = SuffixCacheKey(fromInst, byteRange.start, byteRange.end)
+            var pc = self.c.insts.length
+            if self.c.suffixCache.get(key, pc)? as cachedPc {
+                fromInst = cachedPc
+                continue
+            }
+            self.c.byteClasses.setRange(byteRange.start, byteRange.end)
+            if fromInst == 1 << 64 {
+                lastHole = self.c.pushHole(InstHole.Bytes((
+                        byteRange.start,
+                        byteRange.end,
+                    )))
+            } else {
+                self.c.pushCompiled(Inst.Bytes(InstBytes(
+                            fromInst,
+                            byteRange.start,
+                            byteRange.end,
+                        )))
+            }
+            fromInst = self.c.insts.length - 1
+            assert fromInst < 1 << 64
+        }
+        assert fromInst < 1 << 64
+        return Patch(lastHole, fromInst)
+    }
+}
+
+$derive(\==, hash)
+class SuffixCacheKey {
+    InstPtr fromInst
+    int start
+    int end
+
+    public operator new(InstPtr fromInst, int start, int end) {
+        self.fromInst = fromInst
+        self.start = start
+        self.end = end
+    }
+}
+
+class SuffixCache {
+    final dict[SuffixCacheKey, InstPtr] tbl
+
+    public operator new(int size) {
+        self.tbl = {:}
+    }
+
+    public mut method get(SuffixCacheKey key, InstPtr pc) -> InstPtr? {
+        if key in self.tbl {
+            return self.tbl[key]
+        } else {
+            self.tbl[key] = pc
+            return null
+        }
+    }
+
+    public mut method clear() {
+        self.tbl.clear()
+    }
+}
+
+class ByteClassSet {
+    final list[bool] value
+
+    public operator new() {
+        self.value = [false] * 256
+    }
+
+    public mut operator []= (int index, bool value) {
+        self.value[index] = value
+    }
+
+    public mut method setRange(int start, int end) {
+        assert start <= end
+        assert start in [0:256] and end in [0:256]
+        if start > 0 {
+            self.value[start - 1] = true
+        }
+        self[end] = true
+    }
+
+    public mut method setWordBoundary() {
+        # We need to mark all ranges of bytes whose pairs result in
+        # evaluating \b differently.
+        var iswb = isWordByte
+        mut var b1 = 0
+        mut int b2
+        while b1 <= 255 {
+            b2 = b1 + 1
+            while b2 <= 255 and iswb(b1) == iswb(b2) {
+                b2++
+            }
+            self.setRange(b1, b2 - 1)
+            b1 = b2
+        }
+    }
+
+    public method byteClasses() -> bytes {
+        mut var byteClasses = b"\0" * 256
+        mut var byteCls = 0
+        mut var i = 0
+        while true {
+            byteClasses[i] = byteCls
+            break if i >= 255
+            if self.value[i] {
+                byteCls++
+            }
+            i++
+        }
+        return byteClasses
+    }
+}
+
+# FIXME
+class Unreachable from Throwable {
+    private str value
+
+    public operator new(str value) {
+        self.value = value
+    }
+
+    public operator str {
+        return f"Unreachable: {self.value}"
+    }
+
+    public method msg() -> str {
+        return self.value
+    }
+}
+
+func isWordByte(int c) -> bool {
+    raise NotImplemented()
+}
+
+$test
+func byteClassAlpha() {
+    final var byteSet = ByteClassSet()
+    byteSet.setRange(y'a', y'z')
+    var classes = byteSet.byteClasses()
+    assert classes[0] == 0
+    assert classes[1] == 0
+    assert classes[2] == 0
+    assert classes[y'a' - 1] == 0
+    assert classes[y'a'] == 1
+    assert classes[y'm'] == 1
+    assert classes[y'z'] == 1
+    assert classes[y'z' + 1] == 2
+    assert classes[254] == 2
+    assert classes[255] == 2
+}
+
+$test
+func byteClassDouble() {
+    final var byteSet = ByteClassSet()
+    byteSet.setRange(0, 2)
+    byteSet.setRange(4, 6)
+    var classes = byteSet.byteClasses()
+    assert classes[0] == 0
+    assert classes[1] == 0
+    assert classes[2] == 0
+    assert classes[3] == 1
+    assert classes[4] == 2
+    assert classes[5] == 2
+    assert classes[6] == 2
+    assert classes[7] == 3
+    assert classes[254] == 3
+    assert classes[255] == 3
+}
+
+$test
+func fullByteClasses() {
+    final var byteSet = ByteClassSet()
+    for var i in [0:256] {
+        byteSet.setRange(i, i)
+    }
+    assert byteSet.byteClasses().length == 256
+}

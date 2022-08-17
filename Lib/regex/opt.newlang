@@ -1,0 +1,132 @@
+from .functions import quote
+
+from functools import split
+from itertools import unique
+
+export OptParen, opt
+
+enum OptParen {
+    WORDS,
+    STD,
+    NO_GROUP
+
+    public method openParen() -> str {
+        return switch self {
+            case OptParen.WORDS => r"\b("
+            case OptParen.STD => "("
+            case OptParen.NO_GROUP => "(?:"
+        }
+    }
+
+    public method closeParen() -> str {
+        return switch self {
+            case OptParen.WORDS => r")\b"
+            case OptParen.STD => ")"
+            case OptParen.NO_GROUP => ")"
+        }
+    }
+}
+
+func opt(*str values, OptParen paren = OptParen.NO_GROUP) -> Regex {
+    return re"(?!)" if not values
+
+    var sortedVals = sorted(unique(values), key=lambda x => x.length)
+    return ref"{optGroup(sortedVals, paren.openParen(), paren.closeParen())}"
+}
+
+func optGroup(list[str] values, str paren = "", str closeParen = "", bool lax = false) -> str {
+    var openGroup = paren
+    var closeGroup = closeParen
+    var openCharset = "" if lax else openGroup
+    var closeCharset = "" if lax else closeGroup
+    var group = lambda str x => f"{openGroup}{x}{closeGroup}"
+    var charset = lambda str x => f"{openCharset}{x}{closeCharset}"
+    return "" if not values
+    if values.length == 1 {
+        return (charset if values[0].length == 1 else group)(values[0])
+    }
+    # If there is an empty string, remove it and recurse
+    if not values[0] {
+        return charset(optGroup(values[1:], "(?:", ")", lax=true) + "?")
+    } elif values[0].length == 1 and values[1].length == 1 {
+        var oneChars = [i[0] for var i in values while i.length == 1]
+        var multiChars = values[oneChars.length:]
+        if multiChars {
+            # Several one-char strings: take them and recurse on the rest
+            return group(f"{optGroup(rest)}|{optCharset(oneChars)}")
+        } else {
+            # All are one-char strings: just return a character set
+            return charset(optCharset(oneChars))
+        }
+    } else {
+        var prefix = commonPrefix(strings)
+        if prefix {
+            # Common prefix: take it and recurse on suffixes
+            var optimized = optGroup([i[prefix.length:] for var i in strings], '(?:', ')', true)
+            return group(f"{quote(prefix)}{optimized}")
+        } else {
+            var reversedStrings = [reversed(i) for var i in strings]
+            var postfix = commonPrefix(reversedStrings)
+            if postfix {
+                # Common suffix: take it and recurse on suffixes
+                var optimized = optGroup([i[:-postfix.length] for var i in strings], '(?:', ')', true)
+                return group(f"{optimized}{quote(reversed(postfix))}")
+            } else {
+                # Otherwise, divide the list into those that start with a
+                # particular letter and those that do not, and recurse on them.
+                var chr = strings[0][0]
+                var half1, var half2 = split(strings, pred=lambda a => a.startswith(chr))
+                return group(f"{optGroup(half1)}|{optGroup(half2)}")
+            }
+        }
+    }
+}
+
+func optCharset(list[char] chars) -> str {
+    final set[char] charTbl = {}
+    mut str bracket = ""
+    mut str carat = ""
+    mut str dash = ""
+    for var chr in chars {
+        switch chr {
+            case c"]" {bracket = "]"}
+            case c"^" {carat = "^"}
+            case c"-" {dash = "-"}
+            default {charTbl.add(chr)}
+        }
+    }
+    # Create ranges of chars
+    final list[list[char]] ranges = [[]]
+    for char c in sorted(charTbl) {
+        if c - 1 not in charTbl {
+            ranges.append([])
+        }
+        ranges[-1].append(c)
+    }
+    final list[str] charset = []
+    for var a in ranges {
+        if a.length <= 2 {
+            charset.append("".join(a))
+        } else {
+            var sort = sorted(a)
+            charset.append(f"{a[0]}-{a[-1]}")
+        }
+    }
+    # Make sure that ] is first, ^ is not first, - is first or last.
+    var all = ''.join([bracket, *charset, carat, dash])
+    return switch all.length {
+        case 0 => "(?!)"
+        case 1 => quote(all)
+        default => "[-^]" if all == "^-" else f"[{all}]"
+    }
+}
+
+func commonPrefix(list[str] strings) -> str {
+    return "" if not strings
+    mut var result = strings[0]
+    for var string in strings[1:] {
+        var result = ''.join([i for var i, var j in string, result while i == j])
+        return "" if not result
+    }
+    return result
+}

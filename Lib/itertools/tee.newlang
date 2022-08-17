@@ -1,0 +1,26 @@
+from collections import Deque
+
+export tee
+
+generic T
+func tee(Iterable[T] iterable, int n = 2) -> list[Iterable[T]] {
+    var it = iter(iterable)
+    mut var deques = [Deque() for i in [0:n]]
+    return [teeInner(it, d, deques) for d in deques]
+}
+
+generic T
+generator func teeInner(Iterator[T] iterable, mut Deque[T] myDeque, mut list[Deque[T]] deques) -> T {
+    while true {
+        if not myDeque {
+            if iterable.next()? as next {
+                for deque in deques {
+                    deque.push(next)
+                }
+            } else {
+                return
+            }
+        }
+        yield myDeque.popLeft()
+    }
+}

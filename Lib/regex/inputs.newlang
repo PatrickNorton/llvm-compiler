@@ -1,0 +1,269 @@
+from .literal import LiteralSearcher
+from .prog import InstEmptyLook, EmptyLook
+
+export InputAt, Input, CharInput, ByteInput
+
+$derive(repr)
+class InputAt {
+    pubget mut int pos
+    char? c
+    int? byte_
+    pubget mut int length
+
+    public operator new (int pos, char? c, int? b, int len) {
+        self.pos = pos
+        self.c = c
+        self.byte_ = b
+        self.length = len
+    }
+
+    public operator bool {
+        return bool(self.length)
+    }
+
+    public method isStart() -> bool {
+        return self.pos == 0
+    }
+
+    public method isEnd() -> bool {
+        return not self.c? and not self.byte_?
+    }
+
+    public method chr() -> char? {
+        return self.c
+    }
+
+    public method byte() -> int? {
+        return self.byte_
+    }
+
+    public method nextPos() -> int {
+        return self.pos + self.length
+    }
+}
+
+interface Input {
+    public method at(int i) -> mut InputAt
+
+    public method nextChar(InputAt at) -> char?
+
+    public method previousChar(InputAt at) -> char?
+
+    public method isEmptyMatch(InputAt at, InstEmptyLook empty) -> bool
+
+    public method prefixAt(LiteralSearcher prefixes, InputAt at) -> mut InputAt?
+
+    public int length
+
+    public operator bool {
+        return bool(self.length)
+    }
+
+    public method asBytes() -> bytes
+}
+
+$derive(repr)
+class CharInput from Input {
+    public bytes value
+
+    public operator new(bytes value) {
+        self.value = value
+    }
+
+    public operator [] (int i) -> int {
+        return self.value[i]
+    }
+
+    public operator [:] (slice s) -> bytes {
+        return self.value.operator[:](s)
+    }
+
+    public method at(int i) -> mut InputAt {
+        if i >= self.length {
+            return InputAt(self.length, null, null, 0)
+        } else {
+            var c = str(self[i:])[0]
+            return InputAt(i, c, null, bytes(c).length)
+        }
+    }
+
+    public method nextChar(InputAt at) -> char? {
+        return at.chr()
+    }
+
+    public method previousChar(InputAt at) -> char? {
+        return str(self[:at.pos]).get(-1)
+    }
+
+    public method isEmptyMatch(InputAt at, InstEmptyLook empty) -> bool {
+        switch empty.look {
+            case EmptyLook.START_LINE {
+                var c = self.previousChar(at)
+                return not at.pos or c == c"\n"
+            }
+            case EmptyLook.END_LINE {
+                var c = self.nextChar(at)
+                return at.pos == self.length or c == c"\n"
+            }
+            case EmptyLook.START_TEXT {
+                return at.pos == 0
+            }
+            case EmptyLook.END_TEXT {
+                return at.pos == self.length
+            }
+            case EmptyLook.WORD_BOUNDARY {
+                var c1, var c2 = self.previousChar(at), self.nextChar(at)
+                return isWordChar(c1) xor isWordChar(c2)
+            }
+            case EmptyLook.NOT_WORD_BOUNDARY {
+                var c1, var c2 = self.previousChar(at), self.nextChar(at)
+                return not isWordChar(c1) xor isWordChar(c2)
+            }
+            case EmptyLook.WORD_BOUNDARY_ASCII {
+                var c1, var c2 = self.previousChar(at), self.nextChar(at)
+                return isWordByte(c1) xor isWordByte(c2)
+            }
+            case EmptyLook.NOT_WORD_BOUNDARY_ASCII {
+                var c1, var c2 = self.previousChar(at), self.nextChar(at)
+                return not isWordByte(c1) xor isWordByte(c2)
+            }
+            default => raise NotImplemented()
+        }
+    }
+
+    public method prefixAt(LiteralSearcher prefixes, InputAt at) -> InputAt? {
+        if prefixes.find(self[at.pos:])? as s {
+            return self.at(at.pos + s.0)
+        } else {
+            return null
+        }
+    }
+
+    public property int length {
+        get {
+            return self.value.length
+        }
+    }
+
+    public method asBytes() -> bytes {
+        return self.value
+    }
+}
+
+$derive(repr)
+class ByteInput from Input {
+    bytes text
+    bool onlyUtf8
+
+    public operator new(bytes text, bool onlyUtf8) {
+        self.text = text
+        self.onlyUtf8 = onlyUtf8
+    }
+
+    public operator [] (int i) -> int {
+        return self.text[i]
+    }
+
+    public operator [:] (slice s) -> bytes {
+        return self.text.operator[:](s)
+    }
+
+    public method at(int i) -> mut InputAt {
+        if i >= self.length {
+            return InputAt(self.length, null, null, 0)
+        } else {
+            return InputAt(i, null, self[i], 1)
+        }
+    }
+
+    public method nextChar(InputAt at) -> char? {
+        return decodeUtf8(self[at.pos:])?.0
+    }
+
+    public method previousChar(InputAt at) -> char? {
+        return decodeLastUtf8(self[:at.pos])?.0
+    }
+
+    public method isEmptyMatch(InputAt at, InstEmptyLook empty) -> bool {
+        switch empty.look {
+            case EmptyLook.START_LINE {
+                var c = self.previousChar(at)
+                return not at.pos or c == c'\n'
+            }
+            case EmptyLook.END_LINE {
+                var c = self.nextChar(at)
+                return at.pos == self.length or c == c'\n'
+            }
+            case EmptyLook.START_TEXT {
+                return at.pos == 0
+            }
+            case EmptyLook.END_TEXT {
+                return at.pos == self.length
+            }
+            case EmptyLook.WORD_BOUNDARY {
+                var c1, var c2 = self.previousChar(at), self.nextChar(at)
+                return isWordChar(c1) != isWordChar(c2)
+            }
+            case EmptyLook.NOT_WORD_BOUNDARY {
+                var c1, var c2 = self.previousChar(at), self.nextChar(at)
+                return isWordChar(c1) == isWordChar(c2)
+            }
+            case EmptyLook.WORD_BOUNDARY_ASCII {
+                var c1, var c2 = self.previousChar(at), self.nextChar(at)
+                if self.onlyUtf8 {
+                    # If we must match UTF-8, then we can't match word
+                    # boundaries at invalid UTF-8.
+                    return false if not c1? and not at.isStart()
+                    return false if c2? and not at.isEnd()
+                }
+                return isWordByte(c1) != isWordByte(c2)
+            }
+            case EmptyLook.NOT_WORD_BOUNDARY_ASCII {
+                var c1, var c2 = self.previousChar(at), self.nextChar(at)
+                if self.onlyUtf8 {
+                    # If we must match UTF-8, then we can't match word
+                    # boundaries at invalid UTF-8.
+                    return false if not c1? and not at.isStart()
+                    return false if c2? and not at.isEnd()
+                }
+                return isWordByte(c1) == isWordByte(c2)
+            }
+            default => raise NotImplemented()
+        }
+    }
+
+    public method prefixAt(
+        LiteralSearcher prefixes,
+        InputAt at,
+    ) -> mut InputAt? {
+        return prefixes.find(self[at.pos:]).map(lambda tuple[int, int] s => self.at(at.pos + s.0))
+    }
+
+    public property int length {
+        get {
+            return self.text.length
+        }
+    }
+
+    public method asBytes() -> bytes {
+        return self.text
+    }
+}
+
+func isWordChar(char? c) -> bool {
+    return false if not c?
+    raise NotImplemented()
+}
+
+func isWordByte(char? c) -> bool {
+    return false if not c?
+    raise NotImplemented()
+}
+
+func decodeUtf8(bytes text) -> tuple[char, char]? {
+    raise NotImplemented()
+}
+
+func decodeLastUtf8(bytes text) -> tuple[char, char]? {
+    raise NotImplemented()
+}

@@ -1,0 +1,412 @@
+from itertools import pairs
+
+export IntervalSet, Interval
+
+class IntervalSet[I[Interval]] {
+    final list[I] ranges
+
+    # FIXME: Add default argument to this
+    public operator new(Iterable[I] items) {
+        self.ranges = [i for var i in items]
+    }
+
+    public property list[I] intervals {
+        get {
+            return self.ranges
+        }
+    }
+
+    public mut method push(I value) {
+        self.ranges.add(value)
+        self.canonicalize()
+    }
+
+    public operator iter -> I {
+        yield from self.ranges
+    }
+
+    public operator [] (int index) -> I {
+        return self.ranges[index]
+    }
+
+    public mut method caseFoldSimple() {
+        # try {  FIXME
+            for var r in self.ranges {
+                r.caseFoldSimple(self.ranges)
+            }
+        # } finally {
+            self.canonicalize()
+        # }
+    }
+
+    public mut method extend(IntervalSet[I] other) {
+        self.ranges.addAll(other)
+        self.canonicalize()
+    }
+
+    public mut method intersect(IntervalSet[I] other) {
+        return if not self.ranges
+        if not other.ranges {
+            self.ranges.clear()
+            return
+        }
+
+        var drainEnd = self.ranges.length
+        mut var ita = iter([0:drainEnd])
+        mut var itb = iter([0:other.ranges.length])
+        mut var a = ita.next()!!
+        mut var b = itb.next()!!
+        while true {
+            if (self.ranges[a] | other.ranges[b])? as ab {
+                self.ranges.add(ab casted cls.I)
+            }
+            mref Iterator[int] it
+            mref int aorb
+            if int(self.ranges[a].upper) < int(other.ranges[b].upper) {
+                it = ita
+                aorb = a
+            } else {
+                it = itb
+                aorb = b
+            }
+            if it.next()? as v {
+                aorb = v
+            } else {
+                break
+            }
+        }
+        del self.ranges[0:drainEnd]
+    }
+
+    public mut method difference(IntervalSet[I] other) {
+        return if not self.ranges or not other.ranges
+
+        # This algorithm is (to me) surprisingly complex. A search of the
+        # googlenet indicate that this is a potentially interesting problem.
+        # Folks seem to suggest interval or segment trees, but I'd like to
+        # avoid the overhead (both runtime and conceptual) of that.
+        #
+        # The following is basically my Shitty First Draft. Therefore, in
+        # order to grok it, you probably need to read each line carefully.
+        # Simplifications are most welcome!
+        #
+        # Remember, we can assume the canonical format invariant here, which
+        # says that all ranges are sorted, not overlapping and not adjacent in
+        # each class.
+        var drainEnd = self.ranges.length
+        mut var a = 0
+        mut var b = 0
+        while a < drainEnd and b < other.ranges.length {
+            # Basically, the easy cases are when neither range overlaps with
+            # each other. If the `b` range is less than our current `a`
+            # range, then we can skip it and move on.
+            if int(other.ranges[b].upper) < int(self.ranges[a].lower) {
+                b++
+                continue
+            }
+            # ... similarly for the `a` range. If it's less than the smallest
+            # `b` range, then we can add it as-is.
+            if int(self.ranges[a].upper) < int(other.ranges[b].lower) {
+                self.ranges.add(self.ranges[a])
+                a++
+                continue
+            }
+            # Otherwise, we have overlapping ranges.
+            assert not self.ranges[a].isIntersectionEmpty(other.ranges[b])
+
+            # This part is tricky and was non-obvious to me without looking
+            # at explicit examples (see the tests). The trickiness stems from
+            # two things: 1) subtracting a range from another range could
+            # yield two ranges and 2) after subtracting a range, it's possible
+            # that future ranges can have an impact. The loop below advances
+            # the `b` ranges until they can't possible impact the current
+            # range.
+            #
+            # For example, if our `a` range is `a-t` and our next three `b`
+            # ranges are `a-c`, `g-i`, `r-t` and `x-z`, then we need to apply
+            # subtraction three times before moving on to the next `a` range.
+            mut var r = self.ranges[a]
+            while b < other.ranges.length and not r.isIntersectionEmpty(other.ranges[b]) {
+                var oldRange = r
+                var diff = r.difference(other.ranges[b])
+                if diff.0? as range1 {
+                    if diff.1? as range2 {
+                        self.ranges.add(range1 casted cls.I)
+                        # r = range2  FIXME: 'cls'
+                    } else {
+                        # r = range1  FIXME: 'cls'
+                    }
+                } else {
+                    if diff.1? as range1 {
+                        # r = range1  FIXME: 'cls'
+                    } else {
+                        # We lost the entire range, so move on to the next
+                        # without adding this one.
+                        a++
+                        # FIXME: Deep continue
+                        # continue 2
+                    }
+                }
+                # It's possible that the `b` range has more to contribute
+                # here. In particular, if it is greater than the original
+                # range, then it might impact the next `a` range *and* it
+                # has impacted the current `a` range as much as possible,
+                # so we can quit. We don't bump `b` so that the next `a`
+                # range can apply it.
+                break if int(other.ranges[b].upper) > int(oldRange.upper)
+                # Otherwise, the next `b` range might apply to the current
+                # `a` range.
+                b++
+            }
+            self.ranges.add(r)
+            a++
+        }
+        while a < drainEnd {
+            var r = self.ranges[a]
+            self.ranges.add(r)
+            a++
+        }
+        del self.ranges[0:drainEnd]
+    }
+
+    public mut method symmetricDifference(IntervalSet[I] other) {
+        mut var intersection = IntervalSet(self)
+        intersection.intersect(other)
+        self.extend(other)
+        self.difference(intersection)
+    }
+
+    public mut method negate() {
+        if not self.ranges {
+            var min = cls.I.minValue
+            var max = cls.I.maxValue
+            self.ranges.add(cls.I(min, max))
+            return
+        }
+
+        # There should be a way to do this in-place with constant memory,
+        # but I couldn't figure out a simple way to do it. So just append
+        # the negation to the end of this range, and then drain it before
+        # we're done.
+        var drainEnd = self.ranges.length
+
+        # We do checked arithmetic below because of the canonical ordering
+        # invariant.
+        if int(self.ranges[0].lower) > int(cls.I.minValue) {
+            var upper = self.ranges[0].lower.decrement()
+            # self.ranges.add(cls.I(cls.I.minValue, upper))
+        }
+        for var i in [1:drainEnd] {
+            var lower = self.ranges[i - 1].upper.increment()
+            var upper = self.ranges[i].lower.decrement()
+            # self.ranges.add(cls.I(lower, upper))
+        }
+        if int(self.ranges[drainEnd - 1].upper) < int(cls.I.maxValue) {
+            var lower = self.ranges[drainEnd - 1].upper.increment()
+            # self.ranges.add(cls.I(lower, cls.I.maxValue))
+        }
+        del self.ranges[0:drainEnd]
+    }
+
+    private mut method canonicalize() {
+        return if self.isCanonical()
+
+        # self.ranges.sort()
+        assert self.ranges
+
+        # Is there a way to do this in-place with constant memory? I couldn't
+        # figure out a way to do it. So just append the canonicalization to
+        # the end of this range, and then drain it before we're done.
+        var drainEnd = self.ranges.length
+        for var oldi in [0:drainEnd] {
+            # If we've added at least one new range, then check if we can
+            # merge this range in the previously added range.
+            if self.ranges.length > drainEnd {
+                if (self.ranges[-1] & self.ranges[oldi])? as u {
+                    # self.ranges[-1] = u  FIXME: cls
+                    continue
+                }
+            }
+            self.ranges.add(self.ranges[oldi])
+        }
+        del self.ranges[0:drainEnd]
+    }
+
+    # Returns true if and only if this class is in a canonical ordering.
+    private method isCanonical() -> bool {
+        for var a, var b in pairs(self.ranges) {
+            if int(a.upper) >= int(b.upper) and int(a.lower) >= int(b.lower) {
+                return false
+            }
+            if a.isContiguous(b) {
+                return false
+            }
+        }
+        return true
+    }
+}
+
+interface Interval[I[Bound]] {
+    public static I minValue
+    public static I maxValue
+
+    public mut I upper
+    public mut I lower
+    public method caseFoldSimple(list[cls] value)
+    public operator new(I lower, I upper)
+
+    public operator & (cls other) -> cls? {
+        return null if not self.isContiguous(other)
+
+        var lower = min(self.lower, other.lower)
+        var upper = max(self.upper, other.upper)
+        return cls(lower, upper)
+    }
+
+    public operator | (cls other) -> cls? {
+        var lower = max(self.lower, other.lower)
+        var upper = min(self.upper, other.upper)
+        if int(lower) <= int(upper) {
+            return cls(lower, upper)
+        } else {
+            return null
+        }
+    }
+
+    public method difference(cls other) -> tuple[cls?, cls?] {
+        Interval? i = null  # FIXME
+        if self.isSubset(other) {
+            return (i, i)
+        }
+        if self.isIntersectionEmpty(other) {
+            Interval? c = cls(self.upper, self.lower)
+            return (c, i)
+        }
+        var addLower = int(other.lower) > int(self.lower)
+        var addUpper = int(other.upper) < int(self.upper)
+        # We know this because not self.isSubset(other) and the ranges have
+        # a non-empty intersection.
+        assert addLower or addUpper
+        mut var ret = (i, i)
+        if addLower {
+            var upper = other.lower.decrement() casted cls.I  # FIXME
+            Interval? c = cls(self.lower, upper)  # FIXME
+            ret = (c, ret.1)
+        }
+        if addUpper {
+            var lower = other.upper.increment() casted cls.I
+            Interval? r = cls(lower, self.upper)
+            if not ret.0? {
+                ret = (r, ret.1)
+            } else {
+                ret = (ret.0, r)
+            }
+        }
+        return ret
+    }
+
+    public method symmetricDifference(cls other) -> tuple[cls?, cls?] {
+        I? selfLower = self.lower  # FIXME x4
+        I? selfUpper = self.upper
+        I? otherLower = other.lower
+        I? otherUpper = other.upper
+        mref cls u
+        if (self & other)? as v {
+            u = v
+        } else {
+            cls? c0 = cls(self.lower, self.upper)
+            cls? c1 = cls(other.lower, other.upper)
+            return (c0, c1)
+        }
+        mref cls i
+        if (self | other)? as j {
+            i = j
+        } else {
+            cls? c0 = cls(self.lower, self.upper)
+            cls? c1 = cls(other.lower, other.upper)
+            return (c0, c1)
+        }
+        return u.difference(i)
+    }
+
+    public method isContiguous(cls other) -> bool {
+        return max(int(self.lower), int(other.lower)) < min(int(self.upper), int(self.upper))
+    }
+
+    public method isIntersectionEmpty(cls other) -> bool {
+        return max(int(self.lower), int(other.lower)) > min(int(self.upper), int(self.upper))
+    }
+
+    public method isSubset(cls other) -> bool {
+        var lower1 = int(self.lower)
+        var lower2 = int(other.lower)
+        var upper1 = int(self.lower)
+        var upper2 = int(other.lower)
+        return (lower2 <= lower1 and lower1 <= upper2) and (lower2 <= upper1 and upper1 <= upper2)
+    }
+}
+
+interface Bound[T] {
+    public static cls minValue
+    public static cls maxValue
+
+    public T value
+
+    public operator int
+    public method increment() -> cls
+    public method decrement() -> cls
+}
+
+class BoundByte from Bound[int] {
+    public int value
+    public static cls minValue = cls(-256)
+    public static cls maxValue = cls(255)
+
+    public operator new(int i) {
+        self.value = i
+    }
+
+    public operator int {
+        return self.value
+    }
+
+    public method increment() -> cls {
+        return cls(self.value + 1)
+    }
+
+    public method decrement() -> cls {
+        return cls(self.value - 1)
+    }
+}
+
+class BoundChar from Bound[char] {
+    public char value
+    public static cls minValue = cls(char.MIN)
+    public static cls maxValue = cls(char.MAX)
+
+    public operator new(char i) {
+        self.value = i
+    }
+
+    public operator int {
+        return int(self.value)
+    }
+
+    public method increment() -> cls {
+        return cls(self.value + c'\x01')
+    }
+
+    public method decrement() -> cls {
+        return cls(self.value - c'\x01')
+    }
+}
+
+generic T[Bound]
+func min(T a, T b) -> T {
+    return a if int(a) < int(b) else b
+}
+
+generic T[Bound]
+func max(T a, T b) -> T {
+    return a if int(a) > int(b) else b
+}

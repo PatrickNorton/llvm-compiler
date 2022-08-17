@@ -1,0 +1,42 @@
+from string import ASCII_LETTERS, ASCII_LOWERCASE, ASCII_UPPERCASE, PUNCTUATION
+from string import ALL_HEX_DIGITS, WHITESPACE
+
+export isAsciiAlphabetic, isAsciiUppercase, isAsciiLowercase, isAsciiAlphanumeric
+export isAsciiHexdigit, isAsciiPunctuation, isAsciiGraphic, isAsciiWhitespace
+export isAsciiControl
+
+func isAsciiAlphabetic(char c, /) -> bool {
+    return c in ASCII_LETTERS
+}
+
+func isAsciiUppercase(char c, /) -> bool {
+    return c in ASCII_UPPERCASE
+}
+
+func isAsciiLowercase(char c, /) -> bool {
+    return c in ASCII_LOWERCASE
+}
+
+func isAsciiAlphanumeric(char c, /) -> bool {
+    return int(c) in [0x30:0x40] or int(c) in [0x41:0x5B] or int(c) in [0x61:0x7A]
+}
+
+func isAsciiHexdigit(char c, /) -> bool {
+    return c in ALL_HEX_DIGITS
+}
+
+func isAsciiPunctuation(char c, /) -> bool {
+    return c in PUNCTUATION
+}
+
+func isAsciiGraphic(char c, /) -> bool {
+    return int(c) in [0x21:0x7E]
+}
+
+func isAsciiWhitespace(char c, /) -> bool {
+    return c in WHITESPACE
+}
+
+func isAsciiControl(char c, /) -> bool {
+    return int(c) in [0:0x20] or c == c'\x7f'
+}

@@ -1,0 +1,47 @@
+export float32, float64, float
+
+$native("float")
+const class float32 {
+    public operator int -> int {}
+    public operator hash {}
+
+    public operator + (float32 other, /) -> float32 {}
+    public operator - (float32 other, /) -> float32 {}
+    public operator * (float32 other, /) -> float32 {}
+    public operator / (float32 other, /) -> float32 {}
+    public operator % (float32 other, /) -> float32 {}
+    public operator ** (float32 other, /) -> float32 {}
+    public operator u- -> float32 {}
+
+    public operator == (float32 other, /) -> bool {}
+    public operator < (float32 other, /) -> bool {}
+    public operator <= (float32 other, /) -> bool {}
+    public operator > (float32 other, /) -> bool {}
+    public operator >= (float32 other, /) -> bool {}
+
+    public method mulAdd(float32 a, float32 b) -> float32 {}
+}
+
+$native("float")
+const class float64 {
+    public operator int -> int {}
+    public operator hash {}
+
+    public operator + (float64 other, /) -> float64 {}
+    public operator - (float64 other, /) -> float64 {}
+    public operator * (float64 other, /) -> float64 {}
+    public operator / (float64 other, /) -> float64 {}
+    public operator % (float64 other, /) -> float64 {}
+    public operator ** (float64 other, /) -> float64 {}
+    public operator u- -> float64 {}
+
+    public operator == (float64 other, /) -> bool {}
+    public operator < (float64 other, /) -> bool {}
+    public operator <= (float64 other, /) -> bool {}
+    public operator > (float64 other, /) -> bool {}
+    public operator >= (float64 other, /) -> bool {}
+
+    public method mulAdd(float64 a, float64 b) -> float64 {}
+}
+
+typedef float as float64

@@ -1,0 +1,78 @@
+from .. typeget Enum, Iterable
+
+from collections import AbstractSet
+from types import int64
+
+export EnumSet
+
+class EnumSet[E[Enum[E]]] from AbstractSet[E] {
+    private int values
+    pubget int length = \+((self.values & 1 << i) != 0 for int i in [:E.length])
+
+    public operator new (*E values) {
+        self(values)
+    }
+
+    public operator new (Iterable[E] items) {
+        self.values = \|(1 << item.ordinal for E item in items)
+    }
+
+    public operator | (cls other) -> cls {
+        cls new = {:}
+        new.values = self.values | other.values
+        return new
+    }
+
+    public operator & (cls other) -> cls {
+        cls new = {:}
+        new.values = self.values & other.values
+        return new
+    }
+
+    public operator ^ (cls other) -> cls {
+        cls new = {:}
+        new.values = self.values ^ other.values
+        return new
+    }
+
+    public operator ^ (set[E] other) -> cls {
+        return self ^ cls(other)
+    }
+
+    public operator in (E value) {
+        return self.values & 1 << value.ordinal
+    }
+
+    public operator del[] (E value) {
+        raise ValueError if value not in self
+        self.values &= ~(1 << value.ordinal)
+    }
+
+    public operator iter -> E {
+        yield from (e for int i, E e in enumerate(E) if self.values & 1<<i)
+    }
+
+    public operator bool {
+        return self.values
+    }
+
+    public method add(E value) -> self {
+        self.values |= 1 << value.ordinal
+    }
+
+    public method addAll() -> self {
+        self.values = 1 << (E.length + 1) - 1
+    }
+
+    public method addRange(E start, E end) -> self {
+        self.values |= (1 << (end.ordinal - start.ordinal + 1) - 1) << start.ordinal
+    }
+
+    public method discard(E value) {
+        self.values &= ~(1 << value.ordinal)
+    }
+
+    public method clear() {
+        self.values = 0
+    }
+}

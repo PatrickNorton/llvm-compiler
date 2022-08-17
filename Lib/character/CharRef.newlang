@@ -1,0 +1,26 @@
+export CharRef
+
+$derive(\==, repr)
+class CharRef {
+    mut char value
+
+    public operator new(char value) {
+        self.value = value
+    }
+
+    public operator bool {
+        return bool(self.value)
+    }
+
+    public operator int {
+        return int(self.value)
+    }
+
+    public method get() -> char {
+        return self.value
+    }
+
+    public mut method set(int value, /) {
+        self.value = value
+    }
+}

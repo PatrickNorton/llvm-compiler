@@ -1,0 +1,193 @@
+from .dfa import InstPtr
+from .exec import ProgramCache
+from .inputs import Input, InputAt
+from .prog import Program, Inst
+from .trait import Slot
+
+export Bounded, Cache, Bits
+
+typedef Bits as int
+
+int BIT_SIZE = 32
+int MAX_SIZE_BYTES = 256 * (1 << 10) # 256 KB
+
+func shouldExec(int numInsts, int textLen) -> bool {
+    var size = ((numInsts * (textLen + 1) + BIT_SIZE - 1) // BIT_SIZE) * 4
+    return size <= MAX_SIZE_BYTES
+}
+
+class Bounded {
+    private Program prog
+    private Input inputVal
+    private final list[bool] matches
+    private final list[Slot] slots
+    private final Cache m
+
+    private operator new(
+        Program prog,
+        Input inputVal,
+        mut list[bool] matches,
+        mut list[Slot] slots,
+        mut Cache m,
+    ) {
+        self.prog = prog
+        self.inputVal = inputVal
+        self.matches = matches
+        self.slots = slots
+        self.m = m
+    }
+
+    public static method exec(
+        Program prog,
+        ProgramCache cache,
+        list[bool] matches,
+        list[Slot] slots,
+        Input inputVal,
+        int start,
+        int end,
+    ) -> bool {
+        var trueCache = cache.backtrack
+        var start = inputVal.at(start)
+        final var b = Bounded(prog, inputVal, matches, slots, trueCache)
+        return b.exec_(start, end)
+    }
+
+    private mut method clear() {
+        self.m.jobs.clear()
+        self.m.visited.clear()
+    }
+
+    private mut method exec_(InputAt at_, int end) -> bool {
+        mref var at = at_
+        self.clear()
+        if self.prog.isAnchoredStart {
+            return false if not at.isStart() else self.backtrack(at)
+        }
+        mut var matched = false
+        while true {
+            if self.prog.prefixes {
+                if self.inputVal.prefixAt(self.prog.prefixes, at)? as a {
+                    at = a
+                } else {
+                    break
+                }
+            }
+            matched = self.backtrack(at) or matched
+            if matched and self.prog.matches.length == 1 {
+                return true
+            }
+            break if at.pos >= end
+            at = self.inputVal.at(at.nextPos())
+        }
+        return matched
+    }
+
+    private mut method backtrack(InputAt start) -> bool {
+        mut var matched = false
+        final var jobs = self.m.jobs
+        jobs.add(Job.Inst((0, start)))
+        while jobs {
+            switch jobs.pop()!! {
+                case Job.Inst as pair {
+                    if self.step(*pair) {
+                        return true if self.prog.matches.length == 1
+                        matched = true
+                    }
+                }
+                case Job.SaveRestore as pair {
+                    if pair.0 < self.slots.length {
+                        self.slots[pair.0] = pair.1
+                    }
+                }
+            }
+        }
+        return matched
+    }
+
+    private mut method step(InstPtr ip_, InputAt at_) -> bool {
+        mref var ip = ip_
+        mref var at = at_
+        while true {
+            return false if self.hasVisited(ip, at)
+            switch self.prog[ip] {
+                case Inst.Match as slot {
+                    if slot < self.matches.length {
+                        self.matches[slot] = true
+                    }
+                    return true
+                }
+                case Inst.Save as inst {
+                    if self.slots.get(inst.slot)? as oldSlot {
+                        self.m.jobs.add(Job.SaveRestore((inst.slot, oldSlot)))
+                        self.slots[inst.slot] = at.pos
+                    }
+                    ip = inst.jump
+                }
+                case Inst.Split as inst {
+                    self.m.jobs.add(Job.Inst((inst.jump2, at)))
+                    ip = inst.jump1
+                }
+                case Inst.EmptyLook as inst {
+                    if self.inputVal.isEmptyMatch(at, inst) {
+                        ip = inst.jump
+                    } else {
+                        return false
+                    }
+                }
+                case Inst.Char as inst {
+                    if inst.c == at.chr() {
+                        ip = inst.jump
+                        at = self.inputVal.at(at.nextPos())
+                    } else {
+                        return false
+                    }
+                }
+                case Inst.Ranges as inst {
+                    if inst.matches(at.chr()!!) {
+                        ip = inst.jump
+                        at = self.inputVal.at(at.nextPos())
+                    } else {
+                        return false
+                    }
+                }
+                case Inst.Bytes as inst {
+                    if at.byte()? as b {
+                        if inst.matches(b) {
+                            ip = inst.jump
+                            at = self.inputVal.at(at.nextPos())
+                            continue
+                        }
+                    }
+                    return false
+                }
+            }
+        }
+    }
+
+    private mut method hasVisited(InstPtr ip, InputAt at) -> bool {
+        var k = ip * (self.inputVal.length + 1) + at.pos
+        var k1 = k // BIT_SIZE
+        var k2 = 1 << (k & BIT_SIZE - 1)
+        if self.m.visited[k1] and not k2 {
+            self.m.visited[k1] |= k2
+            return false
+        } else {
+            return true
+        }
+    }
+}
+
+class Cache {
+    final list[Job] jobs
+    final list[Bits] visited
+
+    public operator new(Program prog) {
+        self.jobs = []
+        self.visited = []
+    }
+}
+
+union Job {
+    tuple[InstPtr, InputAt] Inst
+    tuple[int, int?] SaveRestore
+}

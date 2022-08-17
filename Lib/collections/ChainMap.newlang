@@ -1,0 +1,60 @@
+from itertools import any, chain
+
+export ChainMap
+
+# FIXME?? Value changes act on sub-maps themselves... should that happen?
+final class ChainMap[K, V] from dict[K, V] {
+    private final list[dict[K, V]] values
+
+    public operator new (*dict[K, V] values) {
+        self.values = list(values)
+    }
+
+    public operator [] (K key) -> V {
+        return self.get(key) ?? raise KeyError(f"Key {key} not found")
+    }
+
+    public mut operator []= (K key, V value) {
+        self.values[0] = value
+    }
+
+    public mut operator del[] (K key) {
+        for var subDict in self.values {
+            if key in subDict {
+                del subDict[key]
+            }
+        }
+    }
+
+    public operator iter -> K, V {
+        for var d in self.values {
+            yield from d
+        }
+    }
+
+    public operator in (K key) {
+        return any(K in i for var i in self.values)
+    }
+
+    public operator hash {
+        return hash(f"ChainMap[{K}, {V}]", *self.values)
+    }
+
+    public operator repr {
+        var inner = ", ".join(f"{key}: {value}" for K key, V value in self)
+        return f"{type(self)}(\{{inner}\})"
+    }
+
+    public method get(K key) -> V? {
+        for var value in self.values {
+            if value.get(key)? as val {
+                return val
+            }
+        }
+        return null
+    }
+
+    public generator method keys() -> K {
+        yield from chain(d.keys for var d in self.values)
+    }
+}

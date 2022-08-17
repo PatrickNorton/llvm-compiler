@@ -1,0 +1,221 @@
+from collections import AbstractList, normalizeIndices
+from itertools import all
+
+export LinkedList
+
+class LinkedList[T] from AbstractList[T] {
+    private LLNode[T]? first
+    private LLNode[T]? last
+    pubget int length
+
+    public operator new (*T nodes) {
+        self.length = nodes.length
+        if not nodes {
+            self.first = null
+            self.last = null
+        } else {
+            self.first = LLNode(null, nodes[0], null)
+            var current = self.first
+            for T node in nodes[1:] {
+                LLNode next = LLNode[T](current, node, null)
+                current.next = next
+                current = next
+                self.last = next
+            }
+        }
+    }
+
+    public operator [] (int index) {
+        return self.getNode(index).this
+    }
+
+    public operator []= (int index, T value) {
+        var node = self.getNode(position)
+        node.this = value
+    }
+
+    public operator [:] (int start, int stop, int step) -> list[T] {
+        return list(self.operator iter[:](start, stop, step))
+    }
+
+    @normalizeIndices(self)
+    public operator [:]= (int start, int stop, int step, Iterable[T] values) {
+        var startNode = self.getNode(start)
+        var endNode = self.getNode(end)
+        if step < 0 {
+            var current = endNode
+            var iterator = iter(values)
+            dotimes (stop - start) % step {
+                if iterator.next()? as n {
+                    current.this = n
+                } else {
+                    break
+                }
+                dotimes step {
+                    current = current.previous!!
+                }
+            }
+        } else {
+            var current = startNode
+            var iterator = iter(values)
+            dotimes (start - stop) % step {
+                if iterator.next()? as n {
+                    current.this = n
+                } else {
+                    break
+                }
+                dotimes step {
+                    current = current.next!!
+                }
+            }
+        }
+        self.length = \+(1 for var i in self)
+    }
+
+    private method getNode(int index) -> LLNode {
+        if index < 0 {
+            raise IndexError if self.last is null
+            var current = self.last!!
+            dotimes ~index {
+                raise IndexError if current.previous is null
+                current = current.previous!!
+            }
+            return current
+        } else {
+            raise IndexError if self.first is null
+            var current = self.first!!
+            dotimes index {
+                raise IndexError if current.next is null
+                current = current.next!!
+            }
+            return current
+        }
+    }
+
+    public operator iter -> T {
+        var current = self.first
+        while current is not null {
+            yield current!!.this
+            current = current!!.next
+        }
+    }
+
+    @normalizeIndices(self)
+    public operator iter[:] (int start, int stop, int step) -> T {
+        if step < 0 {
+            var current = self.getNode(self.stop)
+            dotimes (start - stop) % step {
+                yield current.this
+                dotimes step {
+                    current = current!!.previous  # No null check needed, indices already known
+                }
+            }
+        } else {
+            var current = self.getNode(self.start)
+            dotimes (stop - start) % step {
+                yield current.this
+                dotimes step {
+                    current = current!!.next  # No null check needed, indices already known
+                }
+            }
+        }
+    }
+
+    public operator reversed -> T {
+        var current = self.last
+        while current is not null {
+            yield current!!.this
+            current = current!!.previous
+        }
+    }
+
+    public operator bool {
+        return self.first is not null
+    }
+
+    public operator + (list[T] other) -> cls {
+        return cls(*self, *other)
+    }
+
+    public operator * (int size) -> cls {
+        cls new = []
+        dotimes size {
+            new.extend(self)
+        }
+        return new
+    }
+
+    public method append(T value) -> self {
+        var newLast = LLNode[T](self.last, value, null)
+        self.last.next = newLast
+        self.last = newLast
+        self.length++
+        return self
+    }
+
+    public method insert(T value, int position) {
+        if self.first is null {
+            self.first = LLNode[T](null, value, null)
+            self.last = self.first
+        } elif position == 0 {
+            var node = self.first!!
+            self.first = LLNode[T](null, value, node)
+        } elif position == -1 or position == self.length {
+            var node = self.getNode(-1)
+            var newNode = LLNode[T](node, value, null)
+            node.next = newNode
+            self.last = newNode
+        } else {
+            var node = self.getNode(position)!!
+            var next = node.next
+            var newNode = LLNode[T](node, value, next)
+            node.next = newNode
+            next.previous = newNode
+        }
+        self.length++
+    }
+
+    public method pop(int position) -> T {
+        var node = self.getNode(position)
+        if node.previous is not null {
+            node.previous!!.next = node.next
+            if node.next is not null {
+                node.next!!.next = node.previous
+            } else {
+                self.last = node.previous
+            }
+        } else {
+            if node.next is not null {
+                node.next!!.previous = null
+                self.first = node.next
+            } else {
+                self.first = null
+                self.last = null
+            }
+        }
+        self.length--
+        return node.this
+    }
+
+    public method reverse() {
+        self.last, self.first = self.first, self.last
+        var next = self.last
+        while next is not null {
+            var trueNext = next!!
+            next.previous, next.next = next.next, next.previous
+            next = next.previous
+        }
+    }
+
+    public method clear() {
+        self.last = null
+        self.first = null
+        self.length = 0
+    }
+}
+
+class LLNode[T] {
+    LLNode[T]? previous
+    T this
+    LLNode[T]? next
+}

@@ -1,0 +1,643 @@
+from ..ast import (
+    Assertion, AssertionKind, Ast, ClassAsciiKind, ClassPerl,
+    ClassPerlKind, ClassUnicodeKind, FlagsItemKind, Flag, Span, visit, Visitor
+)
+from ..ast import (
+    Class, ClassUnicode, Flags, Literal, Repetition, RepetitionKind, RepetitionRange, GroupKind, Group
+) as (
+    AstClass, AstUnicode, AstFlags, AstLiteral, AstRepetition,
+    AstRepetitionKind, AstRepetitionRange, AstGroupKind, AstGroup
+)
+from .error import ErrorKind, RegexBuildError
+from .hir import (
+    Anchor, Hir, Class, ClassUnicode, ClassUnicodeRange, ClassBytes, ClassBytesRange,
+    Repetition, RepetitionKind, RepetitionRange, Group, GroupKind, HirLiteral, WordBoundary
+)
+from .unicode import ClassQuery, containsSimpleCaseMapping, perlDigit, perlSpace, perlWord, UnicodeError, unicodeType
+
+from string import ASCII_LETTERS
+
+export HirBuilder, Translator
+
+class HirBuilder {
+    mut bool allowInvalidUtf8_
+    Flags flags
+
+    public operator new {
+        self.allowInvalidUtf8_ = false
+        self.flags = Flags()
+    }
+
+    public method build() -> mut Translator {
+        return Translator(empty(), self.flags, self.allowInvalidUtf8_)
+    }
+
+    public mut method allowInvalidUtf8(bool yes) {
+        self.allowInvalidUtf8_ = yes
+    }
+
+    public method swapGreed(bool yes) {
+        self.flags.swapGreed = yes
+    }
+
+    public method multiLine(bool yes) {
+        self.flags.multiLine = yes
+    }
+
+    public method dotMatchesNewline(bool yes) {
+        self.flags.dotMatchesNewline = yes
+    }
+
+    public method caseInsensitive(bool yes) {
+        self.flags.caseInsensitive = yes
+    }
+
+    public method unicode(bool yes) {
+        self.flags.unicode = yes
+    }
+}
+
+func empty() -> mut list[mut HirFrame] {
+    return []  # FIXME: 'mut' in inline types
+}
+#|
+
+impl TranslatorBuilder {
+
+    /// When enabled, translation will permit the construction of a regular
+    /// expression that may match invalid UTF-8.
+    ///
+    /// When disabled (the default), the translator is guaranteed to produce
+    /// an expression that will only ever match valid UTF-8 (otherwise, the
+    /// translator will return an error).
+    ///
+    /// Perhaps surprisingly, when invalid UTF-8 isn't allowed, a negated ASCII
+    /// word boundary (uttered as `(?-u:\B)` in the concrete syntax) will cause
+    /// the parser to return an error. Namely, a negated ASCII word boundary
+    /// can result in matching positions that aren't valid UTF-8 boundaries.
+    pub fn allow_invalid_utf8(&mut self, yes: bool) -> &mut TranslatorBuilder {
+        self.allow_invalid_utf8 = yes;
+        self
+    }
+
+    /// Enable or disable the case insensitive flag (`i`) by default.
+    pub fn case_insensitive(&mut self, yes: bool) -> &mut TranslatorBuilder {
+        self.flags.case_insensitive = if yes { Some(true) } else { None };
+        self
+    }
+
+    /// Enable or disable the multi-line matching flag (`m`) by default.
+    pub fn multi_line(&mut self, yes: bool) -> &mut TranslatorBuilder {
+        self.flags.multi_line = if yes { Some(true) } else { None };
+        self
+    }
+
+    /// Enable or disable the "dot matches any character" flag (`s`) by
+    /// default.
+    pub fn dot_matches_new_line(
+        &mut self,
+        yes: bool,
+    ) -> &mut TranslatorBuilder {
+        self.flags.dot_matches_new_line = if yes { Some(true) } else { None };
+        self
+    }
+
+    /// Enable or disable the "swap greed" flag (`U`) by default.
+    pub fn swap_greed(&mut self, yes: bool) -> &mut TranslatorBuilder {
+        self.flags.swap_greed = if yes { Some(true) } else { None };
+        self
+    }
+
+    /// Enable or disable the Unicode flag (`u`) by default.
+    pub fn unicode(&mut self, yes: bool) -> &mut TranslatorBuilder {
+        self.flags.unicode = if yes { None } else { Some(false) };
+        self
+    }
+}
+|#
+
+class Flags {
+    mut bool? caseInsensitive
+    mut bool? multiLine
+    mut bool? dotMatchesNewline
+    mut bool? swapGreed
+    mut bool? unicode
+
+    public operator new() {
+        self.caseInsensitive = null
+        self.multiLine = null
+        self.dotMatchesNewline = null
+        self.swapGreed = null
+        self.unicode = null
+    }
+
+    static method fromAst(AstFlags ast) -> mut Flags {
+        final var flags = Flags()
+        mut bool enable = true
+        for var item in ast.items {
+            switch item.kind {
+                case FlagsItemKind.Negation {
+                    enable = false
+                }
+                case FlagsItemKind.Flag as f {
+                    switch f {
+                        case Flag.CASE_INSENSITIVE {
+                            flags.caseInsensitive = enable
+                        }
+                        case Flag.MULTI_LINE {
+                            flags.multiLine = enable
+                        }
+                        case Flag.DOT_MATCHES_NEWLINE {
+                            flags.dotMatchesNewline = enable
+                        }
+                        case Flag.SWAP_GREED {
+                            flags.swapGreed = enable
+                        }
+                        case Flag.UNICODE {
+                            flags.unicode = enable
+                        }
+                    }
+                }
+            }
+        }
+        return flags
+    }
+
+    mut method merge(Flags previous) {
+        if not self.caseInsensitive? {
+            self.caseInsensitive = previous.caseInsensitive
+        }
+        if not self.multiLine? {
+            self.multiLine = previous.multiLine
+        }
+        if not self.dotMatchesNewline? {
+            self.dotMatchesNewline = previous.dotMatchesNewline
+        }
+        if not self.swapGreed? {
+            self.swapGreed = previous.swapGreed
+        }
+        if not self.unicode? {
+            self.unicode = previous.unicode
+        }
+    }
+}
+
+class Translator {
+    final list[mut HirFrame] stack
+    mut Flags flags
+    bool allowInvalidUtf8
+
+    operator new(mut list[mut HirFrame] stack, mut Flags flags, bool allowInvalidUtf8) {
+        self.stack = stack
+        self.flags = flags
+        self.allowInvalidUtf8 = allowInvalidUtf8
+    }
+
+    public method translate(str pattern, Ast ast) -> Hir {
+        return visit(ast, TranslatorI(self, pattern))
+    }
+}
+
+class TranslatorI from Visitor[Hir] {
+    final Translator trans
+    str pattern
+
+    public operator new(mut Translator trans, str pattern) {
+        self.trans = trans
+        self.pattern = pattern
+    }
+
+    private property Flags flags {
+        get {
+            return self.trans.flags
+        }
+    }
+
+    private mut method pop() -> mut HirFrame? {
+        return self.trans.stack.pop()
+    }
+
+    private mut method push(HirFrame frame) {
+        self.trans.stack.add(frame)
+    }
+
+    private method error(Span span, ErrorKind kind) -> RegexBuildError {
+        return RegexBuildError(kind, self.pattern, span)
+    }
+
+    private mut method setFlags(AstFlags astFlags) -> Flags {
+        var oldFlags = self.flags
+        mut var newFlags = Flags.fromAst(astFlags)
+        newFlags.merge(oldFlags)
+        self.trans.flags = newFlags
+        return oldFlags
+    }
+
+    private method hirLiteral(AstLiteral lit) -> Hir {
+        switch self.literalToChar(lit) {
+            case HirLiteral.Byte as b {
+                return Hir.literal(HirLiteral.Byte(b))
+            }
+            case HirLiteral.Unicode as ch {
+                if self.flags.caseInsensitive ?? false {
+                    return self.hirFromCharCaseInsensitive(lit.span, ch)
+                } else {
+                    return self.hirFromChar(lit.span, ch)
+                }
+            }
+        }
+    }
+
+    private method hirDot(Span span) -> Hir {
+        var unicode = self.flags.unicode
+        if not unicode and not self.trans.allowInvalidUtf8 {
+            raise self.error(span, ErrorKind.InvalidUtf8)
+        }
+        if self.flags.dotMatchesNewline {
+            return Hir.any(not unicode)
+        } else {
+            return Hir.dot(not unicode)
+        }
+    }
+
+    private method hirAssertion(Assertion ast) -> Hir {
+        var unicode = self.flags.unicode
+        var multiLine = self.flags.multiLine
+        switch ast.kind {
+            case AssertionKind.START_LINE {
+                if multiLine {
+                    return Hir.anchor(Anchor.START_LINE)
+                } else {
+                    return Hir.anchor(Anchor.START_TEXT)
+                }
+            }
+            case AssertionKind.END_LINE {
+                if multiLine {
+                    return Hir.anchor(Anchor.END_LINE)
+                } else {
+                    return Hir.anchor(Anchor.END_TEXT)
+                }
+            }
+            case AssertionKind.START_TEXT {
+                return Hir.anchor(Anchor.START_TEXT)
+            }
+            case AssertionKind.END_TEXT {
+                return Hir.anchor(Anchor.END_TEXT)
+            }
+            case AssertionKind.WORD_BOUNDARY {
+                if unicode {
+                    return Hir.wordBoundary(WordBoundary.UNICODE)
+                } else {
+                    return Hir.wordBoundary(WordBoundary.ASCII)
+                }
+            }
+            case AssertionKind.NOT_WORD_BOUNDARY {
+                if unicode {
+                    return Hir.wordBoundary(WordBoundary.UNICODE_NEGATE)
+                } else {
+                    if not self.trans.allowInvalidUtf8 {
+                        raise self.error(ast.span, ErrorKind.InvalidUtf8)
+                    }
+                    return Hir.wordBoundary(WordBoundary.ASCII_NEGATE)
+                }
+            }
+            default => raise NotImplemented()
+        }
+    }
+
+    private method hirUnicodeClass(AstUnicode astClass) -> ClassUnicode {
+        if not self.flags.unicode {
+            raise self.error(astClass.span, ErrorKind.UnicodeNotAllowed)
+        }
+        var query = switch astClass.kind {
+            case ClassUnicodeKind.OneLetter as name => ClassQuery.OneLetter(name)
+            case ClassUnicodeKind.Named as name => ClassQuery.Binary(name)
+            case ClassUnicodeKind.NamedValue as pair => ClassQuery.ByValue((pair.1, pair.2))
+        }
+        mref ClassUnicode result
+        try {
+            result = unicodeType(query)
+        } except UnicodeError as err {
+            raise self.convertUnicodeClassError(astClass.span, err)
+        }
+        self.unicodeFoldAndNegate(astClass.span, astClass.negated, result)
+        if not result.ranges {
+            raise self.error(astClass.span, ErrorKind.EmptyClassNotAllowed)
+        }
+        return result
+    }
+
+    private method hirPerlUnicodeClass(ClassPerl astClass) -> ClassUnicode {
+        assert self.flags.unicode
+        mut ClassUnicode result
+        try {
+            result = switch astClass.kind {
+                case ClassPerlKind.DIGIT => perlDigit()
+                case ClassPerlKind.SPACE => perlSpace()
+                case ClassPerlKind.WORD => perlWord()
+                default => raise NotImplemented()
+            }
+        } except UnicodeError as err {
+            raise self.convertUnicodeClassError(astClass.span, err)
+        }
+        if astClass.negated {
+            result.negate()
+        }
+        return result
+    }
+
+    private method hirPerlByteClass(ClassPerl astClass) -> ClassBytes {
+        assert not self.flags.unicode
+        final var type = switch astClass.kind {
+            case ClassPerlKind.DIGIT => hirAsciiClassBytes(ClassAsciiKind.DIGIT)
+            case ClassPerlKind.SPACE => hirAsciiClassBytes(ClassAsciiKind.SPACE)
+            case ClassPerlKind.WORD => hirAsciiClassBytes(ClassAsciiKind.WORD)
+            default => raise NotImplemented()
+        }
+        if astClass.negated {
+            type.negate()
+        }
+        return type
+    }
+
+    private method hirGroup(AstGroup group, Hir expr) -> Hir {
+        var kind = switch group.kind {
+            case AstGroupKind.CaptureIndex as idx => GroupKind.CaptureIndex(idx)
+            case AstGroupKind.CaptureName as capname => GroupKind.CaptureName((capname.name, capname.index))
+            case AstGroupKind.NonCapturing => GroupKind.NonCapturing()
+        }
+        return Hir.group(Group(kind, expr))
+    }
+
+    private method hirRepetition(AstRepetition rep, Hir expr) -> Hir {
+        var kind = switch rep.op.kind {
+            case AstRepetitionKind.ZeroOrOne => RepetitionKind.ZeroOrOne()
+            case AstRepetitionKind.ZeroOrMore => RepetitionKind.ZeroOrMore()
+            case AstRepetitionKind.OneOrMore => RepetitionKind.OneOrMore()
+            case AstRepetitionKind.Range as r => switch r {
+                case AstRepetitionRange.Exactly as m => RepetitionKind.Range(RepetitionRange.Exactly(m))
+                case AstRepetitionRange.AtLeast as m => RepetitionKind.Range(RepetitionRange.AtLeast(m))
+                case AstRepetitionRange.Bounded as pair => RepetitionKind.Range(RepetitionRange.Bounded(pair))
+            }
+        }
+        var greedy = self.flags.swapGreed xor rep.greedy
+        return Hir.repetition(Repetition(kind, greedy, expr))
+    }
+
+    private method hirFromChar(Span span, char c) -> Hir {
+        if not self.flags.unicode and int(c) > 0x7F {
+            raise self.error(span, ErrorKind.UnicodeNotAllowed)
+        }
+        return Hir.literal(HirLiteral.Unicode(c))
+    }
+
+    private method hirFromCharCaseInsensitive(Span span, char c) -> Hir {
+        if self.flags.unicode {
+            var map = containsSimpleCaseMapping(c, c)
+            if not map {
+                return self.hirFromChar(span, c)
+            }
+            final var typ = ClassUnicode([ClassUnicodeRange(c, c)])
+            typ.caseFoldSimple()
+            return Hir.type(Class.Unicode(typ))
+        } else {
+            if int(c) > 0x7F {
+                raise self.error(span, ErrorKind.UnicodeNotAllowed)
+            }
+            if c not in ASCII_LETTERS {
+                return self.hirFromChar(span, c)
+            }
+            mut var typ = ClassBytes([ClassBytesRange(int(c), int(c))])
+            typ.caseFoldSimple()
+            return Hir.type(Class.Bytes(typ))
+        }
+    }
+
+
+    private method unicodeFoldAndNegate(
+        Span span,
+        bool negated,
+        mut ClassUnicode type,
+    ) {
+        if self.flags.caseInsensitive {
+            type.caseFoldSimple()
+        }
+        if negated {
+            type.negate()
+        }
+    }
+
+    private method bytesFoldAndNegate(
+        Span span,
+        bool negated,
+        mut ClassBytes type,
+    ) {
+        if self.flags.caseInsensitive {
+            type.caseFoldSimple()
+        }
+        if negated {
+            type.negate()
+        }
+        if not self.trans.allowInvalidUtf8 and not type.isAllAscii() {
+            raise self.error(span, ErrorKind.InvalidUtf8)
+        }
+    }
+
+    private method literalToChar(AstLiteral lit) -> HirLiteral {
+        if self.flags.unicode {
+            return HirLiteral.Unicode(lit.c)
+        }
+        if lit.byteVal()? as byte {
+            if byte <= 0x7F {
+                return HirLiteral.Unicode(char(byte))
+            }
+            if not self.trans.allowInvalidUtf8 {
+                raise self.error(lit.span, ErrorKind.InvalidUtf8)
+            }
+            return HirLiteral.Byte(byte)
+        } else {
+            return HirLiteral.Unicode(lit.c)
+        }
+    }
+
+    private method convertUnicodeClassError(
+        Span span,
+        UnicodeError error,
+    ) -> RegexBuildError {
+        return switch error {
+            case UnicodeError.PropertyNotFound => self.error(span, ErrorKind.UnicodePropertyNotFound)
+            case UnicodeError.PropertyValueNotFound => self.error(span, ErrorKind.UnicodePropertyValueNotFound)
+            case UnicodeError.PerlClassNotFound => self.error(span, ErrorKind.UnicodePerlClassNotFound)
+        }
+    }
+
+    public mut method finish() -> Hir {
+        assert self.trans.stack.length == 1 as f"Stack length should be 1, instead {self.trans.stack.length}"
+        return self.pop()!!.unwrapExpr()
+    }
+
+    public mut method visitPost(Ast ast) {
+        switch ast {
+            case Ast.Empty {
+                self.push(HirFrame.Expr(Hir.empty()))
+            }
+            case Ast.Flags as x {
+                self.setFlags(x.flags)
+                self.push(HirFrame.Expr(Hir.empty()))
+            }
+            case Ast.Literal as x {
+                self.push(HirFrame.Expr(self.hirLiteral(x)))
+            }
+            case Ast.Dot as span {
+                self.push(HirFrame.Expr(self.hirDot(span)))
+            }
+            case Ast.Assertion as x {
+                self.push(HirFrame.Expr(self.hirAssertion(x)))
+            }
+            case Ast.Class as c {
+                switch c {
+                    case AstClass.Perl as x {
+                        if self.flags.unicode {
+                            var type = self.hirPerlUnicodeClass(x)
+                            var hcls = Class.Unicode(type)
+                            self.push(HirFrame.Expr(Hir.type(hcls)))
+                        } else {
+                            var type = self.hirPerlByteClass(x)
+                            var hcls = Class.Bytes(type)
+                            self.push(HirFrame.Expr(Hir.type(hcls)))
+                        }
+                    }
+                    case AstClass.Unicode as x {
+                        var type = Class.Unicode(self.hirUnicodeClass(x))
+                        self.push(HirFrame.Expr(Hir.type(type)))
+                    }
+                    case AstClass.Bracketed as ast {
+                        if self.flags.unicode {
+                            var type = self.pop()!!.unwrapClassUnicode()
+                            self.unicodeFoldAndNegate(ast.span, ast.negated, type)
+                            if not type.ranges {
+                                raise self.error(ast.span, ErrorKind.EmptyClassNotAllowed)
+                            }
+                            var expr = Hir.type(Class.Unicode(type))
+                            self.push(HirFrame.Expr(expr))
+                        } else {
+                            var type = self.pop()!!.unwrapClassBytes()
+                            self.bytesFoldAndNegate(ast.span, ast.negated, type)
+                            if not type.ranges() {
+                                raise self.error(ast.span, ErrorKind.EmptyClassNotAllowed)
+                            }
+                            var expr = Hir.type(Class.Bytes(type))
+                            self.push(HirFrame.Expr(expr))
+                        }
+                    }
+                }
+            }
+            case Ast.Repetition as x {
+                var expr = self.pop()!!.unwrapExpr()
+                self.push(HirFrame.Expr(self.hirRepetition(x, expr)))
+            }
+            case Ast.Group as x {
+                var expr = self.pop()!!.unwrapExpr()
+                mut var oldFlags = self.pop()!!.unwrapGroup()
+                self.trans.flags = oldFlags
+                self.push(HirFrame.Expr(self.hirGroup(x, expr)))
+            }
+            case Ast.Concat {
+                final list[Hir] exprs = []
+                while self.pop()? as frame {
+                    if frame.Expr? as expr {
+                        if expr.kind {
+                            exprs.add(expr)
+                        }
+                    }
+                }
+                exprs.reverse()
+                self.push(HirFrame.Expr(Hir.concat(exprs)))
+            }
+            case Ast.Alternation {
+                final list[Hir] exprs = []
+                while self.pop()? as frame {
+                    if frame.Expr? as expr {
+                        exprs.add(expr)
+                    }
+                }
+                exprs.reverse()
+                self.push(HirFrame.Expr(Hir.alternation(exprs)))
+            }
+        }
+    }
+}
+
+union HirFrame {
+    Hir Expr
+    ClassUnicode ClassUnicode
+    ClassBytes ClassBytes
+    mut Flags Group
+    null Concat
+    null Alternation
+
+    method unwrapExpr() -> Hir {
+        if self.Expr? as expr {
+            return expr
+        } else {
+            raise ValueError(f"Tried to unwrap expr from HirFrame, got: {self !r}")
+        }
+    }
+
+    method unwrapClassUnicode() -> ClassUnicode {
+        if self.ClassUnicode? as expr {
+            return expr
+        } else {
+            raise ValueError(f"Tried to unwrap Unicode class from HirFrame, got: {self !r}")
+        }
+    }
+
+    method unwrapClassBytes() -> ClassBytes {
+        if self.ClassBytes? as expr {
+            return expr
+        } else {
+            raise ValueError(f"Tried to unwrap byte class from HirFrame, got: {self !r}")
+        }
+    }
+
+    mut method unwrapGroup() -> mut Flags {
+        if self.Group? as expr {
+            raise NotImplemented()
+            # return expr
+        } else {
+            raise ValueError(f"Tried to unwrap group from HirFrame, got: {self !r}")
+        }
+    }
+}
+
+func hirAsciiClassBytes(ClassAsciiKind kind) -> mut ClassBytes {
+    var ranges = [ClassBytesRange(int(pair.0), int(pair.1)) for var pair in asciiClass(kind)]
+    return ClassBytes(ranges)
+}
+
+func asciiClass(ClassAsciiKind kind) -> list[tuple[char, char]] {
+    return switch kind {
+        case ClassAsciiKind.ALNUM => [(c'0', c'9'), (c'A', c'Z'), (c'a', c'z')]
+        case ClassAsciiKind.ALPHA => [(c'A', c'Z'), (c'a', c'z')]
+        case ClassAsciiKind.ASCII => [(c'\x00', c'\x7F')]
+        case ClassAsciiKind.BLANK => [(c'\t', c'\t'), (c' ', c' ')]
+        case ClassAsciiKind.CNTRL => [(c'\x00', c'\x1F'), (c'\x7F', c'\x7F')]
+        case ClassAsciiKind.DIGIT => [(c'0', c'9')]
+        case ClassAsciiKind.GRAPH => [(c'!', c'~')]
+        case ClassAsciiKind.LOWER => [(c'a', c'z')]
+        case ClassAsciiKind.PRINT => [(c' ', c'~')]
+        case ClassAsciiKind.PUNCT => [(c'!', c'/'), (c':', c'@'), (c'[', c'`'), (c'{', c'~')]
+        case ClassAsciiKind.SPACE => [
+            (c'\t', c'\t'),
+            (c'\n', c'\n'),
+            (c'\x0B', c'\x0B'),
+            (c'\x0C', c'\x0C'),
+            (c'\r', c'\r'),
+            (c' ', c' '),
+        ]
+        case ClassAsciiKind.UPPER => [(c'A', c'Z')]
+        case ClassAsciiKind.WORD => [(c'0', c'9'), (c'A', c'Z'), (c'_', c'_'), (c'a', c'z')]
+        case ClassAsciiKind.X_DIGIT => [(c'0', c'9'), (c'A', c'F'), (c'a', c'f')]
+        default => raise NotImplemented()
+    }
+}

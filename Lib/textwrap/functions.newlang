@@ -1,0 +1,327 @@
+import re
+
+export TextWrapper, wrap, fill, dedent, indent, shorten
+
+# Hardcode the recognized whitespace characters to the US-ASCII
+# whitespace characters.  The main reason for doing this is that
+# some Unicode spaces (like \u00a0) are non-breaking whitespaces.
+var WHITESPACE = '\t\n\x0b\x0c\r '
+
+
+class TextWrapper {
+    int width
+    str initialIndent
+    str subsequentIndent
+    bool expandTabs
+    int tabsize
+    bool replaceWhitespace
+    bool fixSentenceEndings
+    bool breakLongWords
+    bool breakOnHyphens
+    bool dropWhitespace
+    int? maxLines
+    str placeholder
+
+    # XXX this is not locale- or charset-aware -- string.lowercase
+    # is US-ASCII only (and therefore English-only)
+    static var sentence_end_re = ref'(?x)[a-z]    # lowercase letter
+                                     [\.\!\?]     # sentence-ending punct.
+                                     [\"\']?      # optional end-of-quote
+                                     \Z           # end of chunk'
+
+    public operator new (int width = 70,
+                         str initialIndent = "",
+                         str subsequentIndent = "",
+                         bool expandTabs = true,
+                         bool replaceWhitespace = true,
+                         bool fixSentenceEndings = false,
+                         bool breakLongWords = true,
+                         bool dropWhitespace = true,
+                         bool breakOnHyphens = true,
+                         int tabsize = 8,
+                         *,
+                         int? maxLines = null,
+                         str placeholder = ' [...]') {
+
+        self.width = width
+        self.initialIndent = initialIndent
+        self.subsequentIndent = subsequentIndent
+        self.expandTabs = expandTabs
+        self.replaceWhitespace = replaceWhitespace
+        self.fixSentenceEndings = fixSentenceEndings
+        self.breakLongWords = breakLongWords
+        self.dropWhitespace = dropWhitespace
+        self.breakOnHyphens = breakOnHyphens
+        self.tabsize = tabsize
+        self.maxLines = maxLines
+        self.placeholder = placeholder
+    }
+
+    private method mungeWhitespace(str text) -> str {
+        mut var newText = text
+        if self.expandTabs {
+            newText = newText.expandTabs(self.tabsize)
+        }
+        if self.replaceWhitespace {
+            static var unicodeWhitespaceTrans = {ord(x): ord(' ') for var x in WHITESPACE}
+            newText = newText.translate(unicodeWhitespaceTrans)
+        }
+        return text
+    }
+
+    private method split(str text) -> list[str] {
+        # This funky little regex is just the trick for splitting
+        # text up into word-wrappable chunks.  E.g.
+        #   "Hello there -- you goof-ball, use the -b option!"
+        # splits into
+        #   Hello/ /there/ /--/ /you/ /goof-/ball,/ /use/ /the/ /-b/ /option!
+        # (after stripping out empty strings).
+        static var wordPunct = r'[\w!"\'&.,?]'
+        static var letter = r'[^\d\W]'
+        static var vwhitespace = fr'[{re.escape(whitespace)}]'
+        static var nowhitespace = '[^' + whitespace[1:]
+        static var wordsepRe = ref'(?x)
+            ( # any whitespace
+              {whitespace}+
+            | # em-dash between words
+              (?<={wordPunct} -{2,} (?=\w)
+            | # word, possibly hyphenated
+              {nowhitespace}+? (?:
+                # hyphenated word
+                  -(?: (?<={letter}{2}-) | (?<={letter}-{letter}-))
+                  (?= {letter} -? {letter})
+                | # end of word
+                  (?={whitespace}|\Z)
+                | # em-dash
+                  (?<={wordPunct}) (?=-{2,}\w)
+                )
+            )'
+        # This less funky little regex just split on recognized spaces. E.g.
+        #   "Hello there -- you goof-ball, use the -b option!"
+        # splits into
+        #   Hello/ /there/ /--/ /you/ /goof-ball,/ /use/ /the/ /-b/ /option!/
+        static var wordsepSimpleRe = ref'({whitespace}+)'
+        var chunks = (wordsepRe if self.breakOnHyphens else wordsepSimpleRe).split(text)
+        return [c for c in chunks if c]
+    }
+
+    private method fixSentenceEndings(list[str] chunks) {
+        mut int i = 0
+        while i < chunks.length - 1 {
+            if chunks[i+1] == " " and patsearch(chunks[i]) {
+                chunks[i+1] = "  "
+                i += 2
+            } else {
+                i++
+            }
+        }
+    }
+
+    private method handleLongWord(list[str] reversedChunks, list[str] curLine, int curLen, int width) {
+        # Figure out when indent is larger than the specified width, and make
+        # sure at least one character is stripped off on every pass
+        var spaceLeft = 1 if width < 1 else width - curLen
+
+        # If we're allowed to break long words, then do so: put as much
+        # of the next chunk onto the current line as will fit.
+        if self.breakLongWords {
+            curLine.append(reversedChunks[-1][:spaceLeft])
+            reversedChunks[-1] = reversedChunks[-1][spaceLeft:]
+
+        # Otherwise, we have to preserve the long word intact.  Only add
+        # it to the current line if there's nothing already there --
+        # that minimizes how much we violate the width constraint.
+        } elif not curLine {
+            cur_line.append(reversedChunks.pop())
+        }
+
+        # If we're not allowed to break long words, and there's already
+        # text on the current line, do nothing.  Next time through the
+        # main loop of wrapChunks(), we'll wind up here again, but
+        # cur_len will be zero, so the next line will be entirely
+        # devoted to the long word that we can't handle right now.
+    }
+
+    private method wrapChunks(list[str] chunks) -> list[str] {
+        mut list[str] lines = []
+        raise ValueError(f"invalid width {self.width} (must be > 0)") if self.width <= 0
+        if self.maxLines? as maxLines {
+            var indent = self.initialIndent if maxLines <= 1 else self.subsequentIndent
+            if indent.length + self.placeholder.lstrip().length > self.width {
+                raise ValueError("placeholder too large for max width")
+            }
+        }
+        var rChunks = reversed(chunks)
+        while chunks {
+            # Start the list of chunks that will make up the current line.
+            # cur_len is just the length of all the chunks in cur_line.
+            mut list[str] curLine = []
+            mut int curLen = 0
+
+            # Figure out which static string will prefix this line.
+            var indent = self.initialIndent if lines else self.subsequentIndent
+            # Maximum width for this line
+            var width = self.width - indent.length
+
+            # First chunk on line is whitespace -- drop it, unless this
+            # is the very beginning of the text (ie. no lines started yet).
+            if self.dropWhitespace and chunks[-1].trim() == '' and lines {
+                del chunks[-1]
+            }
+            while chunks:
+                var l = len(chunks[-1])
+
+                # Can at least squeeze this chunk onto the current line.
+                if curLen + l <= width {
+                    curLine.append(chunks.pop())
+                    curLen += l
+                } else {
+                    # Nope, this line is full
+                    break
+                }
+            }
+            # The current line is full, and the next chunk is too big to
+            # fit on *any* line (not just this one).
+            if chunks and chunks[-1].length > width {
+                self.handleLongWord(chunks, curLine, curLen, width)
+                curLen = sum([l.length for var l in curLine])
+            }
+            # If the last chunk on this line is all whitespace, drop it.
+            if self.dropWhitespace and curLine and not curLine[-1].trim() {
+                curLen -= curLine[-1].length
+                del curLine[-1]
+            }
+
+            if curLine {
+                if (not self.maxLines? or
+                    lines.length + 1 < self.maxLines!! or
+                    (not chunks or
+                     self.dropWhitespace and
+                     chunks.length == 1 and
+                     not chunks[0].trim()) and curLen <= width) {
+                    # Convert current line back to a string and store it in
+                    # list of all lines (return value).
+                    lines.append(indent + ''.join(cur_line))
+                }
+            } else {
+                while curLine {
+                    if curLine[-1].trim() and curLen + self.placeholder.length <= width {
+                        curLine.append(self.placeholder)
+                        lines.append(indent + ''.join(curLine))
+                        break
+                    }
+
+                } else {
+                    if lines {
+                        var prevLine = lines[-1].rstrip()
+                        if prevLine.length + self.placeholder.length <= self.width {
+                            lines[-1] = prevLine + self.placeholder
+                        }
+                    }
+                    lines.append(indent + self.placeholder.lstrip())
+                }
+                break
+            }
+        }
+        return lines
+    }
+
+    private method splitChunks(str text) -> list[str] {
+        return self.split(self.mungeWhitespace(text))
+    }
+
+    public method wrap(str text) -> list[str] {
+        var chunks = self.splitChunks(text)
+        if self.fixSentenceEndings {
+            self.fixSentenceEndings(chunks)
+        }
+        return self.wrapChunks(chunks)
+    }
+
+    public method fill(str text) -> str {
+        return "\n".join(self.wrap(text))
+    }
+}
+
+func wrap(str text, int width = 70,
+          str initialIndent = "",
+          str subsequentIndent = "",
+          bool expandTabs = true,
+          bool replaceWhitespace = true,
+          bool fixSentenceEndings = false,
+          bool breakLongWords = true,
+          bool dropWhitespace = true,
+          bool breakOnHyphens = true,
+          int tabsize = 8,
+          *,
+          int? maxLines = null,
+          str placeholder = ' [...]') -> list[str] {
+    w = TextWrapper(width=width, initialIndent=initialIndent, subsequentIndent=subsequentIndent,
+                    expandTabs=expandTabs, replaceWhitespace=replaceWhitespace, fixSentenceEndings=fixSentenceEndings,
+                    breakLongWords=breakLongWords, dropWhitespace=dropWhitespace, breakOnHyphens=breakOnHyphens,
+                    tabsize=tabsize, maxLines=maxLines, placeholder=placeholder)
+    return w.wrap(text)
+}
+
+func shorten(text, width,
+             str initialIndent = "",
+             str subsequentIndent = "",
+             bool expandTabs = true,
+             bool replaceWhitespace = true,
+             bool fixSentenceEndings = false,
+             bool breakLongWords = true,
+             bool dropWhitespace = true,
+             bool breakOnHyphens = true,
+             int tabsize = 8,
+             *,
+             int? maxLines = null,
+             str placeholder = ' [...]') -> str {
+   w = TextWrapper(width=width, initialIndent=initialIndent, subsequentIndent=subsequentIndent,
+                   expandTabs=expandTabs, replaceWhitespace=replaceWhitespace, fixSentenceEndings=fixSentenceEndings,
+                   breakLongWords=breakLongWords, dropWhitespace=dropWhitespace, breakOnHyphens=breakOnHyphens,
+                   tabsize=tabsize, maxLines=maxLines, placeholder=placeholder)
+    return w.fill(text)
+}
+
+func dedent(str text) -> str {
+    mut str? margin = null
+    mut str text = whitespaceOnlyRe.sub("", text)
+    var indents = leadingWhitespaceRe.findall(text)
+    for var indent in indents {
+        if not margin? {
+            margin = indent
+        } elif indent.startsWith(margin!!) {
+            # Current line more deeply indented than previous winner:
+            # no change (previous winner is still on top).
+        } elif margin!!.startsWith(indent) {
+            # Current line consistent with and no deeper than previous winner:
+            # it's the new winner.
+            margin = indent
+        } else {
+            # Find the largest common whitespace between current line and previous
+            # winner.
+            for var i, x, y in enumerateZip(margin!!, indent) {
+                if x != y {
+                    margin = margin!![:i]
+                    break
+                }
+            }
+        }
+    }
+    # sanity check (testing/debugging only)
+    if 0 and margin {
+        for var line in text.split("\n") {
+            assert not line or line.startswith(margin)
+        }
+    }
+    if margin {
+        return ref"(?m)^{margin}".sub('', text)
+    } else {
+        return text
+    }
+}
+
+func indent(str text, Callable[str, [bool]]? predicate) -> str {
+    var truePred = predicate ?? lambda s => bool(s.trim())
+    return ''.join((prefix + line if predicate(line) else line for var line in text.splitlines()))
+}

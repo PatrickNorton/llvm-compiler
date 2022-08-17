@@ -1,0 +1,627 @@
+export Span, Ast, WithComments, Literal, LiteralKind
+export Alternation, Comment, Concat, CaptureName, Group, Position
+export Class, ClassSet, ClassSetUnion, ClassBracketed, ClassSetBinaryOpKind, ClassSetBinaryOp, ClassSetItem, ClassAscii
+export SetFlags, AstError, ErrorKind, GroupKind, Flags, Flag, ClassAsciiKind, RepetitionKind, RepetitionOp, Repetition
+export RepetitionRange, Assertion, ClassPerl, ClassUnicode, HexLiteralKind, SpecialLiteralKind, AssertionKind
+export ClassUnicodeKind, ClassUnicodeOpKind, ClassPerlKind, FlagsItem, FlagsItemKind, ClassSetRange
+
+const class Span {
+    public Position start
+    public Position end
+
+    public operator new(Position start, Position end) {
+        self.start = start
+        self.end = end
+    }
+
+    public method withEnd(Position end) -> Span {
+        return Span(self.start, end)
+    }
+}
+
+union Ast {
+    Span Empty
+    SetFlags Flags
+    Literal Literal
+    Span Dot
+    Assertion Assertion
+    Class Class
+    Repetition Repetition
+    Group Group
+    Alternation Alternation
+    Concat Concat
+
+    public property Span span {
+        get {
+            return switch self {
+                case Ast.Empty as e => e
+                case Ast.Flags as f => f.span
+                case Ast.Literal as l => l.span
+                case Ast.Dot as d => d
+                case Ast.Assertion as a => a.span
+                case Ast.Class as c => c.span
+                case Ast.Repetition as r => r.span
+                case Ast.Group as g => g.span
+                case Ast.Alternation as a => a.span
+                case Ast.Concat as c => c.span
+            }
+        }
+    }
+}
+
+const class WithComments {
+    public Ast ast
+    public list[Comment] comments
+
+    public operator new(Ast ast, list[Comment] comments) {
+        self.ast = ast
+        self.comments = comments
+    }
+}
+
+const class Flags {
+    public Span span
+    public list[FlagsItem] items
+
+    public operator new(Span span, list[FlagsItem] flags) {
+        self.span = span
+        self.items = flags
+    }
+
+    public method flagState(Flag flag) -> bool? {
+        mut var negated = false
+        for var x in self.items {
+            switch x.kind {
+                case FlagsItemKind.Negation {
+                    negated = true
+                }
+                case FlagsItemKind.Flag as xflag {
+                    return not negated if xflag == flag
+                }
+            }
+        }
+        return null
+    }
+}
+
+union LiteralKind {
+    null Verbatim
+    null Punctuation
+    null Octal
+    HexLiteralKind HexFixed
+    HexLiteralKind HexBrace
+    SpecialLiteralKind Special
+}
+
+const class Alternation {
+    public Span span
+    public list[Ast] asts
+
+    public operator new(Span span, list[Ast] asts) {
+        self.span = span
+        self.asts = asts
+    }
+
+    public method intoAst() -> Ast {
+        return switch self.asts.length {
+            case 0 => Ast.Empty(self.span)
+            case 1 => self.asts[0]
+            default => Ast.Alternation(self)
+        }
+    }
+}
+
+const class Assertion {
+    public Span span
+    public AssertionKind kind
+
+    public operator new(Span span, AssertionKind kind) {
+        self.span = span
+        self.kind = kind
+    }
+}
+
+enum AssertionKind {
+    START_LINE,
+    END_LINE,
+    START_TEXT,
+    END_TEXT,
+    WORD_BOUNDARY,
+    NOT_WORD_BOUNDARY
+}
+
+const class Comment {
+    public Span span
+    public str comment
+
+    public operator new (Span span, str comment) {
+        self.span = span
+        self.comment = comment
+    }
+}
+
+$derive(repr)
+const class Concat {
+    public Span span
+    public list[Ast] asts
+
+    public operator new(Span span, list[Ast] asts) {
+        self.span = span
+        self.asts = asts
+    }
+
+    public method withSpan(Span s) -> Concat {
+        return Concat(s, self.asts)
+    }
+
+    public method withAst(Ast ast) -> Concat {
+        return Concat(self.span, self.asts + [ast])
+    }
+
+    public method intoAst() -> Ast {
+        return switch self.asts.length {
+            case 0 => Ast.Empty(self.span)
+            case 1 => self.asts[0]
+            default => Ast.Concat(self)
+        }
+    }
+}
+
+const class CaptureName {
+    public Span span
+    public str name
+    public int index
+
+    public operator new(Span span, str name, int index) {
+        self.span = span
+        self.name = name
+        self.index = index
+    }
+}
+
+const class Group {
+    public Span span
+    public GroupKind kind
+    public Ast ast
+
+    public operator new(Span span, GroupKind kind, Ast ast) {
+        self.span = span
+        self.kind = kind
+        self.ast = ast
+    }
+
+    public method withSpan(Span s) -> Group {
+        return Group(s, self.kind, self.ast)
+    }
+
+    public method withAst(Ast a) -> Group {
+        return Group(self.span, self.kind, a)
+    }
+
+    public property Flags? flags {
+        get {
+            if self.kind.NonCapturing? as flags {
+                return flags
+            } else {
+                return null
+            }
+        }
+    }
+}
+
+union GroupKind {
+    int CaptureIndex
+    CaptureName CaptureName
+    Flags NonCapturing
+}
+
+$derive(repr)
+const class Literal {
+    public Span span
+    public LiteralKind kind
+    public char c
+
+    public operator new(Span span, LiteralKind kind, char c) {
+        self.span = span
+        self.kind = kind
+        self.c = c
+    }
+
+    public method withSpan(Span span) -> Literal {
+        return Literal(span, self.kind, self.c)
+    }
+
+    public method byteVal() -> int? {
+        var shortHex = LiteralKind.HexFixed(HexLiteralKind.X)
+        if int(self.c) <= 255 and self.kind == shortHex {
+            return int(self.c)
+        } else {
+            return null
+        }
+    }
+}
+
+const class Position {
+    public int offset
+    public int line
+    public int column
+
+    public operator new(int offset, int line, int column) {
+        self.offset = offset
+        self.line = line
+        self.column = column
+    }
+}
+
+const class SetFlags {
+    public Span span
+    public Flags flags
+
+    public operator new(Span span, Flags flags) {
+        self.span = span
+        self.flags = flags
+    }
+}
+
+union Class {
+    ClassUnicode Unicode
+    ClassPerl Perl
+    ClassBracketed Bracketed
+
+    public property Span span {
+        get {
+            return switch self {
+                case Class.Unicode as u => u.span
+                case Class.Perl as p => p.span
+                case Class.Bracketed as b => b.span
+            }
+        }
+    }
+}
+
+union ClassSet {
+    ClassSetItem Item
+    ClassSetBinaryOp BinaryOp
+
+    public property Span span {
+        get {
+            return switch self {
+                case ClassSet.Item as i => i.span
+                case ClassSet.BinaryOp as i => i.span
+            }
+        }
+    }
+
+    public static method unionSet(ClassSetUnion ast) -> ClassSet {
+        return ClassSet.Item(ClassSetItem.Union(ast))
+    }
+}
+
+const class ClassSetUnion {
+    public Span span
+    public list[ClassSetItem] items
+
+    public operator new(Span span, list[ClassSetItem] items) {
+        self.span = span
+        self.items = items
+    }
+
+    public method intoItem() -> ClassSetItem {
+        return switch self.items.length {
+            case 0 => ClassSetItem.Empty(self.span)
+            case 1 => self.items[0]
+            default => ClassSetItem.Union(self)
+        }
+    }
+}
+
+const class ClassBracketed {
+    public Span span
+    public bool negated
+    public ClassSet kind
+
+    public operator new(Span span, bool negated, ClassSet kind) {
+        self.span = span
+        self.negated = negated
+        self.kind = kind
+    }
+}
+
+enum ClassSetBinaryOpKind {
+    INTERSECTION,
+    DIFFERENCE,
+    SYMMETRIC_DIFFERENCE
+}
+
+const class Repetition {
+    public Span span
+    public RepetitionOp op
+    public bool greedy
+    public Ast ast
+
+    public operator new(Span span, RepetitionOp op, bool greedy, Ast ast) {
+        self.span = span
+        self.op = op
+        self.greedy = greedy
+        self.ast = ast
+    }
+}
+
+const class RepetitionOp {
+    public Span span
+    public RepetitionKind kind
+
+    public operator new(Span span, RepetitionKind kind) {
+        self.span = span
+        self.kind = kind
+    }
+}
+
+union RepetitionKind {
+    null ZeroOrOne
+    null ZeroOrMore
+    null OneOrMore
+    RepetitionRange Range
+}
+
+union RepetitionRange {
+    int Exactly
+    int AtLeast
+    tuple[int, int] Bounded
+
+    public method isValid() -> bool {
+        if self.Bounded? as pair {
+            return pair.0 <= pair.1
+        } else {
+            return true
+        }
+    }
+}
+
+enum Flag {
+    CASE_INSENSITIVE,
+    MULTI_LINE,
+    DOT_MATCHES_NEWLINE,
+    SWAP_GREED,
+    UNICODE,
+    IGNORE_WHITESPACE
+}
+
+class FlagsItem {
+    public Span span
+    public FlagsItemKind kind
+
+    public operator new(Span span, FlagsItemKind kind) {
+        self.span = span
+        self.kind = kind
+    }
+}
+
+union FlagsItemKind {
+    null Negation
+    Flag Flag
+}
+
+enum SpecialLiteralKind {
+    BELL,
+    FORM_FEED,
+    TAB,
+    LINE_FEED,
+    CARRIAGE_RETURN,
+    VERTICAL_TAB,
+    SPACE
+}
+
+enum HexLiteralKind {
+    X,
+    UNICODE_SHORT,
+    UNICODE_LONG
+
+    public property int digits {
+        get {
+            return switch self {
+                case HexLiteralKind.X => 1
+                case HexLiteralKind.UNICODE_SHORT => 4
+                case HexLiteralKind.UNICODE_LONG => 8
+                default => raise NotImplemented()
+            }
+        }
+    }
+}
+
+const class ClassUnicode {
+    public Span span
+    public bool negated
+    public ClassUnicodeKind kind
+
+    public operator new(Span span, bool negated, ClassUnicodeKind kind) {
+        self.span = span
+        self.negated = negated
+        self.kind = kind
+    }
+}
+
+union ClassUnicodeKind {
+    char OneLetter
+    str Named
+    tuple[ClassUnicodeOpKind, str, str] NamedValue
+}
+
+enum ClassUnicodeOpKind {
+    EQUAL,
+    COLON,
+    NOT_EQUAL
+}
+
+const class ClassPerl {
+    public Span span
+    public ClassPerlKind kind
+    public bool negated
+
+    public operator new(Span span, ClassPerlKind kind, bool negated) {
+        self.span = span
+        self.kind = kind
+        self.negated = negated
+    }
+}
+
+enum ClassPerlKind {
+    DIGIT,
+    SPACE,
+    WORD
+}
+
+union ClassSetItem {
+    Span Empty
+    Literal Literal
+    ClassSetRange Range
+    ClassAscii Ascii
+    ClassUnicode Unicode
+    ClassPerl Perl
+    ClassBracketed Bracketed
+    ClassSetUnion Union
+
+    public property Span span {
+        get {
+            return switch self {
+                case ClassSetItem.Empty as s => s
+                case ClassSetItem.Literal as l => l.span
+                case ClassSetItem.Range as r => r.span
+                case ClassSetItem.Ascii as a => a.span
+                case ClassSetItem.Unicode as u => u.span
+                case ClassSetItem.Perl as p => p.span
+                case ClassSetItem.Bracketed as b => b.span
+                case ClassSetItem.Union as u => u.span
+            }
+        }
+    }
+}
+
+const class ClassSetRange {
+    public Span span
+    public Literal start
+    public Literal end
+
+    public operator new(Span span, Literal start, Literal end) {
+        self.span = span
+        self.start = start
+        self.end = end
+    }
+
+    public method isValid() -> bool {
+        return int(self.start.c) <= int(self.end.c)
+    }
+}
+
+const class ClassSetBinaryOp {
+    public Span span
+    public ClassSetBinaryOpKind kind
+    public ClassSet lhs
+    public ClassSet rhs
+
+    public operator new(Span span, ClassSetBinaryOpKind kind, ClassSet lhs, ClassSet rhs) {
+        self.span = span
+        self.kind = kind
+        self.lhs = lhs
+        self.rhs = rhs
+    }
+}
+
+const class ClassAscii {
+    public Span span
+    public ClassAsciiKind kind
+    public bool negated
+
+    public operator new(Span span, ClassAsciiKind kind, bool negated) {
+        self.span = span
+        self.kind = kind
+        self.negated = negated
+    }
+}
+
+enum ClassAsciiKind {
+    ALNUM,
+    ALPHA,
+    ASCII,
+    BLANK,
+    CNTRL,
+    DIGIT,
+    GRAPH,
+    LOWER,
+    PRINT,
+    PUNCT,
+    SPACE,
+    UPPER,
+    WORD,
+    X_DIGIT
+
+    public static method fromName(str name) -> ClassAsciiKind? {
+        return switch name {
+            case "alnum" => cls.ALNUM
+            case "alpha" => cls.ALPHA
+            case "ascii" => cls.ASCII
+            case "blank" => cls.BLANK
+            case "cntrl" => cls.CNTRL
+            case "digit" => cls.DIGIT
+            case "graph" => cls.GRAPH
+            case "lower" => cls.LOWER
+            case "print" => cls.PRINT
+            case "punct" => cls.PUNCT
+            case "space" => cls.SPACE
+            case "upper" => cls.UPPER
+            case "word" => cls.WORD
+            case "xdigit" => cls.X_DIGIT
+            default => null
+        }
+    }
+}
+
+const class AstError from Throwable {
+    private Span span
+    private ErrorKind kind
+    private str pattern
+
+    public operator new(Span span, str pattern, ErrorKind kind) {
+        self.span = span
+        self.kind = kind
+        self.pattern = pattern
+    }
+
+    public method msg() -> str {
+        return str(self.kind)
+    }
+}
+
+union ErrorKind {
+    null CaptureLimitExceeded
+    null ClassEscapeInvalid
+    null ClassRangeInvalid
+    null ClassRangeLiteral
+    null ClassUnclosed
+    null DecimalEmpty
+    null DecimalInvalid
+    null EscapeHexEmpty
+    null EscapeHexInvalid
+    null EscapeHexInvalidDigit
+    null EscapeUnexpectedEof
+    null EscapeUnrecognized
+    null FlagDanglingNegation
+    Span FlagDuplicate
+    Span FlagRepeatedNegation
+    null FlagUnexpectedEof
+    null FlagUnrecognized
+    Span GroupNameDuplicate
+    null GroupNameEmpty
+    null GroupNameInvalid
+    null GroupNameUnexpectedEof
+    null GroupUnclosed
+    null GroupUnopened
+    int NestLimitExceeded
+    null RepetitionCountInvalid
+    null RepetitionCountDecimalEmpty
+    null RepetitionCountUnclosed
+    null RepetitionMissing
+    null UnicodeClassInvalid
+    null UnsupportedBackReference
+    null UnsupportedLookAround
+}

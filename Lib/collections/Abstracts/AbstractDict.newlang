@@ -1,0 +1,31 @@
+from itertools import all
+
+export AbstractDict
+
+interface AbstractDict[K, V] from dict[K, V] {
+    operator == (dict[K, V] other) {
+        return (self.length == other.length
+                and all(k in other and other[k] == v for K key, V value in self))
+    }
+
+    operator bool {
+        return self.length
+    }
+
+    operator + (dict[K, V] other, /) -> dict[K, V] {
+        return {**self, **other}
+    }
+
+    public method remove(V value) -> K {
+        K key = self.keyOf(value)
+        del self[key]
+        return key
+    }
+
+    public method keyOf(V value) -> K {
+        for K key, V val in self {
+            return key if value == val
+        }
+        raise ValueError(f"Dict does not contain value {value}")
+    }
+}

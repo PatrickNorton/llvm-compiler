@@ -1,0 +1,50 @@
+export FrozenDict
+
+
+final class FrozenDict[K, V] from dict[K, V] {
+    private dict[K, V] items
+
+#     operator new (*tuple[K, V] items, /) {
+#         self.items = dict(items)
+#     }
+
+    operator new (dict[K, V] items, /) {
+        self.items = {i: j for var i, var j in items}
+    }
+
+    operator + (dict[K, V] items, /) -> dict[K, V] {
+        raise NotImplemented
+    }
+
+    operator [] (K key) -> V {
+        return items[key]
+    }
+
+    operator []= (K key, V value) {
+        raise NotImplemented
+    }
+
+    operator del[] (V value) {
+        raise NotImplemented
+    }
+
+    operator in (K key) {
+        return key in self.items
+    }
+
+    operator iter -> K, V {
+        yield from self.items
+    }
+
+    operator bool {
+        return self.items
+    }
+
+    method remove(V value) -> K {
+        raise NotImplemented
+    }
+
+    method keyOf(V value) -> K {
+        return self.items.keyOf(value)
+    }
+}

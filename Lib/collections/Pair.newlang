@@ -1,0 +1,23 @@
+export Pair
+
+const class Pair[T, U] {
+    public T first
+    public U second
+
+    public operator new(T first, U second) {
+        self.first = first
+        self.second = second
+    }
+
+    public operator repr {
+        return f"Pair({repr(self.first)}, {repr(self.second)})"
+    }
+
+    public operator str {
+        return f"Pair({self.first}, {self.second})"
+    }
+
+    public operator == (Pair[T, U] other) {
+        return self.first == other.first and self.second == other.second
+    }
+}

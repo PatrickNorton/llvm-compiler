@@ -1,0 +1,271 @@
+from string import StringBuilder
+
+from .builder import RegexBuilder
+from .exec import Exec
+from .expand import expandStr
+from .Match import Match
+from .trait import Locations
+
+export Regex, CaptureLocations, Captures
+
+class Regex {
+    Exec value
+
+    public operator new(str re) {
+        self.value = RegexBuilder(re).build()
+    }
+
+    public method isMatch(str text) -> bool {
+        return self.isMatchAt(text, 0)
+    }
+
+    public method isMatchAt(str text, int start) -> bool {
+        return self.shortestMatchAt(text, start)?
+    }
+
+    public method find(str text) -> Match? {
+        return self.findAt(text, 0)
+    }
+
+    public generator method findIter(str text) -> Match {
+        var value = self.value.searcherStr().findIter(bytes(text))
+        for var n in value {
+            yield Match(text, *n)
+        }
+    }
+
+    public method captures(str text) -> Captures? {
+        mut var locs = self.captureLocations()
+        if self.capturesReadAt(locs, text, 0)? {
+            return Captures(text, locs.value, self.value.captureNameIdx())
+        } else {
+            return null
+        }
+    }
+
+    public generator method capturesIter(str text) -> Captures {
+        for var locs in self.value.searcherStr().capturesIter(text) {
+            yield Captures(text, locs, self.value.searcherStr().captureNameIdx())
+        }
+    }
+
+    public generator method split(str text) -> str {
+        mut var last = 0
+        for var m in self.findIter(text) {
+            var matched = text[last:m.start]
+            last = m.end
+            yield matched
+        }
+        yield text[last:]
+    }
+
+    public generator method splitN(str text, int limit) -> str {
+        mut int n = 0
+        mut var last = 0
+        for var m in self.findIter(text) {
+            n++
+            break if n >= limit
+            var matched = text[last:m.start]
+            last = m.end
+            yield matched
+        }
+        yield text[last:]
+    }
+
+    public method replace(str text, str replacement) -> str {
+        return self.replacen(text, 1, replacement)
+    }
+
+    public method replaceAll(str text, str replacement) -> str {
+        return self.replacen(text, 0, replacement)
+    }
+
+    public method replacen(str text, int limit, str replacement) -> str {
+        # If we know that the replacement doesn't have any capture expansions,
+        # then we can fast path. The fast path can make a tremendous
+        # difference:
+        #
+        #   1) We use `findIter` instead of `capturesIter`. Not asking for
+        #      captures generally makes the regex engines faster.
+        #   2) We don't need to look up all of the capture groups and do
+        #      replacements inside the replacement string. We just push it
+        #      at each match and be done with it.
+        mut var repl = ReplacerStr(replacement)
+        if repl.noExpansion()? as rep {
+            final var new = StringBuilder(cap=text.length)
+            mut var lastMatch = 0
+            for int i, var m in enumerate(self.findIter(text)) {
+                break if limit > 0 and i >= limit
+
+                new.add(text[lastMatch:m.start])
+                new.add(rep)
+                lastMatch = m.end
+            }
+            return text if not new and not lastMatch
+            new.add(text[lastMatch:])
+            return str(new)
+        }
+
+        # The slower path, which we use if the replacement needs access to
+        # capture groups.
+        mut var new = StringBuilder(cap=text.length)
+        mut var lastMatch = 0
+        for var i, var cap in enumerate(self.capturesIter(text)) {
+            break if limit > 0 and i >= limit
+
+            var m = cap.group(0)
+            new.add(text[lastMatch:m.start])
+            new = StringBuilder(repl.replaceAppend(cap, str(new)))
+            lastMatch = m.end
+        }
+        return text if not new and not lastMatch
+        new.add(text[lastMatch:])
+        return str(new)
+    }
+
+    # Advanced/lower-level search methods
+    public method shortestMatch(str text) -> int? {
+        return self.shortestMatchAt(text, 0)
+    }
+
+    public method shortestMatchAt(str text, int start) -> int? {
+        return self.value.searcherStr().shortestMatchAt(text, start)
+    }
+
+    public method findAt(str text, int start) -> Match? {
+        if self.value.searcherStr().findAt(text, start)? as x {
+            return Match(text, *x)
+        } else {
+            return null
+        }
+    }
+
+    public method capturesRead(mut CaptureLocations locs, str text) -> Match? {
+        return self.capturesReadAt(locs, text, 0)
+    }
+
+    public method capturesReadAt(mut CaptureLocations locs, str text, int start) -> Match? {
+        if self.value.searcherStr().capturesReadAt(locs.value, bytes(text), start)? as x {
+            return Match(text, *x)
+        } else {
+            return null
+        }
+    }
+
+    # Auxiliary methods
+
+    public operator str {
+        # FIXME: Parse this properly
+        return (self.value.regexStrings())[0]
+    }
+
+    public generator method captureNames() -> str? {
+        yield from self.value.captureNames()
+    }
+
+    public method captureLen() -> int {
+        return self.value.captureNames().length
+    }
+
+    public method captureLocations() -> mut CaptureLocations {
+        return CaptureLocations(self.value.searcherStr().locations())
+    }
+}
+
+class CaptureLocations {
+    Locations value
+
+    public operator new (Locations value) {
+        self.value = value
+    }
+
+    public operator [] (int i) -> tuple[int, int]? {
+        return self.value.pos(i)
+    }
+
+    public property int length {
+        get {
+            return self.value.length
+        }
+    }
+}
+
+class Captures {
+    str text
+    Locations locs
+    dict[str, int] namedGroups
+
+    operator new(str text, Locations locs, dict[str, int] namedGroups) {
+        self.text = text
+        self.locs = locs
+        self.namedGroups = namedGroups
+    }
+
+    public operator iter -> Match? {
+        for var loc in self.locs {
+            if loc? as l {
+                yield Match(self.text, *l)
+            } else {
+                yield null
+            }
+        }
+    }
+
+    # Note: these were originally both operator [], but due to overloading issues, are no longer so
+    # Note 2: IndexError is still not implemented, but should be soon
+    public method group(int i) -> Match {
+        return self.get(i)!! # ?? raise IndexError(f"No group at index {i}")
+    }
+
+    public method namedGroup(str name) -> Match {
+        return self.name(name)!! # ?? raise IndexError(f"No group named '{name}'")
+    }
+
+    public method get(int i) -> Match? {
+        if self.locs.pos(i)? as p {
+            return Match(self.text, *p)
+        } else {
+            return null
+        }
+    }
+
+    public method name(str name) -> Match? {
+        if self.namedGroups.get(name)? as n {
+            return self.get(n)
+        } else {
+            return null
+        }
+    }
+
+    public method expand(str replacement) -> str {
+        return expandStr(self, replacement)
+    }
+}
+
+interface Replacer {
+    public mut method replaceAppend(Captures caps, str dst) -> str
+
+    public mut method noExpansion() -> str? {
+        return null
+    }
+}
+
+class ReplacerStr {
+    private str val
+
+    public operator new(str val) {
+        self.val = val
+    }
+
+    public mut method replaceAppend(Captures caps, str dst) -> str {
+        return dst + caps.expand(self.val)
+    }
+
+    public mut method noExpansion() -> str? {
+        if bytes(self).indexOf(y"$")? {
+            return null
+        } else {
+            return self.val
+        }
+    }
+}

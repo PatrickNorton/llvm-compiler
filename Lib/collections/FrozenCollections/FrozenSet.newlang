@@ -1,0 +1,72 @@
+export FrozenSet
+
+# Is this class needed anymore? Const-correctness seems to be its death knell
+final class FrozenSet[T] from set[T] {
+    private set[T] values
+
+    public property int length {
+        get {
+            return self.values.length
+        }
+    }
+
+#     operator new (*T items, /) {
+#         self.values = {*items}
+#     }
+
+    operator new (Iterable[T] items, /) {
+        self.values = set(items)
+    }
+
+    operator + (set[T] other, /) -> set[T] {
+        return self.values + other
+    }
+
+    operator | (set[T] other, /) -> set[T] {
+        return self.values + other
+    }
+
+    operator & (set[T] other, /) -> set[T] {
+        return self.values & other
+    }
+
+    operator ^ (set[T] other, /) -> set[T] {
+        return self.values ^ other
+    }
+
+    operator del[] (T value, /) {
+        raise NotImplemented
+    }
+
+    operator iter -> T {
+        yield from self.items
+    }
+
+    operator in (T value, /) {
+        return value in self.values
+    }
+
+    operator bool {
+        return bool(self.values)
+    }
+
+    method add(T value, /) -> cls {  # Should be 'self'
+        raise NotImplemented
+    }
+
+    method remove(T value, /) {
+        raise NotImplemented
+    }
+
+    method discard(T value, /) {
+        raise NotImplemented
+    }
+
+    method pop() -> T {
+        raise NotImplemented
+    }
+
+    method clear() {
+        raise NotImplemented
+    }
+}

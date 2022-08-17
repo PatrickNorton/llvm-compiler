@@ -1,0 +1,34 @@
+export BoolRef
+
+$derive(\==)
+class BoolRef {
+    mut bool value
+
+    public operator new(bool value) {
+        self.value = value
+    }
+
+    public operator bool {
+        return self.value
+    }
+
+    public operator int {
+        return int(self.value)
+    }
+
+    public mut method andWith(bool other) {
+        self.value &= other
+    }
+
+    public mut method orWith(bool other) {
+        self.value |= other
+    }
+
+    public mut method xorWith(bool other) {
+        self.value ^= other
+    }
+
+    public mut method invert() {
+        self.value = not self.value
+    }
+}

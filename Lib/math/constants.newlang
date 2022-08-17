@@ -1,0 +1,9 @@
+#|
+export E, PI, NaN, INF, TAU
+
+dec E = 2.718281828459045
+dec PI = 3.141592653589793
+dec TAU = 2 * PI
+float NaN = float(0) / float(0)
+float INF = float(1) / float(0)
+|#

@@ -1,0 +1,580 @@
+from .ahocorasick import MatchKind
+from .frequency import freqRank
+from .match import Match
+from .packed import Builder, Config, Searcher as PackedBuilder, PackedConfig, PackedSearcher
+
+export Candidate, Prefilter, PrefilterObj, PrefilterState, Builder, next, oppositeAsciiCase
+
+union Candidate {
+    null None
+    Match Match
+    int PossibleStartOfMatch
+
+    public method intoOption() -> int? {
+        return switch self {
+            case Candidate.None => null
+            case Candidate.Match as m => m.start
+            case Candidate.PossibleStartOfMatch as start => start
+        }
+    }
+}
+
+interface Prefilter {
+    public method nextCandidate(mut PrefilterState state, bytes haystack, int at) -> Candidate
+
+    public method clonePrefilter() -> Prefilter
+
+    public nonfinal method reportsFalsePositives() -> bool {
+        return true
+    }
+}
+
+class PrefilterObj {
+    Prefilter value
+
+    public operator new(Prefilter value) {
+        self.value = value
+    }
+
+    public method asRef() -> Prefilter {
+        return self.value
+    }
+}
+
+int MIN_SKIPS = 40
+int MIN_AVG_FACTOR = 2
+
+class PrefilterState {
+    mut int skips
+    mut int skipped
+    int maxMatchLen
+    mut bool inert
+    mut int lastScanAt
+
+    public operator new(int maxMatchLen) {
+        self.skips = 0
+        self.skipped = 0
+        self.maxMatchLen = maxMatchLen
+        self.inert = false
+        self.lastScanAt = 0
+    }
+
+    mut method updateSkippedBytes(int skipped) {
+        self.skips++
+        self.skipped += skipped
+    }
+
+    mut method updateAt(int at) {
+        if at > self.lastScanAt {
+            self.lastScanAt = at
+        }
+    }
+
+    public mut method isEffective(int at) -> bool {
+        return false if self.inert
+        return false if at < self.lastScanAt
+        return true if self.skips < MIN_SKIPS
+
+        var minAvg = MIN_AVG_FACTOR * self.maxMatchLen
+        return true if self.skipped >= minAvg * self.skips
+
+        self.inert = true
+        return false
+    }
+}
+
+class Builder {
+    mut int count
+    mut bool asciiCaseInsensitive_
+    mut StartBytesBuilder startBytes
+    mut RareBytesBuilder rareBytes
+    final PackedBuilder? packed
+
+    public operator new(MatchKind kind) {
+        self.count = 0
+        self.asciiCaseInsensitive_ = false
+        self.startBytes = StartBytesBuilder()
+        self.rareBytes = RareBytesBuilder()
+        if kind.asPacked()? as k {
+            self.packed = PackedConfig().matchKind(k).builder()
+        } else {
+            self.packed = null
+        }
+    }
+
+    public mut method asciiCaseInsensitive(bool yes) -> mut cls {
+        self.asciiCaseInsensitive_ = yes
+        self.startBytes = self.startBytes.asciiCaseInsensitive(yes)
+        self.rareBytes = self.rareBytes.asciiCaseInsensitive(yes)
+        return self
+    }
+
+    public mut method build() -> PrefilterObj? {
+        if self.startBytes.build()? as prestart {
+            if self.rareBytes.build()? as prerare {
+                var hasFewerBytes = self.startBytes.count < self.rareBytes.count
+                var hasRarerBytes = self.startBytes.rankSum <= self.rareBytes.rankSum + 50
+                return prestart if hasFewerBytes or hasRarerBytes else prerare
+            } else {
+                return prestart
+            }
+        } else {
+            if self.rareBytes.build()? as prerare {
+                return prerare
+            } else {
+                if self.asciiCaseInsensitive_ {
+                    return null
+                } else {
+                    if self.packed? as p {
+                        if p.build()? as s {
+                            return PrefilterObj(Packed(s))
+                        }
+                    }
+                    return null
+                }
+            }
+        }
+    }
+
+    public mut method add(bytes b) {
+        self.count++
+        self.startBytes.add(b)
+        self.rareBytes.add(b)
+        if self.packed? as pbuilder {
+            pbuilder.add(b)
+        }
+    }
+}
+
+class Packed from Prefilter {
+    PackedSearcher value
+
+    operator new(PackedSearcher value) {
+        self.value = value
+    }
+
+    public method nextCandidate(mut PrefilterState state, bytes haystack, int at) -> Candidate {
+        if self.value.findAt(haystack, at)? as a {
+            return Candidate.Match(a)
+        } else {
+            return Candidate.None()
+        }
+    }
+
+    public method clonePrefilter() -> Prefilter {
+        return Packed(self.value)
+    }
+
+    public method reportsFalsePositives() -> bool {
+        return false
+    }
+}
+
+class RareBytesBuilder {
+    mut bool asciiCaseInsensitive_
+    final ByteSet rareSet
+    mut RareByteOffsets byteOffsets
+    mut bool available
+    mut int count
+    int rankSum
+
+    public operator new() {
+        self.asciiCaseInsensitive_ = false
+        self.rareSet = ByteSet.empty()
+        self.byteOffsets = RareByteOffsets()
+        self.available = true
+        self.count = 0
+        self.rankSum = 0
+    }
+
+    public mut method asciiCaseInsensitive(bool yes) -> mut cls {
+        self.asciiCaseInsensitive_ = yes
+        return self
+    }
+
+    public mut method build() -> PrefilterObj? {
+        return null if not self.available or self.count > 3
+        mut var byteVals = bytes("")
+        mut var len = 0
+        for var b in [0:256] {
+            if b in self.rareSet {
+                byteVals.add(b)
+                len++
+            }
+        }
+        switch len {
+            case 0 {
+                return null
+            }
+            case 1 {
+                return PrefilterObj(RareBytesOne(byteVals[0], self.byteOffsets.value[byteVals[0]]))
+            }
+            case 2 {
+                return PrefilterObj(RareBytesTwo(self.byteOffsets, byteVals[0], byteVals[1]))
+            }
+            case 3 {
+                return PrefilterObj(RareBytesThree(self.byteOffsets, byteVals[0], byteVals[1], byteVals[2]))
+            }
+            default {
+                raise NotImplemented()
+            }
+        }
+    }
+
+    public mut method add(bytes byteVals) {
+        return if not self.available
+
+        if self.count > 3 {
+            self.available = false
+            return
+        }
+
+        if byteVals.length > 256 {
+            self.available = false
+            return
+        }
+        return if not byteVals
+        mut var rarest = (byteVals[0], freqRank(byteVals[0]))
+
+        mut var found = false
+        for int pos, var b in enumerate(byteVals) {
+            self.setOffset(pos, b)
+            continue if found
+            if b in self.rareSet {
+                found = true
+                continue
+            }
+            var rank = freqRank(b)
+            if rank < rarest.1 {
+                rarest = (b, rank)
+            }
+        }
+        if not found {
+            self.addRareByte(rarest.0)
+        }
+    }
+
+    public mut method setOffset(int pos, int byte) {
+        var offset = RareByteOffset(byte)
+        self.byteOffsets.add(byte, offset)
+        if self.asciiCaseInsensitive_ {
+            self.byteOffsets.add(oppositeAsciiCase(byte), offset)
+        }
+    }
+
+    public mut method addRareByte(int byte) {
+        self.addOneRareByte(byte)
+        if self.asciiCaseInsensitive_ {
+            self.addOneRareByte(oppositeAsciiCase(byte))
+        }
+    }
+
+    private mut method addOneRareByte(int byte) {
+        if self.rareSet.insert(byte) {
+            self.count++
+            self.rankSum += freqRank(byte)
+        }
+    }
+}
+
+class ByteSet {
+    public mut Array[bool] value
+
+    public operator new(mut Array[bool] value = Array[bool](false, 256)) {
+        self.value = value
+    }
+
+    public static method empty() -> mut cls {
+       return ByteSet(Array[bool](false, 256))
+    }
+
+    public operator in (int b) {
+        return self.value[b]
+    }
+
+    public operator repr {
+        var contained = {i for var i in [0:256] if i in self}
+        return f"ByteSet({contained})"
+    }
+
+    public mut method insert(int b) -> bool {
+        assert b in [0:256]
+        var new = b not in self
+        self.value[b] = true
+        return new
+    }
+}
+
+class RareByteOffsets {
+    mut Array[RareByteOffset] value
+
+    public operator new() {
+        self.value = Array[RareByteOffset](RareByteOffset(0), 256)
+    }
+
+    public mut method add(int byte, RareByteOffset off) {
+        self.value[byte] = RareByteOffset(max(self.value[byte].max, off.max))
+    }
+}
+
+const class RareByteOffset {
+    int max
+
+    public operator new(int max = 0) {
+        assert max in [0:256]
+        self.max = max
+    }
+}
+
+class RareBytesOne from Prefilter {
+    int byte1
+    RareByteOffset offset
+
+    public operator new(int byte1, RareByteOffset offset) {
+        assert byte1 in [0:256]
+        self.byte1 = byte1
+        self.offset = offset
+    }
+
+    public method nextCandidate(mut PrefilterState state, bytes haystack, int at) -> Candidate {
+        if haystack[at:].indexOf(self.byte1)? as i {
+            var pos = i + 1
+            state.lastScanAt = pos
+            return Candidate.PossibleStartOfMatch(max3(at, pos - self.offset.max, 0))
+        } else {
+            return Candidate.None()
+        }
+    }
+
+    public method clonePrefilter() -> Prefilter {
+        return cls(self.byte1, self.offset)
+    }
+}
+
+class RareBytesTwo from Prefilter {
+    RareByteOffsets offsets
+    int byte1
+    int byte2
+
+    public operator new(RareByteOffsets offsets, int byte1, int byte2) {
+        self.offsets = offsets
+        self.byte1 = byte1
+        self.byte2 = byte2
+    }
+
+    public method nextCandidate(mut PrefilterState state, bytes haystack, int at) -> Candidate {
+        if memchr2(self.byte1, self.byte2, haystack[at:])? as i {
+            var pos = at + i
+            state.updateAt(i)
+            var offset = self.offsets.value[haystack[pos]].max
+            return Candidate.PossibleStartOfMatch(max3(at, pos - offset, 0))
+        } else {
+            raise NotImplemented() # FIXME: What was supposed to go here?
+        }
+    }
+
+    public method clonePrefilter() -> Prefilter {
+        return cls(self.offsets, self.byte1, self.byte2)
+    }
+}
+
+func memchr2(int b1, int b2, bytes b) -> int? {
+    for var i in b {
+        if i == b1 or i == b2 {
+            return i
+        }
+    }
+    return null
+}
+
+class RareBytesThree from Prefilter {
+    RareByteOffsets offsets
+    int byte1
+    int byte2
+    int byte3
+
+    public operator new(RareByteOffsets offsets, int byte1, int byte2, int byte3) {
+        self.offsets = offsets
+        self.byte1 = byte1
+        self.byte2 = byte2
+        self.byte3 = byte3
+    }
+
+    public method nextCandidate(mut PrefilterState state, bytes haystack, int at) -> Candidate {
+        if memchr3(self.byte1, self.byte2, self.byte3, haystack[at:])? as i {
+            var pos = at + i
+            state.updateAt(i)
+            var offset = self.offsets.value[haystack[pos]].max
+            return Candidate.PossibleStartOfMatch(max3(at, pos - offset, 0))
+        } else {
+            return Candidate.None()
+        }
+    }
+
+    public method clonePrefilter() -> Prefilter {
+        return cls(self.offsets, self.byte1, self.byte2, self.byte3)
+    }
+}
+
+func memchr3(int b1, int b2, int b3, bytes b) -> int? {
+    for var i in b {
+        if i == b1 or i == b2 or i == b3 {
+            return i
+        }
+    }
+    return null
+}
+
+class StartBytesBuilder {
+    mut bool asciiCaseInsensitive_
+    final list[bool] byteSet
+    mut int count
+    int rankSum
+
+    public operator new() {
+        self.asciiCaseInsensitive_ = false
+        self.byteSet = [false] * 256
+        self.count = 0
+        self.rankSum = 0
+    }
+
+    mut method asciiCaseInsensitive(bool yes) -> mut cls {
+        self.asciiCaseInsensitive_ = yes
+        return self
+    }
+
+    mut method build() -> PrefilterObj? {
+        return null if self.count > 3
+        mut var byteVals = bytes("")
+        for var b in [0:256] {
+            continue if not self.byteSet[b]
+            return null if b > 0x7F
+            byteVals.add(b)
+        }
+        return switch byteVals.length {
+            case 0 => null
+            case 1 => PrefilterObj(StartBytesOne(byteVals[0]))
+            case 2  => PrefilterObj(StartBytesTwo(byteVals[0], byteVals[1]))
+            case 3 => PrefilterObj(StartBytesThree(byteVals[0], byteVals[1], byteVals[2]))
+            default => raise NotImplemented()
+        }
+    }
+
+    mut method add(bytes b) {
+        return if self.count > 3
+        if b {
+            self.addOneByte(b[0])
+            if self.asciiCaseInsensitive_ {
+                self.addOneByte(oppositeAsciiCase(b[0]))
+            }
+        }
+    }
+
+    private mut method addOneByte(int b) {
+        if not self.byteSet[b] {
+            self.byteSet[b] = true
+            self.count++
+            self.rankSum += freqRank(b)
+        }
+    }
+}
+
+class StartBytesOne from Prefilter {
+    int byte1
+
+    public operator new(int byte1) {
+        self.byte1 = byte1
+    }
+
+    public method nextCandidate(mut PrefilterState state, bytes haystack, int at) -> Candidate {
+        if haystack[at:].indexOf(self.byte1)? as i {
+            return Candidate.PossibleStartOfMatch(at + i)
+        } else {
+            return Candidate.None()
+        }
+    }
+
+    public method clonePrefilter() -> Prefilter {
+        return cls(self.byte1)
+    }
+}
+
+class StartBytesTwo from Prefilter {
+    int byte1
+    int byte2
+
+    public operator new(int byte1, int byte2) {
+        self.byte1 = byte1
+        self.byte2 = byte2
+    }
+
+    public method nextCandidate(mut PrefilterState state, bytes haystack, int at) -> Candidate {
+        if memchr2(self.byte1, self.byte2, haystack[at:])? as i {
+            return Candidate.PossibleStartOfMatch(at + i)
+        } else {
+            return Candidate.None()
+        }
+    }
+
+    public method clonePrefilter() -> Prefilter {
+        return cls(self.byte1, self.byte2)
+    }
+}
+
+class StartBytesThree from Prefilter {
+    int byte1
+    int byte2
+    int byte3
+
+    public operator new(int byte1, int byte2, int byte3) {
+        self.byte1 = byte1
+        self.byte2 = byte2
+        self.byte3 = byte3
+    }
+
+    public method nextCandidate(mut PrefilterState state, bytes haystack, int at) -> Candidate {
+        if memchr3(self.byte1, self.byte2, self.byte3, haystack[at:])? as i {
+            return Candidate.PossibleStartOfMatch(at + i)
+        } else {
+            return Candidate.None()
+        }
+    }
+
+    public method clonePrefilter() -> Prefilter {
+        return cls(self.byte1, self.byte2, self.byte3)
+    }
+}
+
+func next(mut PrefilterState prestate, Prefilter prefilter, bytes haystack, int at) -> Candidate {
+    var cand = prefilter.nextCandidate(prestate, haystack, at)
+    switch cand {
+        case Candidate.None {
+            prestate.updateSkippedBytes(haystack.length - at)
+        }
+        case Candidate.Match as m {
+            prestate.updateSkippedBytes(m.start - at)
+        }
+        case Candidate.PossibleStartOfMatch as i {
+            prestate.updateSkippedBytes(i - at)
+        }
+    }
+    return cand
+}
+
+func oppositeAsciiCase(int b) -> int {
+    if b in [0x41:0x5C] {  # A-Z
+        return b + 0x20
+    } elif b in [0x61:0x7C] {  # a-z
+        return b - 0x20
+    } else {
+        return b
+    }
+}
+
+func max(int a, int b) -> int {
+    return a if a > b else b
+}
+
+func max3(int a, int b, int c) -> int {
+    return max(a, c) if a > b else max(b, c)
+}

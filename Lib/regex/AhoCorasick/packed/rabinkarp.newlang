@@ -1,0 +1,137 @@
+from .patterns import Patterns, PatternID
+
+from ..match import Match
+
+export RabinKarp
+
+typedef Hash as int
+
+int NUM_BUCKETS = 64
+
+class RabinKarp {
+    # The order of patterns in each bucket is significant. Namely, they are
+    # arranged such that the first one to match is the correct match. This
+    # may not necessarily correspond to the order provided by the caller.
+    # For example, if leftmost-longest semantics are used, then the patterns
+    # are sorted by their length in descending order. If leftmost-first
+    # semantics are used, then the patterns are sorted by their pattern ID
+    # in ascending order (which corresponds to the caller's order).
+    list[list[tuple[Hash, PatternID]]] buckets
+    # The length of the hashing window. Generally, this corresponds to the
+    # length of the smallest pattern.
+    int hashLen
+    # The factor to subtract out of a hash before updating it with a new
+    # byte.
+    int hash2pow
+    # The maximum identifier of a pattern. This is used as a sanity check
+    # to ensure that the patterns provided by the caller are the same as
+    # the patterns that were used to compile the matcher. This sanity check
+    # possibly permits safely eliminating bounds checks regardless of what
+    # patterns are provided by the caller.
+    #
+    # (Currently, we don't use this to elide bounds checks since it doesn't
+    # result in a measurable performance improvement, but we do use it for
+    # better failure modes.)
+    PatternID maxPatternId
+
+    # Compile a new Rabin-Karp matcher from the patterns given.
+    #
+    # This panics if any of the patterns in the collection are empty, or if
+    # the collection is itself empty.
+    public operator new(Patterns patterns) {
+        assert patterns.length >= 1
+        var hashLen = patterns.minimumLen
+        assert hashLen >= 1
+
+        mut var hash2pow = 1
+        dotimes hashLen - 1 {
+            hash2pow <<= 1
+            hash2pow |= hash2pow >> 32
+            hash2pow &= (1 << 32) - 1
+        }
+
+        # FIXME: Type deduction
+        # self.buckets = [[]] * NUM_BUCKETS
+        self.hashLen = hashLen
+        self.hash2pow = hash2pow
+        self.maxPatternId = patterns.maxPatternId
+
+        for var pair in patterns {
+            var idVal, var pat = *pair
+            var hashVal = self.hash(pat.bytes()[:self.hashLen])
+            var bucket = hashVal % NUM_BUCKETS
+            # self.buckets[bucket].add((hashVal, idVal))  FIXME: Mutable inner types
+        }
+    }
+
+    # Return the first matching pattern in the given haystack, beginning the
+    # search at `at`.
+    public method findAt(
+        Patterns patterns,
+        bytes haystack,
+        mut int at,
+    ) -> Match? {
+        assert NUM_BUCKETS == self.buckets.length
+        assert self.maxPatternId == patterns.maxPatternId as "Rabin-Karp must be called with same patterns it was built with"
+
+        return null if at + self.hashLen > haystack.length
+
+        mut var hashVal = self.hash(haystack[at:at + self.hashLen])
+        while true {
+            var bucket = self.buckets[hashVal % NUM_BUCKETS]
+            for var pair in bucket {
+                var phash, var pid = *pair
+                if phash == hashVal {
+                    if self.verify(patterns, pid, haystack, at)? as c {
+                        return c
+                    }
+                }
+            }
+            return null if at + self.hashLen >= haystack.length
+
+            hashVal = self.updateHash(
+                hashVal,
+                haystack[at],
+                haystack[at + self.hashLen],
+            )
+            at++
+        }
+    }
+
+    # Verify whether the pattern with the given id matches at
+    # `haystack[at..]`.
+    method verify(
+        Patterns patterns,
+        PatternID patternId,
+        bytes haystack,
+        mut int at,
+    ) -> Match? {
+        var pat = patterns[patternId]
+        if pat.isPrefix(haystack[at:]) {
+            return Match.fromSpan(patternId, at, at + pat.length)
+        } else {
+            return null
+        }
+    }
+
+    # Hash the given bytes.
+    method hash(bytes b) -> Hash {
+        assert self.hashLen == b.length
+
+        mut var hashVal = 0
+        for var byte in b {
+            hashVal <<= 1
+            hashVal += byte
+        }
+        return hashVal
+    }
+
+    public method updateHash(Hash prev, int oldByte, int newByte) -> Hash {
+        assert oldByte in [0:256] and newByte in [0:256]
+        mut var result = prev - oldByte  # FIXME: Wrapping operations
+        result *= self.hash2pow
+        result <<= 1
+        result += newByte
+        return result
+    }
+}

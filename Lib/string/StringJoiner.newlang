@@ -1,0 +1,20 @@
+export StringJoiner
+
+class StringJoiner {
+    private str joiner
+    private final list[str] values
+
+    public operator new(str joiner, /) {
+        self.joiner = joiner
+        self.values = []
+    }
+
+    public operator str {
+        return self.joiner.join(self.values)
+    }
+
+    public mut method add(str value, /) -> cls {
+        self.values.add(value)
+        return self
+    }
+}

@@ -1,0 +1,18 @@
+# NOTE: Native is commented out till it gets implemented as a descriptor
+# export Array
+
+#|
+final native class Array[T] {
+    pubget int length
+
+    public operator new (int length, *T values, T end) {}
+
+    public operator [] (int index) -> T {}
+    public operator []= (int index, T value) {}
+
+    public operator [:] (int start, int end, int stop) -> cls {}
+    public operator [:]= (int start, int end, int stop, T value) {}
+
+    public operator iter -> T {}
+}
+|#
