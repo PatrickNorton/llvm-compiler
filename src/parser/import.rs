@@ -12,11 +12,9 @@ use crate::parser::token_list::TokenList;
 pub struct ImportExportNode {
     import_type: ImportExportType,
     line_info: LineInfo,
-    ports: Vec<DottedVariableNode>,
+    values: IEValue,
     from: DottedVariableNode,
-    as_stmt: Vec<DottedVariableNode>,
     pre_dots: usize,
-    is_wildcard: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -26,24 +24,33 @@ pub enum ImportExportType {
     Typeget,
 }
 
+#[derive(Debug)]
+pub enum IEValue {
+    Standard(StandardNames),
+    Wildcard,
+}
+
+#[derive(Debug)]
+pub struct StandardNames {
+    ports: Vec<DottedVariableNode>,
+    as_stmt: Option<Vec<DottedVariableNode>>,
+}
+
 impl ImportExportNode {
     pub fn new(
         import_type: ImportExportType,
         line_info: LineInfo,
         ports: Vec<DottedVariableNode>,
         from: DottedVariableNode,
-        as_stmt: Vec<DottedVariableNode>,
+        as_stmt: Option<Vec<DottedVariableNode>>,
         pre_dots: usize,
-        is_wildcard: bool,
     ) -> Self {
         Self {
             import_type,
             line_info,
-            ports,
+            values: IEValue::Standard(StandardNames { ports, as_stmt }),
             from,
-            as_stmt,
             pre_dots,
-            is_wildcard,
         }
     }
 
@@ -56,11 +63,9 @@ impl ImportExportNode {
         Self {
             import_type,
             line_info,
-            ports: Vec::new(),
+            values: IEValue::Wildcard,
             from,
-            as_stmt: Vec::new(),
             pre_dots,
-            is_wildcard: true,
         }
     }
 
@@ -73,15 +78,21 @@ impl ImportExportNode {
     }
 
     pub fn get_values(&self) -> &[DottedVariableNode] {
-        &self.ports
+        match &self.values {
+            IEValue::Standard(s) => &s.ports,
+            IEValue::Wildcard => panic!("Should not be getting values from wildcard"),
+        }
     }
 
     pub fn is_wildcard(&self) -> bool {
-        self.is_wildcard
+        matches!(self.values, IEValue::Wildcard)
     }
 
-    pub fn get_as(&self) -> &[DottedVariableNode] {
-        &self.as_stmt
+    pub fn get_as(&self) -> Option<&[DottedVariableNode]> {
+        match &self.values {
+            IEValue::Standard(s) => s.as_stmt.as_deref(),
+            IEValue::Wildcard => panic!("Should not be getting values from wildcard"),
+        }
     }
 
     pub fn get_pre_dots(&self) -> usize {
@@ -129,9 +140,8 @@ impl ImportExportNode {
                     info,
                     imports,
                     from,
-                    as_stmt,
+                    Some(as_stmt),
                     pre_dots,
-                    false,
                 ))
             } else {
                 Ok(ImportExportNode::new(
@@ -139,9 +149,8 @@ impl ImportExportNode {
                     info,
                     imports,
                     from,
-                    Vec::new(),
+                    None,
                     pre_dots,
-                    false,
                 ))
             }
         }

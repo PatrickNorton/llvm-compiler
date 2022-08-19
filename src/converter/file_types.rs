@@ -110,6 +110,7 @@ impl FileTypes {
             self.add_wildcard_import(path, node, all_files, args)
         } else if node.get_from().is_empty() {
             check_as(node)?;
+            let as_strings = node.get_as().unwrap_or(&[]);
             let mut result = Vec::with_capacity(node.get_values().len());
             for (i, val) in node.get_values().iter().enumerate() {
                 let pre_dot = <&VariableNode>::try_from(val.get_pre_dot())
@@ -118,7 +119,7 @@ impl FileTypes {
                 assert!(val.get_post_dots().is_empty());
                 let (path, is_stdlib) = load_file(pre_dot, node, args, path)?;
                 let val_str = val.name_string();
-                let as_str = node.get_as().get(i).map(|x| x.name_string());
+                let as_str = as_strings.get(i).map(|x| x.name_string());
                 self.imports
                     .entry(path.clone())
                     .or_default()
@@ -169,7 +170,7 @@ impl FileTypes {
             let name = <&VariableNode>::try_from(name.get_pre_dot())
                 .unwrap()
                 .get_name();
-            let as_name = node.get_as().get(i).map(|x| {
+            let as_name = node.get_as().and_then(|x| x.get(i)).map(|x| {
                 <&VariableNode>::try_from(x.get_pre_dot())
                     .unwrap()
                     .get_name()
@@ -196,7 +197,6 @@ impl FileTypes {
         all_files: &HashMap<PathBuf, (TopNode, FileTypes)>,
         args: &CLArgs,
     ) -> CompileResult<Vec<(PathBuf, bool)>> {
-        let not_renamed = node.get_as().is_empty();
         let is_from = !node.get_from().is_empty();
         if node.is_wildcard() {
             if !is_from {
@@ -221,11 +221,7 @@ impl FileTypes {
                 Vec::new()
             };
             for (i, value) in node.get_values().iter().enumerate() {
-                let as_stmt = if not_renamed {
-                    value
-                } else {
-                    &node.get_as()[i]
-                };
+                let as_stmt = node.get_as().map_or(value, |x| &x[i]);
                 if <&VariableNode>::try_from(value.get_pre_dot()).is_err()
                     || !value.get_post_dots().is_empty()
                 {
@@ -288,7 +284,7 @@ impl FileTypes {
             let import_info = SingleImportInfo::new(
                 LineInfo::empty(),
                 value.get_name().to_string(),
-                node.get_as().get(i).map(|x| {
+                node.get_as().and_then(|x| x.get(i)).map(|x| {
                     <&VariableNode>::try_from(x.get_pre_dot())
                         .unwrap()
                         .get_name()
@@ -299,12 +295,6 @@ impl FileTypes {
                 .entry(path.clone())
                 .or_default()
                 .push(import_info);
-            let export = node.get_as().get(i).unwrap_or(name);
-            let export_name = <&VariableNode>::try_from(export.get_pre_dot())
-                .unwrap()
-                .get_name();
-            self.exports
-                .insert(export_name.to_string(), Either::Right(path.clone()));
         }
         Ok(vec![(path, is_stdlib)])
     }
@@ -395,17 +385,18 @@ fn load_file(
 }
 
 fn check_as(node: &ImportExportNode) -> CompileResult<()> {
-    if !node.get_as().is_empty() && node.get_as().len() != node.get_values().len() {
-        Err(
-            CompilerException::of(
-                format!(
-                    "'{}' statement had {} 'as' clauses, expected {} (equal to number of imported names)",
-                    node.get_type(), node.get_as().len(), node.get_values().len()
-                ),
-                node
-            ).into()
+    match node.get_as() {
+        Some(as_stmt) if as_stmt.len() != node.get_values().len() => Err(CompilerException::of(
+            format!(
+                "'{}' statement had {} 'as' clauses, expected {} \
+                 (equal to number of imported names)",
+                node.get_type(),
+                as_stmt.len(),
+                node.get_values().len()
+            ),
+            node,
         )
-    } else {
-        Ok(())
+        .into()),
+        _ => Ok(()),
     }
 }
