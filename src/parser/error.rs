@@ -50,6 +50,24 @@ impl ParserException {
             backtrace: Backtrace::new(),
         }
     }
+
+    pub fn with_note<T: ToString, D: Display, U: Lined>(message: T, note: D, line_info: U) -> Self {
+        let mut message = message.to_string();
+        let line_info = line_info.line_info();
+        write!(
+            &mut message,
+            "\nNote: {}\nError: File {} Line {}\n{}",
+            note,
+            line_info.get_path().display(),
+            line_info.get_line_number(),
+            line_info.info_string()
+        )
+        .unwrap();
+        ParserException {
+            message,
+            backtrace: Backtrace::new(),
+        }
+    }
 }
 
 impl ParserInternalError {

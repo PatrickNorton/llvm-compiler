@@ -158,13 +158,13 @@ impl StdTypeObject {
                     .into())
                 }
             }
-            Result::Err(e) => Err(CompilerException::of(
+            Result::Err(e) => Err(CompilerException::with_note(
                 format!(
-                    "Cannot generify object in this manner: type {} by types [{}]\nNote: {}",
+                    "Cannot generify object in this manner: type {} by types [{}]",
                     self.name(),
                     args.iter().map(|x| x.name()).format(", "),
-                    e
                 ),
+                e,
                 line_info,
             )
             .into()),

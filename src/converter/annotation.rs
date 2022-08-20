@@ -131,9 +131,9 @@ where
                 convert_test_fn(info, f)?;
                 Ok((BytecodeList::new(), DivergingInfo::new()))
             } else {
-                Err(CompilerException::of(
-                    "Only functions may be used as tests\n\
-                     Note: You may want $cfg(test)",
+                Err(CompilerException::with_note(
+                    "Only functions may be used as tests",
+                    "You may want $cfg(test)",
                     node,
                 )
                 .into())

@@ -57,6 +57,21 @@ pub fn warn(
     warn_if(message, warn, info.warning_holder(), line_info)
 }
 
+pub fn warn_note(
+    message: impl Display,
+    note: impl Display,
+    warn: WarningType,
+    info: &CompilerInfo,
+    line_info: impl Lined,
+) -> CompileResult<()> {
+    warn_if(
+        format_args!("{}\nNote: {}", message, note),
+        warn,
+        info.warning_holder(),
+        line_info,
+    )
+}
+
 pub fn warn_if(
     message: impl Display,
     warn: WarningType,

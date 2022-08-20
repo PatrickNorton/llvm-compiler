@@ -739,11 +739,9 @@ fn literal_exception(literal_type: &str, label: impl Lined) -> CompilerException
 }
 
 fn literal_exception_with(literal: &str, label: impl Lined, note: &str) -> CompilerException {
-    CompilerException::of(
-        format!(
-            "'switch' on a {literal} requires a {literal} literal in each case statement\n\
-             Note: {note}"
-        ),
+    CompilerException::with_note(
+        format!("'switch' on a {literal} requires a {literal} literal in each case statement"),
+        note,
         label,
     )
 }

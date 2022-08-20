@@ -33,9 +33,9 @@ impl<'a> ConverterBase for ContinueConverter<'a> {
                 .and_then(|x| x.bool_value())
             {
                 if value {
-                    warning::warn(
-                        "'continue' condition is always true\n\
-                         Note: 'continue if true' is equivalent to 'continue'",
+                    warning::warn_note(
+                        "'continue' condition is always true",
+                        "'continue if true' is equivalent to 'continue'",
                         WarningType::TrivialValue,
                         info,
                         self.node,
@@ -44,9 +44,9 @@ impl<'a> ConverterBase for ContinueConverter<'a> {
                         info.loop_manager().continue_label().clone().into(),
                     ));
                 } else {
-                    warning::warn(
-                        "'continue' condition is always false\n\
-                         Note: 'continue if false' will never be taken and can be removed'",
+                    warning::warn_note(
+                        "'continue' condition is always false",
+                        "'continue if false' will never be taken and can be removed'",
                         WarningType::TrivialValue,
                         info,
                         self.node,

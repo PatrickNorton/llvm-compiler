@@ -89,10 +89,10 @@ impl<'a> ForConverter<'a> {
         let iter_len = self.node.get_iterables().len();
         let variable_count = var_len.try_into().expect("Too many variables");
         if var_len != iter_len {
-            return Err(CompilerException::of(
+            return Err(CompilerException::with_note(
                 "For loops with more than one iterable must have an \
-                 equal number of variables and iterables\n\n\
-                 Note: Statements with multiple returns are only usable \
+                 equal number of variables and iterables",
+                "Statements with multiple returns are only usable \
                  in for-loops when there is only one",
                 self.node,
             )

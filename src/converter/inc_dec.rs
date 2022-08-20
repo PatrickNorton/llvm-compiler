@@ -165,11 +165,11 @@ impl<'a> IncDecConverter<'a> {
     fn index_error(&self, ty: &TypeObject, op: OpSpTypeNode) -> CompilerException {
         let inc_name = self.inc_name();
         let ty_name = ty.name();
-        CompilerException::of(
+        CompilerException::with_note(
+            format!("Cannot {inc_name} index of object of type '{ty_name}'"),
             format!(
-                "Cannot {inc_name} index of object of type '{ty_name}'\n\
-                 Note: To {inc_name}, type '{ty_name}' requires both \
-                 operator [] and operator []=, but it is missing {op}",
+                "To {inc_name}, type '{ty_name}' requires both \
+                 operator [] and operator []=, but it is missing {op}"
             ),
             self.node,
         )

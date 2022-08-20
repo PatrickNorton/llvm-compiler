@@ -422,9 +422,9 @@ impl ArgumentInfo {
             if keyword_map.contains_key(&*arg.name) {
                 continue;
             } else if next_arg >= self.len() {
-                return Err(CompilerInternalError::of(
-                    "Error in parameter expansion: nextEligibleArg() should never return >= size\n\
-                     Note: All cases where this branch is taken should be \
+                return Err(CompilerInternalError::with_note(
+                    "Error in parameter expansion: nextEligibleArg() should never return >= size",
+                    "All cases where this branch is taken should be \
                      spotted earlier in the function",
                     &**arg,
                 )

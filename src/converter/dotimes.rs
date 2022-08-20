@@ -55,9 +55,9 @@ impl<'a> DotimesConverter<'a> {
     fn check_constant(&self, info: &mut CompilerInfo, constant: LangConstant) -> CompileResult<()> {
         let value = int_arithmetic::convert_const(&constant).unwrap();
         if value.is_negative() {
-            warning::warn(
-                "Loop will never execute\n\
-                 Note: 'dotimes' loops with negative values may become an error in the future",
+            warning::warn_note(
+                "Loop will never execute",
+                "'dotimes' loops with negative values may become an error in the future",
                 WarningType::TrivialValue,
                 info,
                 self.node.get_iterations(),

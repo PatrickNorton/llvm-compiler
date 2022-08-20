@@ -582,11 +582,9 @@ impl<'a> FunctionCallConverter<'a> {
                     self.node,
                 )?;
             } else {
-                warning::warn(
-                    format!(
-                        "Unused return {} of '{}' that must be used\nNote: {}",
-                        val, str_name, message
-                    ),
+                warning::warn_note(
+                    format!("Unused return {} of '{}' that must be used", val, str_name),
+                    message,
                     WarningType::Unused,
                     info,
                     self.node,

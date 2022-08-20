@@ -42,9 +42,9 @@ impl<'a> ConverterBase for BreakConverter<'a> {
                 .and_then(|x| x.bool_value())
             {
                 if constant {
-                    warning::warn(
-                        "'break' condition is always true\n\
-                         Note: 'break if true' is equivalent to 'break'",
+                    warning::warn_note(
+                        "'break' condition is always true",
+                        "'break if true' is equivalent to 'break'",
                         WarningType::TrivialValue,
                         info,
                         self.node,
@@ -53,9 +53,9 @@ impl<'a> ConverterBase for BreakConverter<'a> {
                         info.loop_manager().break_label(levels).clone().into(),
                     ));
                 } else {
-                    warning::warn(
-                        "'break' condition is always false\n\
-                         Note: 'break if false' will never be taken and can be removed",
+                    warning::warn_note(
+                        "'break' condition is always false",
+                        "'break if false' will never be taken and can be removed",
                         WarningType::TrivialValue,
                         info,
                         self.node,

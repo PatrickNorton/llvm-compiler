@@ -6,6 +6,8 @@ use backtrace::Backtrace;
 use crate::parser::line_info::Lined;
 use crate::parser::operator_sp::OpSpTypeNode;
 
+// TODO? Make an ErrorBuilder API
+
 #[derive(Debug)]
 pub enum CompilerError {
     Normal(CompilerException),
@@ -38,6 +40,24 @@ impl CompilerException {
         write!(
             &mut message,
             "\nError: File {} Line {}\n{}",
+            line_info.get_path().display(),
+            line_info.get_line_number(),
+            line_info.info_string(),
+        )
+        .unwrap();
+        Self {
+            message,
+            backtrace: Backtrace::new(),
+        }
+    }
+
+    pub fn with_note<T: ToString, D: Display, L: Lined>(message: T, note: D, line_info: L) -> Self {
+        let mut message = message.to_string();
+        let line_info = line_info.line_info();
+        write!(
+            &mut message,
+            "\nNote: {}\nError: File {} Line {}\n{}",
+            note,
             line_info.get_path().display(),
             line_info.get_line_number(),
             line_info.info_string(),
@@ -99,6 +119,24 @@ impl CompilerInternalError {
         write!(
             &mut message,
             "\nInternal error: File {} Line {}\n{}",
+            line_info.get_path().display(),
+            line_info.get_line_number(),
+            line_info.info_string(),
+        )
+        .unwrap();
+        Self {
+            message,
+            backtrace: Backtrace::new(),
+        }
+    }
+
+    pub fn with_note<T: ToString, D: Display, L: Lined>(message: T, note: D, line_info: L) -> Self {
+        let mut message = message.to_string();
+        let line_info = line_info.line_info();
+        write!(
+            &mut message,
+            "\nNote: {}\nInternal error: File {} Line {}\n{}",
+            note,
             line_info.get_path().display(),
             line_info.get_line_number(),
             line_info.info_string(),

@@ -244,12 +244,9 @@ impl StringPrefix {
             }
             if Self::INVALID_TOGETHER.contains(&prefix) {
                 if has_unique {
-                    return Err(ParserException::of(
-                        format!(
-                            "Invalid prefix combination: {}\n\
-                        Note: The characters 'rbcy' may not appear in a string prefix together",
-                            chars
-                        ),
+                    return Err(ParserException::with_note(
+                        format!("Invalid prefix combination: {}", chars),
+                        "The characters 'rbcy' may not appear in a string prefix together",
                         LineInfo::empty(),
                     )
                     .into());
@@ -259,12 +256,9 @@ impl StringPrefix {
             }
             if Self::INVALID_2.contains(&prefix) {
                 if has_unique_2 {
-                    return Err(ParserException::of(
-                        format!(
-                            "Invalid prefix combination: {}\n\
-                        Note: The characters 'fcy' may not appear in a string prefix together",
-                            chars
-                        ),
+                    return Err(ParserException::with_note(
+                        format!("Invalid prefix combination: {}", chars),
+                        "The characters 'fcy' may not appear in a string prefix together",
                         LineInfo::empty(),
                     )
                     .into());
