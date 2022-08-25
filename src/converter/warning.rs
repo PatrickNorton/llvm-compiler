@@ -3,11 +3,13 @@ use std::fmt::Display;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use crate::converter::error_builder::ErrorType;
 use crate::parser::line_info::Lined;
 use crate::util::error_counter::ErrorCounter;
 
 use super::compiler_info::CompilerInfo;
 use super::error::CompilerException;
+use super::error_builder::ErrorBuilder;
 use super::CompileResult;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -64,11 +66,12 @@ pub fn warn_note(
     info: &CompilerInfo,
     line_info: impl Lined,
 ) -> CompileResult<()> {
-    warn_if(
-        format_args!("{}\nNote: {}", message, note),
+    warn_builder(
+        ErrorBuilder::new(&line_info)
+            .with_message(message)
+            .with_note(note),
         warn,
         info.warning_holder(),
-        line_info,
     )
 }
 
@@ -78,35 +81,36 @@ pub fn warn_if(
     holder: &WarningHolder,
     line_info: impl Lined,
 ) -> CompileResult<()> {
+    warn_builder(
+        ErrorBuilder::new(&line_info).with_message(message),
+        warn,
+        holder,
+    )
+}
+
+pub fn warn_builder(
+    builder: ErrorBuilder<'_>,
+    warn: WarningType,
+    holder: &WarningHolder,
+) -> CompileResult<()> {
     match holder.warning_level(warn) {
         WarningLevel::Allow => Ok(()),
         WarningLevel::Warn => {
-            let info = line_info.line_info();
             holder.counter.add_warning();
-            eprintln!(
-                "Warning - file {}, line {}: {}\n{}",
-                info.get_path().display(),
-                info.get_line_number(),
-                message,
-                info.info_string()
-            );
+            eprintln!("{}", builder.get_message(ErrorType::Warning));
             Ok(())
         }
         WarningLevel::Deny => {
             holder.counter.add_error();
             if let Option::Some(warn_name) = warn.annotation_name() {
-                Err(CompilerException::of(
-                    format!(
-                        "{}\nNote: Error because of $deny({}) or $deny(all)",
-                        message, warn_name
-                    ),
-                    line_info,
-                )
+                Err(CompilerException::from_builder(builder.with_note(format!(
+                    "Error because of $deny({}) or $deny(all)",
+                    warn_name
+                )))
                 .into())
             } else {
-                Err(CompilerException::of(
-                    format!("{}\nNote: Error because of $deny(all)", message),
-                    line_info,
+                Err(CompilerException::from_builder(
+                    builder.with_note("Error because of $deny(all)"),
                 )
                 .into())
             }

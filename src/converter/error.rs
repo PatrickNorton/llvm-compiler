@@ -1,12 +1,12 @@
 use std::error::Error;
-use std::fmt::{Display, Write};
+use std::fmt::Display;
 
 use backtrace::Backtrace;
 
 use crate::parser::line_info::Lined;
 use crate::parser::operator_sp::OpSpTypeNode;
 
-// TODO? Make an ErrorBuilder API
+use super::error_builder::{ErrorBuilder, ErrorType};
 
 #[derive(Debug)]
 pub enum CompilerError {
@@ -34,135 +34,72 @@ pub struct CompilerTodoError {
 }
 
 impl CompilerException {
-    pub fn of<T: ToString, L: Lined>(message: T, line_info: L) -> Self {
-        let mut message = message.to_string();
-        let line_info = line_info.line_info();
-        write!(
-            &mut message,
-            "\nError: File {} Line {}\n{}",
-            line_info.get_path().display(),
-            line_info.get_line_number(),
-            line_info.info_string(),
-        )
-        .unwrap();
-        Self {
-            message,
-            backtrace: Backtrace::new(),
-        }
+    pub fn of<D: Display, L: Lined>(message: D, line_info: L) -> Self {
+        let builder = ErrorBuilder::new(&line_info).with_message(message);
+        Self::from_builder(builder)
     }
 
-    pub fn with_note<T: ToString, D: Display, L: Lined>(message: T, note: D, line_info: L) -> Self {
-        let mut message = message.to_string();
-        let line_info = line_info.line_info();
-        write!(
-            &mut message,
-            "\nNote: {}\nError: File {} Line {}\n{}",
-            note,
-            line_info.get_path().display(),
-            line_info.get_line_number(),
-            line_info.info_string(),
-        )
-        .unwrap();
-        Self {
-            message,
-            backtrace: Backtrace::new(),
-        }
+    pub fn with_note<D1: Display, D2: Display, L: Lined>(
+        message: D1,
+        note: D2,
+        line_info: L,
+    ) -> Self {
+        let builder = ErrorBuilder::new(&line_info)
+            .with_message(message)
+            .with_note(note);
+        Self::from_builder(builder)
     }
 
     pub fn double_def(name: &str, info1: impl Lined, info2: impl Lined) -> Self {
-        let info1 = info1.line_info();
-        let info2 = info2.line_info();
-        let message = format!(
-            "Error: name {} defined twice\n\
-             Definition 1: File {} Line {}\n{}\n\
-             Definition 2: File {} Line {}\n{}\n",
-            name,
-            info1.get_path().display(),
-            info1.get_line_number(),
-            info1.info_string(),
-            info2.get_path().display(),
-            info2.get_line_number(),
-            info2.info_string()
-        );
-        Self {
-            message,
-            backtrace: Backtrace::new(),
-        }
+        Self::from_builder(ErrorBuilder::double_def(name, &info1, &info2))
     }
 
     pub fn double_def_op(op: OpSpTypeNode, info1: impl Lined, info2: impl Lined) -> Self {
-        let info1 = info1.line_info();
-        let info2 = info2.line_info();
-        let message = format!(
-            "Error: {} defined twice\n\
-             Definition 1: File {} Line {}\n{}\n\
-             Definition 2: File {} Line {}\n{}\n",
-            op,
-            info1.get_path().display(),
-            info1.get_line_number(),
-            info1.info_string(),
-            info2.get_path().display(),
-            info2.get_line_number(),
-            info2.info_string()
-        );
+        Self::from_builder(ErrorBuilder::double_def(op, &info1, &info2))
+    }
+
+    pub fn from_builder(builder: ErrorBuilder<'_>) -> Self {
         Self {
-            message,
+            message: builder.get_message(ErrorType::Standard),
             backtrace: Backtrace::new(),
         }
     }
 }
 
 impl CompilerInternalError {
-    pub fn of<T: ToString, L: Lined>(message: T, line_info: L) -> Self {
-        let mut message = message.to_string();
-        let line_info = line_info.line_info();
-        write!(
-            &mut message,
-            "\nInternal error: File {} Line {}\n{}",
-            line_info.get_path().display(),
-            line_info.get_line_number(),
-            line_info.info_string(),
-        )
-        .unwrap();
-        Self {
-            message,
-            backtrace: Backtrace::new(),
-        }
+    pub fn of<D: Display, L: Lined>(message: D, line_info: L) -> Self {
+        let builder = ErrorBuilder::new(&line_info).with_message(message);
+        Self::from_builder(builder)
     }
 
-    pub fn with_note<T: ToString, D: Display, L: Lined>(message: T, note: D, line_info: L) -> Self {
-        let mut message = message.to_string();
-        let line_info = line_info.line_info();
-        write!(
-            &mut message,
-            "\nNote: {}\nInternal error: File {} Line {}\n{}",
-            note,
-            line_info.get_path().display(),
-            line_info.get_line_number(),
-            line_info.info_string(),
-        )
-        .unwrap();
+    pub fn with_note<D1: Display, D2: Display, L: Lined>(
+        message: D1,
+        note: D2,
+        line_info: L,
+    ) -> Self {
+        let builder = ErrorBuilder::new(&line_info)
+            .with_message(message)
+            .with_note(note);
+        Self::from_builder(builder)
+    }
+
+    pub fn from_builder(builder: ErrorBuilder<'_>) -> Self {
         Self {
-            message,
+            message: builder.get_message(ErrorType::Internal),
             backtrace: Backtrace::new(),
         }
     }
 }
 
 impl CompilerTodoError {
-    pub fn of<T: ToString, L: Lined>(message: T, line_info: L) -> Self {
-        let mut message = message.to_string();
-        let line_info = line_info.line_info();
-        write!(
-            &mut message,
-            "\nError: Operation not yet implemented\nFile {} Line {}\n{}",
-            line_info.get_path().display(),
-            line_info.get_line_number(),
-            line_info.info_string(),
-        )
-        .unwrap();
+    pub fn of<D: Display, L: Lined>(message: D, line_info: L) -> Self {
+        let builder = ErrorBuilder::new(&line_info).with_message(message);
+        Self::from_builder(builder)
+    }
+
+    pub fn from_builder(builder: ErrorBuilder<'_>) -> Self {
         Self {
-            message,
+            message: builder.get_message(ErrorType::Todo),
             backtrace: Backtrace::new(),
         }
     }

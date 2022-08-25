@@ -31,6 +31,7 @@ mod do_while;
 mod dotimes;
 mod dotted_var;
 mod error;
+mod error_builder;
 mod f_string;
 mod file_types;
 mod file_writer;
