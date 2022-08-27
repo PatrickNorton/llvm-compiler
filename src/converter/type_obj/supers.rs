@@ -75,4 +75,22 @@ impl<'a> Iterator for SuperRefIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         self.supers.next().or_else(|| self.fulfilled.next())
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len(), Some(self.len()))
+    }
+
+    fn last(self) -> Option<Self::Item> {
+        self.fulfilled.last().or_else(|| self.supers.last())
+    }
+
+    fn count(self) -> usize {
+        self.fulfilled.count() + self.supers.count()
+    }
+}
+
+impl<'a> ExactSizeIterator for SuperRefIter<'a> {
+    fn len(&self) -> usize {
+        self.fulfilled.len() + self.supers.len()
+    }
 }

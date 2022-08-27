@@ -66,7 +66,7 @@ impl BreakStatementNode {
             TestNode::parse_maybe_post_if(tokens, false)?
         } else if let TokenType::Keyword(Keyword::If) = tokens.token_type()? {
             tokens.next_token()?;
-            (TestNode::parse(tokens)?, None)
+            (TestNode::empty(), Some(TestNode::parse(tokens)?))
         } else {
             (TestNode::empty(), None)
         };
@@ -82,5 +82,97 @@ impl BreakStatementNode {
 impl Lined for BreakStatementNode {
     fn line_info(&self) -> &LineInfo {
         &self.line_info
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use crate::parser::name::NameNode;
+    use crate::parser::test_node::TestNode;
+    use crate::parser::tokenizer::Tokenizer;
+
+    use super::BreakStatementNode;
+
+    fn variable_name(node: &TestNode) -> &str {
+        match node {
+            TestNode::Name(NameNode::Variable(v)) => v.get_name(),
+            x => panic!("Expected variable, got {:?}", x),
+        }
+    }
+
+    #[test]
+    fn simple_break() {
+        let mut token_list = Tokenizer::parse_str("break", PathBuf::from("/"), 0).unwrap();
+        let node = BreakStatementNode::parse(&mut token_list).unwrap();
+        assert_eq!(node.get_loops(), 1);
+        assert!(node.get_cond().is_empty());
+        assert!(node.get_as().is_empty());
+    }
+
+    #[test]
+    fn break_as() {
+        let mut token_list = Tokenizer::parse_str("break as foo", PathBuf::from("/"), 0).unwrap();
+        let node = BreakStatementNode::parse(&mut token_list).unwrap();
+        assert_eq!(node.get_loops(), 1);
+        assert!(node.get_cond().is_empty());
+        assert_eq!(variable_name(node.get_as()), "foo");
+    }
+
+    #[test]
+    fn break_cond() {
+        let mut token_list = Tokenizer::parse_str("break if foo", PathBuf::from("/"), 0).unwrap();
+        let node = BreakStatementNode::parse(&mut token_list).unwrap();
+        assert_eq!(node.get_loops(), 1);
+        assert_eq!(variable_name(node.get_cond()), "foo");
+        assert!(node.get_as().is_empty());
+    }
+
+    #[test]
+    fn break_loops() {
+        let mut token_list = Tokenizer::parse_str("break 3", PathBuf::from("/"), 0).unwrap();
+        let node = BreakStatementNode::parse(&mut token_list).unwrap();
+        assert_eq!(node.get_loops(), 3);
+        assert!(node.get_cond().is_empty());
+        assert!(node.get_as().is_empty());
+    }
+
+    #[test]
+    fn break_as_cond() {
+        let mut token_list =
+            Tokenizer::parse_str("break as foo if bar", PathBuf::from("/"), 0).unwrap();
+        let node = BreakStatementNode::parse(&mut token_list).unwrap();
+        assert_eq!(node.get_loops(), 1);
+        assert_eq!(variable_name(node.get_cond()), "bar");
+        assert_eq!(variable_name(node.get_as()), "foo");
+    }
+
+    #[test]
+    fn break_as_loops() {
+        let mut token_list = Tokenizer::parse_str("break 3 as foo", PathBuf::from("/"), 0).unwrap();
+        let node = BreakStatementNode::parse(&mut token_list).unwrap();
+        assert_eq!(node.get_loops(), 3);
+        assert!(node.get_cond().is_empty());
+        assert_eq!(variable_name(node.get_as()), "foo");
+    }
+
+    #[test]
+    fn break_loop_cond() {
+        let mut token_list = Tokenizer::parse_str("break 3 if foo", PathBuf::from("/"), 0).unwrap();
+        let node = BreakStatementNode::parse(&mut token_list).unwrap();
+        assert_eq!(node.get_loops(), 3);
+        assert_eq!(variable_name(node.get_cond()), "foo");
+        assert!(node.get_as().is_empty());
+    }
+
+    #[test]
+    fn break_all() {
+        let mut token_list =
+            Tokenizer::parse_str("break 3 as foo if bar", PathBuf::from("/"), 0).unwrap();
+        let node = BreakStatementNode::parse(&mut token_list).unwrap();
+        assert_eq!(node.get_loops(), 3);
+        assert_eq!(variable_name(node.get_cond()), "bar");
+        assert_eq!(variable_name(node.get_as()), "foo");
     }
 }

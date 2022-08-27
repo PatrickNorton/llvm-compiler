@@ -127,6 +127,28 @@ where
 
 impl<T> TeeMap for T where T: Iterator {}
 
+impl<T, U, I, F> ExactSizeIterator for LeftTeeMap<T, U, I, F>
+where
+    Self: Iterator,
+    I: ExactSizeIterator,
+{
+    fn len(&self) -> usize {
+        let buffer = self.rc_buffer.borrow();
+        buffer.iter.len() + buffer.backlog_a.len()
+    }
+}
+
+impl<T, U, I, F> ExactSizeIterator for RightTeeMap<T, U, I, F>
+where
+    Self: Iterator,
+    I: ExactSizeIterator,
+{
+    fn len(&self) -> usize {
+        let buffer = self.rc_buffer.borrow();
+        buffer.iter.len() + buffer.backlog_b.len()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::iter;
@@ -145,6 +167,13 @@ mod tests {
         let (a, b) = iter::empty::<((), ())>().into_iter().tee_map(|x| x);
         assert_eq!(a.size_hint(), (0, Some(0)));
         assert_eq!(b.size_hint(), (0, Some(0)));
+    }
+
+    #[test]
+    fn nonempty_size_hint() {
+        let (a, b) = vec![1, 2, 3].into_iter().tee_map(|x| (x, -x));
+        assert_eq!(a.size_hint(), (3, Some(3)));
+        assert_eq!(b.size_hint(), (3, Some(3)));
     }
 
     #[test]

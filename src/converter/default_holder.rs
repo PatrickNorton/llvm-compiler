@@ -27,3 +27,9 @@ impl<'a> DefaultHolder<'a> {
         Ok(())
     }
 }
+
+impl Default for DefaultHolder<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
+}

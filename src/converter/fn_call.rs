@@ -121,7 +121,7 @@ impl<'a> FunctionCallConverter<'a> {
         let generics = fn_info.generify_args(&args)?.0;
         if generics.is_empty() {
             let returns = fn_info.get_returns();
-            return if ret_count.map_or_else(|| false, |ret| returns.len() < ret as usize) {
+            return if ret_count.map_or(false, |ret| returns.len() < ret as usize) {
                 Err(CompilerException::of(
                     format!(
                         "Cannot call function {} with {} returns: only returns {} values",
@@ -139,7 +139,7 @@ impl<'a> FunctionCallConverter<'a> {
         let cls = fn_info.to_callable();
         let returns = fn_info.get_returns();
         let gen = turn_map_to_list(generics);
-        if ret_count.map_or_else(|| false, |ret| returns.len() < ret as usize) {
+        if ret_count.map_or(false, |ret| returns.len() < ret as usize) {
             return Err(CompilerInternalError::of(
                 format!(
                     "Length {} less than length {}",

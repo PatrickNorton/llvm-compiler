@@ -352,11 +352,15 @@ impl<'a> DotConverter<'a> {
                     prefix,
                     index.get_var().try_into().unwrap(),
                 )?);
-                let operator = OpSpTypeNode::GetAttr; // FIXME: IndexConverter::is_slice
+                let operator = if IndexConverter::is_slice(index.get_indices()).is_some() {
+                    OpSpTypeNode::GetSlice
+                } else {
+                    OpSpTypeNode::GetAttr
+                };
                 attr_type
                     .try_operator_return_type(self.pre_dot, operator, info)
                     .map(|mut x| {
-                        x.drain(1..);
+                        x.truncate(1);
                         x
                     })
             }

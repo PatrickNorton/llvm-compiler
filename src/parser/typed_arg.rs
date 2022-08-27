@@ -328,6 +328,22 @@ impl<'a> Iterator for TALNIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.next()
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
+
+    fn last(self) -> Option<Self::Item> {
+        self.iter.last()
+    }
+
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        self.iter.nth(n)
+    }
+
+    fn count(self) -> usize {
+        self.iter.count()
+    }
 }
 
 impl Lined for TypedArgumentNode {
