@@ -11,6 +11,10 @@ use super::function::Function;
 use super::global_info::GlobalCompilerInfo;
 use super::CompileResult;
 
+/// Convert a function annotated with `$test`.
+///
+/// The function will only be compiled if `$cfg(test)` (e.g. if `--test` was
+/// passed as an argument)
 pub fn convert_test_fn(
     info: &mut CompilerInfo,
     node: &FunctionDefinitionNode,
@@ -32,6 +36,10 @@ pub fn convert_test_fn(
     }
 }
 
+/// Convert the function that starts & runs all tests.
+///
+/// This function is named `__default__$test` and is called at the end of
+/// `__default__` when test mode is enabled.
 pub fn convert_test_start(info: &mut GlobalCompilerInfo) -> u16 {
     let test_constant = info.global_builtins().unwrap().test_const().clone();
     let test_functions = info.get_test_functions();

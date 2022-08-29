@@ -46,22 +46,49 @@ pub struct Index {
 }
 
 impl BytecodeList {
+    /// Creates a new, empty `BytecodeList`.
+    ///
+    /// # Examples
+    /// ```
+    /// let x = BytecodeList::new();
+    /// ```
     pub const fn new() -> Self {
         Self { values: Vec::new() }
     }
 
+    /// Creates a `BytecodeList` with the specified capacity.
+    ///
+    /// # Examples
+    /// ```
+    /// let x = BytecodeList::with_capacity(10);
+    /// ```
     pub fn with_capacity(cap: usize) -> Self {
         Self {
             values: Vec::with_capacity(cap),
         }
     }
 
+    /// Creates a `BytecodeList` with the given bytecode as its sole value.
+    ///
+    /// # Examples
+    /// ```
+    /// let x = BytecodeList::of(Bytecode::Nop());
+    /// ```
     pub fn of(bytecode: Bytecode) -> Self {
         Self {
             values: vec![BytecodeValue::Bytecode(bytecode)],
         }
     }
 
+    /// Returns `true` if the list contains no elements.
+    ///
+    /// # Examples
+    /// ```
+    /// let mut x = BytecodeList::new();
+    /// assert!(x.is_empty());
+    /// x.add(Bytecode::Nop());
+    /// assert!(!x.is_empty());
+    /// ```
     pub fn is_empty(&self) -> bool {
         self.values.is_empty()
     }
@@ -71,18 +98,34 @@ impl BytecodeList {
         Self { values }
     }
 
+    /// Adds the given bytecode to the back of the list.
+    ///
+    /// # Examples
+    /// ```
+    /// let mut x = BytecodeList::new();
+    /// x.add(Bytecode::Nop());
+    /// ```
     pub fn add(&mut self, bytecode: Bytecode) {
         self.values.push(BytecodeValue::Bytecode(bytecode))
     }
 
+    /// Adds the given bytecode to the beginning of the list.
+    ///
+    /// # Examples
+    /// ```
+    /// let mut x = BytecodeList::new();
+    /// x.add_first(Bytecode::Nop());
+    /// ```
     pub fn add_first(&mut self, bytecode: Bytecode) {
         self.values.insert(0, BytecodeValue::Bytecode(bytecode))
     }
 
+    /// Appends the given list to the end of the current list.
     pub fn extend(&mut self, other: BytecodeList) {
         self.values.extend(other.values)
     }
 
+    /// Appends the values of the given iterator to the end of the current list.
     pub fn extend_with(&mut self, other: impl IntoIterator<Item = Bytecode>) {
         self.values
             .extend(other.into_iter().map(BytecodeValue::Bytecode))
