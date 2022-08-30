@@ -272,6 +272,7 @@ impl ExportInfo {
         line_info: impl Lined,
         global_info: &GlobalCompilerInfo,
     ) -> CompileResult<HashMap<String, TypeObject>> {
+        // FIXME: self.exports is not a superset of self.from_exports
         let mut result = HashMap::new();
         let line_info = line_info.line_info();
         for (name, type_val) in &self.exports {
@@ -282,6 +283,17 @@ impl ExportInfo {
             {
                 result.insert(name.clone(), type_obj);
             }
+        }
+        for name in self.from_exports.keys() {
+            if let Option::Some(type_obj) =
+                self.exported_type(name, line_info, global_info, &mut Vec::new())?
+            {
+                result.insert(name.clone(), type_obj);
+            }
+        }
+        for path in &self.wildcard_exports {
+            let exports = global_info.export_info(path);
+            result.extend(exports.exported_types(line_info, global_info)?);
         }
         Ok(result)
     }
