@@ -231,3 +231,74 @@ impl Lined for AssignmentNode {
         &self.line_info
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use crate::parser::name::NameNode;
+    use crate::parser::test_node::TestNode;
+    use crate::parser::tokenizer::Tokenizer;
+
+    use super::{AssignableNode, AssignmentNode};
+
+    #[test]
+    fn simple_assign() {
+        let mut tokens = Tokenizer::parse_str("foo = 7", PathBuf::from("/"), 0).unwrap();
+        let node = AssignmentNode::parse(&mut tokens).unwrap();
+        assert!(matches!(
+            node.get_names(),
+            &[AssignableNode::Name(NameNode::Variable(_))]
+        ));
+        assert!(!node.is_colon());
+        assert_eq!(node.get_values().len(), 1);
+        assert!(matches!(node.get_values()[0], TestNode::Number(_)));
+    }
+
+    #[test]
+    fn colon_assign() {
+        let mut tokens = Tokenizer::parse_str("foo := 7", PathBuf::from("/"), 0).unwrap();
+        let node = AssignmentNode::parse(&mut tokens).unwrap();
+        assert!(matches!(
+            node.get_names(),
+            &[AssignableNode::Name(NameNode::Variable(_))]
+        ));
+        assert!(node.is_colon());
+        assert_eq!(node.get_values().len(), 1);
+        assert!(matches!(node.get_values()[0], TestNode::Number(_)));
+    }
+
+    #[test]
+    fn multiple_assign() {
+        let mut tokens = Tokenizer::parse_str("foo, bar = 7, 9", PathBuf::from("/"), 0).unwrap();
+        let node = AssignmentNode::parse(&mut tokens).unwrap();
+        assert!(matches!(
+            node.get_names(),
+            &[
+                AssignableNode::Name(NameNode::Variable(_)),
+                AssignableNode::Name(NameNode::Variable(_))
+            ]
+        ));
+        assert!(!node.is_colon());
+        assert_eq!(node.get_values().len(), 2);
+        assert!(matches!(node.get_values()[0], TestNode::Number(_)));
+        assert!(matches!(node.get_values()[1], TestNode::Number(_)));
+    }
+
+    #[test]
+    fn unequal_assign() {
+        // There is no parse-time requirement that the two sides of the
+        // assignment have the same length; that is checked in the compilation
+        // pass. This allows splats to exist.
+        let mut tokens = Tokenizer::parse_str("foo = 7, 9", PathBuf::from("/"), 0).unwrap();
+        let node = AssignmentNode::parse(&mut tokens).unwrap();
+        assert!(matches!(
+            node.get_names(),
+            &[AssignableNode::Name(NameNode::Variable(_))]
+        ));
+        assert!(!node.is_colon());
+        assert_eq!(node.get_values().len(), 2);
+        assert!(matches!(node.get_values()[0], TestNode::Number(_)));
+        assert!(matches!(node.get_values()[1], TestNode::Number(_)));
+    }
+}
