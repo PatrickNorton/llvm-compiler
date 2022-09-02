@@ -64,6 +64,7 @@ impl<'a> AnnotatableConverter<'a> for EnumConverter<'a> {
                 Some(true_supers.iter().cloned().map_into().collect()),
                 GenericInfo::empty(),
                 true,
+                self.node.line_info().clone(),
             );
             let user_type = type_val.clone().into();
             ensure_proper_inheritance(self.node, &user_type, &true_supers)?;

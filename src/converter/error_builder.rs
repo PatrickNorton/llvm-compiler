@@ -68,7 +68,7 @@ enum ErrorLineInfo<'a> {
 
 struct ValueDef<'a> {
     name: Box<dyn Display + 'a>,
-    line_info: LineInfo,
+    line_info: &'a LineInfo,
 }
 
 impl<'a> ErrorBuilder<'a> {
@@ -228,15 +228,41 @@ impl<'a> ErrorBuilder<'a> {
     /// # Examples
     /// ```
     /// let builder = ErrorBuilder::new(LineInfo::empty_ref())
-    ///     .with_value_def("foo", LineInfo::empty());
+    ///     .with_value_def("foo", LineInfo::empty_ref());
     /// ```
     #[inline]
-    pub fn with_value_def(mut self, name: impl Display + 'a, line_info: LineInfo) -> Self {
+    pub fn with_value_def(mut self, name: impl Display + 'a, line_info: &'a impl Lined) -> Self {
         self.value_def = Some(ValueDef {
             name: Box::new(name),
-            line_info,
+            line_info: line_info.line_info(),
         });
         self
+    }
+
+    /// Adds a value definition to the given ErrorBuilder if the given
+    /// [`LineInfo`] is not empty.
+    ///
+    /// This takes self by value because it is intended to be used in
+    /// method-chaining style.
+    ///
+    /// # See also
+    ///
+    /// [`Self::with_value_def()`], which always adds the value definition, even
+    /// if the given [`LineInfo`] is empty.
+    ///
+    /// # Examples
+    /// ```
+    /// let builder = ErrorBuilder::new(LineInfo::empty_ref())
+    ///     .try_value_def("foo", LineInfo::empty_ref());
+    /// ```
+    #[inline]
+    pub fn try_value_def(self, name: impl Display + 'a, line_info: &'a impl Lined) -> Self {
+        let line_info = line_info.line_info();
+        if line_info.is_empty() {
+            self
+        } else {
+            self.with_value_def(name, line_info)
+        }
     }
 
     fn true_message(&self) -> impl Display + '_ {

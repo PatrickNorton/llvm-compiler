@@ -83,6 +83,7 @@ impl<'a> AnnotatableConverter<'a> for UnionConverter<'a> {
                 // FIXME: Remove unnecessary clone
                 Some(true_supers.iter().cloned().map_into().collect()),
                 generics,
+                self.node.line_info().clone(),
             );
             let user_type = type_val.clone().into();
             ensure_proper_inheritance(self.node, &user_type, &true_supers)?;

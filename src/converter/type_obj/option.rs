@@ -247,6 +247,7 @@ mod tests {
         StdTypeObject, TemplateParam, TupleType, TypeObject, UserTypeLike,
     };
     use crate::macros::hash_map;
+    use crate::parser::line_info::LineInfo;
 
     use super::OptionTypeObject;
 
@@ -298,7 +299,13 @@ mod tests {
     fn option_generify_as() {
         let param = TemplateParam::new("T".into(), 0, OBJECT.into());
         let generic_info = GenericInfo::new(vec![param.clone()]);
-        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        let parent = StdTypeObject::new(
+            "parent".into(),
+            Some(Vec::new()),
+            generic_info,
+            true,
+            LineInfo::empty(),
+        );
         parent.set_generic_parent();
         let value = OptionTypeObject::new(param.into());
         let result = OptionTypeObject::new(OBJECT.into());
@@ -312,7 +319,13 @@ mod tests {
     fn identity_generify_as() {
         let param = TemplateParam::new("T".into(), 0, OBJECT.into());
         let generic_info = GenericInfo::new(vec![param.clone()]);
-        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        let parent = StdTypeObject::new(
+            "parent".into(),
+            Some(Vec::new()),
+            generic_info,
+            true,
+            LineInfo::empty(),
+        );
         parent.set_generic_parent();
         let value = OptionTypeObject::new(param.clone().into());
         let result = OptionTypeObject::new(param.into());
@@ -326,7 +339,13 @@ mod tests {
     fn invalid_generify_as() {
         let param = TemplateParam::new("T".into(), 0, TupleType::default().into());
         let generic_info = GenericInfo::new(vec![param.clone()]);
-        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        let parent = StdTypeObject::new(
+            "parent".into(),
+            Some(Vec::new()),
+            generic_info,
+            true,
+            LineInfo::empty(),
+        );
         parent.set_generic_parent();
         let value = OptionTypeObject::new(param.into());
         let result = OptionTypeObject::new(OBJECT.into());

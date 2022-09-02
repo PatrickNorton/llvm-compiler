@@ -17,6 +17,7 @@ use crate::parser::annotation::AnnotatableRef;
 use crate::parser::class_def::ClassDefinitionNode;
 use crate::parser::definition::BaseClassRef;
 use crate::parser::descriptor::DescriptorNode;
+use crate::parser::line_info::Lined;
 use crate::parser::operator_sp::OpSpTypeNode;
 
 use super::converter_holder::ConverterHolder;
@@ -59,6 +60,7 @@ impl<'a> AnnotatableConverter<'a> for ClassConverter<'a> {
                 Some(true_supers.iter().cloned().map_into().collect()),
                 generics,
                 is_final,
+                self.node.line_info().clone(),
             );
             let user_type = type_val.clone().into();
             ensure_proper_inheritance(self.node, &user_type, &true_supers)?;

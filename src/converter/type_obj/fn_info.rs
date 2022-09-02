@@ -305,6 +305,7 @@ mod tests {
         ObjectType, StdTypeObject, TemplateParam, TupleType, TypeTypeObject, UserTypeLike,
     };
     use crate::macros::hash_map;
+    use crate::parser::line_info::LineInfo;
 
     use super::FunctionInfoType;
 
@@ -434,7 +435,13 @@ mod tests {
     fn rets_generify_as() {
         let param = TemplateParam::new("T".into(), 0, OBJECT.into());
         let generic_info = GenericInfo::new(vec![param.clone()]);
-        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        let parent = StdTypeObject::new(
+            "parent".into(),
+            Some(Vec::new()),
+            generic_info,
+            true,
+            LineInfo::empty(),
+        );
         parent.set_generic_parent();
         let func = FunctionInfoType::new(FunctionInfo::from_returns(vec![param.into()]));
         let tup = TupleType::new(Vec::new());
@@ -449,7 +456,13 @@ mod tests {
     fn args_generify_as() {
         let param = TemplateParam::new("T".into(), 0, OBJECT.into());
         let generic_info = GenericInfo::new(vec![param.clone()]);
-        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        let parent = StdTypeObject::new(
+            "parent".into(),
+            Some(Vec::new()),
+            generic_info,
+            true,
+            LineInfo::empty(),
+        );
         parent.set_generic_parent();
         let func = FunctionInfoType::new(FunctionInfo::with_args(
             ArgumentInfo::of_types([param.into()]),
@@ -470,7 +483,13 @@ mod tests {
     fn both_generify_as() {
         let param = TemplateParam::new("T".into(), 0, OBJECT.into());
         let generic_info = GenericInfo::new(vec![param.clone()]);
-        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        let parent = StdTypeObject::new(
+            "parent".into(),
+            Some(Vec::new()),
+            generic_info,
+            true,
+            LineInfo::empty(),
+        );
         parent.set_generic_parent();
         let func = FunctionInfoType::new(FunctionInfo::with_args(
             ArgumentInfo::of_types([param.clone().into()]),
@@ -491,7 +510,13 @@ mod tests {
     fn empty_generify_as() {
         let param = TemplateParam::new("T".into(), 0, OBJECT.into());
         let generic_info = GenericInfo::new(vec![param]);
-        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        let parent = StdTypeObject::new(
+            "parent".into(),
+            Some(Vec::new()),
+            generic_info,
+            true,
+            LineInfo::empty(),
+        );
         parent.set_generic_parent();
         let tup = TupleType::new(Vec::new());
         let func = FunctionInfoType::new(FunctionInfo::from_returns(vec![tup.clone().into()]));
@@ -507,7 +532,13 @@ mod tests {
     fn invalid_generify_as() {
         let param = TemplateParam::new("T".into(), 0, OBJECT.into());
         let generic_info = GenericInfo::new(vec![param.clone()]);
-        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        let parent = StdTypeObject::new(
+            "parent".into(),
+            Some(Vec::new()),
+            generic_info,
+            true,
+            LineInfo::empty(),
+        );
         parent.set_generic_parent();
         let tup = TupleType::new(Vec::new());
         let func = FunctionInfoType::new(FunctionInfo::with_args(

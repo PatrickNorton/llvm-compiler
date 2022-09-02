@@ -325,6 +325,7 @@ fn simple_test_type() -> TypeObject {
         Some(Vec::new()),
         GenericInfo::empty(),
         true,
+        LineInfo::empty(),
     );
     ty.seal(None, None);
     ty.into()

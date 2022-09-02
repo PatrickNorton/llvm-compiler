@@ -38,7 +38,13 @@ pub const OBJECT: ObjectType = ObjectType::new();
 pub const STABLE_FEATURES: &[&str] = &[];
 
 pub static NULL_TYPE: Lazy<TypeObject> = Lazy::new(|| {
-    let ty = StdTypeObject::new("null".into(), Some(Vec::new()), GenericInfo::empty(), true);
+    let ty = StdTypeObject::new(
+        "null".into(),
+        Some(Vec::new()),
+        GenericInfo::empty(),
+        true,
+        LineInfo::empty(),
+    );
     ty.is_const_class();
     ty.seal(None, None);
     ty.into()
@@ -49,6 +55,7 @@ pub static THROWS_TYPE: Lazy<TypeObject> = Lazy::new(|| {
         Some(Vec::new()),
         GenericInfo::empty(),
         true,
+        LineInfo::empty(),
     )
     .into()
 });
@@ -68,6 +75,7 @@ pub static CALLABLE: Lazy<TypeObject> = Lazy::new(|| {
         "Callable".into(),
         GenericInfo::new(vec![args, rets]),
         hash_map!(OpSpTypeNode::Call => call_info),
+        LineInfo::empty(),
     );
     callable.set_generic_parent();
     callable.into()
@@ -90,6 +98,7 @@ static CONTEXT: Lazy<TypeObject> = Lazy::new(|| {
         "Context".into(),
         GenericInfo::new(vec![param]),
         hash_map!(OpSpTypeNode::Enter => enter_info, OpSpTypeNode::Exit => exit_info),
+        LineInfo::empty(),
     );
     context.set_generic_parent();
     context.into()
@@ -100,6 +109,7 @@ pub static ITERABLE: Lazy<TypeObject> = Lazy::new(|| {
         "Iterable".to_string(),
         GenericInfo::new(vec![param.clone()]),
         Some(Vec::new()),
+        LineInfo::empty(),
     );
     let iter_info = MethodInfo::new(
         LineInfo::empty(),
@@ -151,6 +161,7 @@ static THROWS: Lazy<TypeObject> = Lazy::new(|| {
         Some(Vec::new()),
         GenericInfo::empty(),
         true,
+        LineInfo::empty(),
     );
     throws.set_generic_parent();
     throws.into()

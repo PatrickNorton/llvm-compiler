@@ -201,6 +201,7 @@ mod tests {
     use crate::converter::generic::GenericInfo;
     use crate::converter::type_obj::{StdTypeObject, TemplateParam, TupleType, UserTypeLike};
     use crate::macros::hash_map;
+    use crate::parser::line_info::LineInfo;
 
     #[test]
     fn empty_tuple_name() {
@@ -244,7 +245,13 @@ mod tests {
     fn empty_generify_as() {
         let param = TemplateParam::new("T".into(), 0, OBJECT.into());
         let generic_info = GenericInfo::new(vec![param]);
-        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        let parent = StdTypeObject::new(
+            "parent".into(),
+            Some(Vec::new()),
+            generic_info,
+            true,
+            LineInfo::empty(),
+        );
         parent.set_generic_parent();
         let tup = TupleType::default();
         let result = TupleType::default();
@@ -258,7 +265,13 @@ mod tests {
     fn single_generify_as() {
         let param = TemplateParam::new("T".into(), 0, OBJECT.into());
         let generic_info = GenericInfo::new(vec![param.clone()]);
-        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        let parent = StdTypeObject::new(
+            "parent".into(),
+            Some(Vec::new()),
+            generic_info,
+            true,
+            LineInfo::empty(),
+        );
         parent.set_generic_parent();
         let tup = TupleType::new(vec![param.into()]);
         let result = TupleType::new(vec![OBJECT.into()]);
@@ -272,7 +285,13 @@ mod tests {
     fn double_generify_as() {
         let param = TemplateParam::new("T".into(), 0, OBJECT.into());
         let generic_info = GenericInfo::new(vec![param.clone()]);
-        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        let parent = StdTypeObject::new(
+            "parent".into(),
+            Some(Vec::new()),
+            generic_info,
+            true,
+            LineInfo::empty(),
+        );
         parent.set_generic_parent();
         let tup = TupleType::new(vec![param.clone().into(), param.into()]);
         let result = TupleType::new(vec![OBJECT.into(), OBJECT.into()]);

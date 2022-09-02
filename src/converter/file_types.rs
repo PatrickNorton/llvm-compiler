@@ -313,14 +313,24 @@ impl FileTypes {
         }
         let generics = GenericInfo::parse_no_types(stmt.get_name().get_subtypes())?;
         let type_val: UserType = match stmt {
-            BaseClassRef::Class(_) | BaseClassRef::Enum(_) => {
-                StdTypeObject::new_predefined(str_name.to_string(), generics).into()
-            }
-            BaseClassRef::Union(_) => {
-                UnionTypeObject::new_predefined(str_name.to_string(), generics).into()
-            }
+            BaseClassRef::Class(_) | BaseClassRef::Enum(_) => StdTypeObject::new_predefined(
+                str_name.to_string(),
+                generics,
+                stmt.line_info().clone(),
+            )
+            .into(),
+            BaseClassRef::Union(_) => UnionTypeObject::new_predefined(
+                str_name.to_string(),
+                generics,
+                stmt.line_info().clone(),
+            )
+            .into(),
             BaseClassRef::Interface(i) => {
-                let ty = InterfaceType::new_predefined(str_name.to_string(), generics);
+                let ty = InterfaceType::new_predefined(
+                    str_name.to_string(),
+                    generics,
+                    stmt.line_info().clone(),
+                );
                 if i.get_descriptors().contains(&DescriptorNode::Auto) {
                     default_interface = Some(ty.clone());
                 }

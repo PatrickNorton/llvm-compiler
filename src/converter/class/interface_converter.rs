@@ -19,6 +19,7 @@ use crate::parser::definition::BaseClassRef;
 use crate::parser::descriptor::DescriptorNode;
 use crate::parser::generic_stmt::GenericDefinitionNode;
 use crate::parser::interface::{InterfaceDefinitionNode, InterfaceStatementNode};
+use crate::parser::line_info::Lined;
 use crate::parser::operator_sp::OpSpTypeNode;
 use crate::util::reborrow_option;
 
@@ -73,6 +74,7 @@ impl<'a> AnnotatableConverter<'a> for InterfaceConverter<'a> {
                 self.node.get_name().str_name().to_string(),
                 generics,
                 Some(true_supers.iter().cloned().map_into().collect()),
+                self.node.line_info().clone(),
             );
             let user_type = UserType::from(type_val.clone());
             type_val.set_generic_parent();

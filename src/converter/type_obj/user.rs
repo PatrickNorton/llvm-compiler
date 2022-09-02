@@ -39,6 +39,7 @@ pub struct UserInfo<O, A> {
     pub(super) info: GenericInfo,
     pub(super) attributes: OnceCell<HashMap<String, A>>,
     pub(super) static_attributes: OnceCell<HashMap<String, A>>,
+    pub(super) def_info: LineInfo,
     is_sealed: AtomicBool,
 }
 
@@ -723,7 +724,12 @@ mod private {
 }
 
 impl<O: AsRef<MethodInfo>, A: AsRef<AttributeInfo>> UserInfo<O, A> {
-    pub fn new(name: String, supers: Option<Vec<TypeObject>>, info: GenericInfo) -> Self {
+    pub fn new(
+        name: String,
+        supers: Option<Vec<TypeObject>>,
+        info: GenericInfo,
+        def_info: LineInfo,
+    ) -> Self {
         Self {
             name,
             supers: SuperHolder::new(supers.map_or_else(OnceCell::new, |x| x.into())),
@@ -733,6 +739,7 @@ impl<O: AsRef<MethodInfo>, A: AsRef<AttributeInfo>> UserInfo<O, A> {
             attributes: OnceCell::new(),
             static_attributes: OnceCell::new(),
             is_sealed: AtomicBool::new(false),
+            def_info,
         }
     }
 
@@ -879,6 +886,14 @@ impl<'a> Iterator for RecursiveSuperIter<'a> {
                 Some(x)
             }
             x => Some(x),
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        if self.values.is_empty() {
+            (0, Some(0))
+        } else {
+            (self.values.len(), None)
         }
     }
 }

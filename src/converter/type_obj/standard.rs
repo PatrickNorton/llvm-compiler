@@ -9,10 +9,11 @@ use once_cell::sync::Lazy;
 use crate::converter::builtins::BuiltinRef;
 use crate::converter::class::{AttributeInfo, MethodInfo};
 use crate::converter::error::CompilerException;
+use crate::converter::error_builder::ErrorBuilder;
 use crate::converter::generic::GenericInfo;
 use crate::converter::global_info::GlobalCompilerInfo;
 use crate::converter::CompileResult;
-use crate::parser::line_info::Lined;
+use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::operator_sp::OpSpTypeNode;
 
 use super::macros::{
@@ -48,11 +49,12 @@ impl StdTypeObject {
         supers: Option<Vec<TypeObject>>,
         info: GenericInfo,
         is_final: bool,
+        def_info: LineInfo,
     ) -> Self {
         Self {
             value: Arc::new(TypeObjInner {
                 info: Arc::new(StdInfo {
-                    info: UserInfo::new(name, supers, info),
+                    info: UserInfo::new(name, supers, info, def_info),
                     is_const_class: OnceBool::new(),
                     is_final,
                 }),
@@ -63,8 +65,8 @@ impl StdTypeObject {
         }
     }
 
-    pub fn new_predefined(name: String, info: GenericInfo) -> Self {
-        Self::new(name, None, info, true)
+    pub fn new_predefined(name: String, info: GenericInfo, def_info: LineInfo) -> Self {
+        Self::new(name, None, info, true, def_info)
     }
 
     fn clone_with_const(&self, is_const: bool) -> Self {
@@ -137,13 +139,14 @@ impl StdTypeObject {
         match generic_info.generify(args.clone()) {
             Result::Ok(true_args) => {
                 if true_args.len() != generic_info.len() {
-                    Err(CompilerException::of(
-                        format!(
-                            "Cannot generify object in this manner: type {} by types [{}]",
-                            self.name(),
-                            args.iter().map(|x| x.name()).format(", "),
-                        ),
-                        line_info,
+                    Err(CompilerException::from_builder(
+                        ErrorBuilder::new(&line_info)
+                            .with_message(format!(
+                                "Cannot generify object in this manner: type {} by types [{}]",
+                                self.name(),
+                                true_args.iter().map(|x| x.name()).format(", "),
+                            ))
+                            .try_value_def(self.name(), &self.get_info().def_info),
                     )
                     .into())
                 } else {
@@ -158,14 +161,15 @@ impl StdTypeObject {
                     .into())
                 }
             }
-            Result::Err(e) => Err(CompilerException::with_note(
-                format!(
-                    "Cannot generify object in this manner: type {} by types [{}]",
-                    self.name(),
-                    args.iter().map(|x| x.name()).format(", "),
-                ),
-                e,
-                line_info,
+            Result::Err(e) => Err(CompilerException::from_builder(
+                ErrorBuilder::new(&line_info)
+                    .with_message(format!(
+                        "Cannot generify object in this manner: type {} by types [{}]",
+                        self.name(),
+                        args.iter().map(|x| x.name()).format(", "),
+                    ))
+                    .with_note(e)
+                    .try_value_def(self.name(), &self.get_info().def_info),
             )
             .into()),
         }
@@ -283,6 +287,7 @@ mod tests {
             Some(Vec::new()),
             GenericInfo::empty(),
             false,
+            LineInfo::empty(),
         );
         ty.seal(None, None);
         assert_eq!(ty.name(), "test");
@@ -293,7 +298,13 @@ mod tests {
     #[test]
     fn generic_name() {
         let generic = GenericInfo::new(vec![TemplateParam::new("T".to_string(), 0, OBJECT.into())]);
-        let ty = StdTypeObject::new("test".to_string(), Some(Vec::new()), generic, false);
+        let ty = StdTypeObject::new(
+            "test".to_string(),
+            Some(Vec::new()),
+            generic,
+            false,
+            LineInfo::empty(),
+        );
         ty.seal(None, None);
         assert_eq!(ty.name(), "test");
         let typedefed = ty.typedef_as("test2".to_string());
@@ -311,7 +322,13 @@ mod tests {
             0,
             TypeTypeObject::new_empty().into(),
         )]);
-        let ty = StdTypeObject::new("test".to_string(), Some(Vec::new()), generic, false);
+        let ty = StdTypeObject::new(
+            "test".to_string(),
+            Some(Vec::new()),
+            generic,
+            false,
+            LineInfo::empty(),
+        );
         ty.seal(None, None);
         assert!(ty
             .generify(
@@ -338,7 +355,13 @@ mod tests {
     fn generics() {
         let generics =
             GenericInfo::new(vec![TemplateParam::new("T".to_string(), 0, OBJECT.into())]);
-        let ty = StdTypeObject::new("test".to_string(), Some(Vec::new()), generics, false);
+        let ty = StdTypeObject::new(
+            "test".to_string(),
+            Some(Vec::new()),
+            generics,
+            false,
+            LineInfo::empty(),
+        );
         ty.seal(None, None);
         assert_eq!(ty.get_generics(), Vec::<TypeObject>::new());
         let generified = ty.generify(LineInfo::empty(), vec![OBJECT.into()]).unwrap();
@@ -348,7 +371,13 @@ mod tests {
     #[test]
     fn same_base_type() {
         let generic = GenericInfo::new(vec![TemplateParam::new("T".to_string(), 0, OBJECT.into())]);
-        let ty = StdTypeObject::new("test".to_string(), Some(Vec::new()), generic, false);
+        let ty = StdTypeObject::new(
+            "test".to_string(),
+            Some(Vec::new()),
+            generic,
+            false,
+            LineInfo::empty(),
+        );
         ty.seal(None, None);
         let ty_obj = ty.clone().into();
         assert!(ty.same_base_type(&ty_obj));

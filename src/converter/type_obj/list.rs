@@ -153,6 +153,7 @@ mod tests {
         UserTypeLike,
     };
     use crate::macros::hash_map;
+    use crate::parser::line_info::LineInfo;
 
     fn list_name_types() -> Vec<(ListTypeObject, &'static str)> {
         vec![
@@ -245,7 +246,13 @@ mod tests {
         let list = ListTypeObject::default();
         let param = TemplateParam::new("T".into(), 0, OBJECT.into());
         let generic_info = GenericInfo::new(vec![param]);
-        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        let parent = StdTypeObject::new(
+            "parent".into(),
+            Some(Vec::new()),
+            generic_info,
+            true,
+            LineInfo::empty(),
+        );
         parent.set_generic_parent();
         assert_eq!(
             list.generify_as(&parent.into(), &list.clone().into()),
@@ -261,7 +268,13 @@ mod tests {
     fn single_generify_as() {
         let param = TemplateParam::new("T".into(), 0, OBJECT.into());
         let generic_info = GenericInfo::new(vec![param.clone()]);
-        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        let parent = StdTypeObject::new(
+            "parent".into(),
+            Some(Vec::new()),
+            generic_info,
+            true,
+            LineInfo::empty(),
+        );
         parent.set_generic_parent();
         let list = ListTypeObject::new(vec![param.into()]);
         let result = ListTypeObject::new(vec![OBJECT.into()]);
@@ -275,7 +288,13 @@ mod tests {
     fn non_list_generify_as() {
         let param = TemplateParam::new("T".into(), 0, OBJECT.into());
         let generic_info = GenericInfo::new(vec![param.clone()]);
-        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        let parent = StdTypeObject::new(
+            "parent".into(),
+            Some(Vec::new()),
+            generic_info,
+            true,
+            LineInfo::empty(),
+        );
         parent.set_generic_parent();
         let list = ListTypeObject::new(vec![param.into()]);
         let result = TupleType::new(vec![OBJECT.into()]);
