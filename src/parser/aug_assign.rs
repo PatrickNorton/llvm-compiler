@@ -219,3 +219,116 @@ impl Lined for AugmentedAssignmentNode {
         &self.line_info
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use crate::parser::aug_assign::AugAssignTypeNode;
+    use crate::parser::name::NameNode;
+    use crate::parser::operator::OperatorTypeNode;
+    use crate::parser::test_node::TestNode;
+    use crate::parser::token::TokenType;
+    use crate::parser::tokenizer::Tokenizer;
+
+    use super::AugmentedAssignmentNode;
+
+    fn variable_name(node: &TestNode) -> &str {
+        match node {
+            TestNode::Name(NameNode::Variable(v)) => v.get_name(),
+            x => panic!("Expected variable, got {:?}", x),
+        }
+    }
+
+    fn name_name(node: &NameNode) -> &str {
+        match node {
+            NameNode::Variable(v) => v.get_name(),
+            x => panic!("Expected variable, got {:?}", x),
+        }
+    }
+
+    #[test]
+    fn aug_assign_pattern() {
+        assert_eq!(
+            AugAssignTypeNode::pattern("+="),
+            Some((TokenType::AugAssign(AugAssignTypeNode::Add), 2)),
+        );
+        assert_eq!(
+            AugAssignTypeNode::pattern("/= foo bar"),
+            Some((TokenType::AugAssign(AugAssignTypeNode::Divide), 2)),
+        );
+        assert_eq!(AugAssignTypeNode::pattern("foo bar"), None);
+        assert_eq!(AugAssignTypeNode::pattern("!="), None);
+    }
+
+    #[test]
+    fn aug_assign_sequence() {
+        assert_eq!(AugAssignTypeNode::Add.sequence(), "+");
+        assert_eq!(AugAssignTypeNode::Subtract.sequence(), "-");
+        assert_eq!(AugAssignTypeNode::Multiply.sequence(), "*");
+        assert_eq!(AugAssignTypeNode::Divide.sequence(), "/");
+        assert_eq!(AugAssignTypeNode::FloorDiv.sequence(), "//");
+        assert_eq!(AugAssignTypeNode::Power.sequence(), "**");
+        assert_eq!(AugAssignTypeNode::LeftBitshift.sequence(), "<<");
+        assert_eq!(AugAssignTypeNode::RightBitshift.sequence(), ">>");
+        assert_eq!(AugAssignTypeNode::BitwiseAnd.sequence(), "&");
+        assert_eq!(AugAssignTypeNode::BitwiseOr.sequence(), "|");
+        assert_eq!(AugAssignTypeNode::BitwiseXor.sequence(), "^");
+        assert_eq!(AugAssignTypeNode::BitwiseNot.sequence(), "~");
+        assert_eq!(AugAssignTypeNode::Modulo.sequence(), "%");
+        assert_eq!(AugAssignTypeNode::NullCoerce.sequence(), "??");
+        assert_eq!(AugAssignTypeNode::BoolAnd.sequence(), "and");
+        assert_eq!(AugAssignTypeNode::BoolOr.sequence(), "or");
+        assert_eq!(AugAssignTypeNode::BoolXor.sequence(), "xor");
+    }
+
+    macro_rules! assert_aug_ops {
+        ($($name:ident),* $(,)?) => {
+            $(
+                assert_eq!(
+                    AugAssignTypeNode::$name.get_operator(),
+                    OperatorTypeNode::$name
+                );
+            )*
+        }
+    }
+
+    #[test]
+    fn aug_assign_operator() {
+        assert_aug_ops!(
+            Add,
+            Subtract,
+            Multiply,
+            Divide,
+            FloorDiv,
+            Power,
+            LeftBitshift,
+            RightBitshift,
+            BitwiseAnd,
+            BitwiseOr,
+            BitwiseXor,
+            BitwiseNot,
+            Modulo,
+            NullCoerce,
+            BoolAnd,
+            BoolOr,
+            BoolXor,
+        );
+    }
+
+    #[test]
+    fn aug_assign_parse() {
+        let mut token_list = Tokenizer::parse_str("x += y", PathBuf::from("/"), 0).unwrap();
+        let node = AugmentedAssignmentNode::parse(&mut token_list).unwrap();
+        assert_eq!(node.get_operator(), AugAssignTypeNode::Add);
+        assert_eq!(name_name(node.get_name()), "x");
+        assert_eq!(variable_name(node.get_value()), "y");
+    }
+
+    #[test]
+    fn aug_assign_err() {
+        let mut token_list = Tokenizer::parse_str("x y +=", PathBuf::from("/"), 0).unwrap();
+        let node = AugmentedAssignmentNode::parse(&mut token_list);
+        assert!(node.is_err(), "{:#?}", node);
+    }
+}
