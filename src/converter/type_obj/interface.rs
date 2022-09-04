@@ -45,6 +45,7 @@ struct InterfaceTypeInner {
     typedef_name: Option<String>,
     generics: Vec<TypeObject>,
     is_const: bool,
+    cached_supers: OnceCell<Vec<TypeObject>>,
 }
 
 #[derive(Debug)]
@@ -69,6 +70,7 @@ impl InterfaceType {
                 typedef_name: None,
                 generics: Vec::new(),
                 is_const: true,
+                cached_supers: OnceCell::new(),
             }),
         }
     }
@@ -131,6 +133,7 @@ impl InterfaceType {
                 typedef_name: None,
                 generics: self.get_generics().to_vec(),
                 is_const,
+                cached_supers: OnceCell::new(),
             }),
         }
     }
@@ -194,6 +197,7 @@ impl InterfaceType {
                             typedef_name: self.typedef_name().clone(),
                             generics: true_args,
                             is_const: self.is_const(),
+                            cached_supers: OnceCell::new(),
                         }),
                     }
                     .into())
@@ -220,6 +224,7 @@ impl InterfaceType {
                 typedef_name: self.value.typedef_name.clone(),
                 generics: self.generify_with_inner(parent, values),
                 is_const: self.value.is_const,
+                cached_supers: OnceCell::new(),
             }),
         }
         .into()
@@ -292,6 +297,7 @@ impl InterfaceType {
                 typedef_name: Some(name),
                 generics: self.value.generics.clone(),
                 is_const: self.value.is_const,
+                cached_supers: OnceCell::new(),
             }),
         }
     }
@@ -326,7 +332,19 @@ impl UserTypeLike for InterfaceType {
     }
 
     fn get_supers(&self) -> SuperRef<'_> {
-        self.get_info().supers.reference()
+        if self.generics().is_empty() {
+            self.get_info().supers.reference()
+        } else {
+            let supers = self.value.cached_supers.get_or_init(|| {
+                let self_ty = self.clone().into();
+                self.get_info()
+                    .supers
+                    .iter()
+                    .map(|x| x.generify_with(&self_ty, self.generics().to_vec()))
+                    .collect()
+            });
+            SuperRef::from_slice(supers)
+        }
     }
 }
 
