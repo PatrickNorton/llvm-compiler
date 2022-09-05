@@ -49,6 +49,13 @@ impl SuperHolder {
 }
 
 impl<'a> SuperRef<'a> {
+    pub fn from_slice(slice: &'a [TypeObject]) -> Self {
+        Self {
+            supers: slice,
+            fulfilled_interfaces: &[],
+        }
+    }
+
     pub fn first(self) -> Option<&'a TypeObject> {
         self.supers
             .first()

@@ -129,7 +129,7 @@ impl GenericInfo {
         }
     }
 
-    pub fn generify(&self, args: Vec<TypeObject>) -> Result<Vec<TypeObject>, GenerifyError> {
+    pub fn generify(&self, args: &[TypeObject]) -> Result<Vec<TypeObject>, GenerifyError> {
         if !self.params.iter().any(|x| x.is_vararg()) {
             self.generify_no_varargs(args)
         } else {
@@ -137,7 +137,7 @@ impl GenericInfo {
         }
     }
 
-    fn generify_no_varargs(&self, args: Vec<TypeObject>) -> Result<Vec<TypeObject>, GenerifyError> {
+    fn generify_no_varargs(&self, args: &[TypeObject]) -> Result<Vec<TypeObject>, GenerifyError> {
         if args.len() != self.len() {
             return Err(GenerifyError::new(GenerifyErrorType::UnequalLength(
                 self.len(),
@@ -146,13 +146,13 @@ impl GenericInfo {
         }
         zip(args, &self.params)
             .map(|(arg, param)| {
-                check_arg(&arg, param)?;
-                Ok(arg)
+                check_arg(arg, param)?;
+                Ok(arg.clone())
             })
             .collect()
     }
 
-    fn generify_vararg(&self, args: Vec<TypeObject>) -> Result<Vec<TypeObject>, GenerifyError> {
+    fn generify_vararg(&self, args: &[TypeObject]) -> Result<Vec<TypeObject>, GenerifyError> {
         if args.len() < self.len() - 1 {
             return Err(GenerifyError::new(GenerifyErrorType::TooFewArgs(
                 self.len(),
@@ -163,7 +163,6 @@ impl GenericInfo {
         let mut i = 0;
         while i < args.len() && !self.params[i].is_vararg() {
             check_arg(&args[i], &self.params[i])?;
-            // TODO: Remove clones
             result.push(args[i].clone());
             i += 1;
         }
@@ -175,7 +174,6 @@ impl GenericInfo {
                 result.push(TypeObject::list([]));
                 while i < args.len() {
                     check_arg(&args[i], &self.params[i])?;
-                    // TODO: Remove clones
                     result.push(args[i].clone());
                     i += 1;
                 }
@@ -186,7 +184,6 @@ impl GenericInfo {
                 i += 1;
                 while i < args.len() {
                     check_arg(&args[i], &self.params[i])?;
-                    // TODO: Remove clones
                     result.push(args[i].clone());
                     i += 1;
                 }
@@ -197,7 +194,6 @@ impl GenericInfo {
                 i += 1;
                 while i < self.len() {
                     check_arg(&args[i + diff], &self.params[i])?;
-                    // TODO: Remove clones
                     result.push(args[i + diff].clone());
                     i += 1;
                 }

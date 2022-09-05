@@ -1,6 +1,7 @@
 use derive_new::new;
 use num::{BigInt, One, Signed, ToPrimitive};
 
+use crate::converter::type_obj::TypeObject;
 use crate::parser::index::IndexNode;
 use crate::parser::operator_sp::OpSpTypeNode;
 use crate::parser::slice::SliceNode;
@@ -42,7 +43,9 @@ impl<'a> ConverterBase for IndexConverter<'a> {
 
 impl<'a> ConverterTest for IndexConverter<'a> {
     fn return_type(&mut self, info: &mut CompilerInfo) -> CompileTypes {
-        // TODO: Type literal objects
+        if let Option::Some(ty) = TypeObject::of_index(info, self.node)? {
+            return Ok(vec![ty.get_type()]);
+        }
         let operator = if Self::is_slice(self.node.get_indices()).is_some() {
             OpSpTypeNode::GetSlice
         } else {

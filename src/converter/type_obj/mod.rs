@@ -40,8 +40,11 @@ use std::iter::zip;
 
 use itertools::Itertools;
 
-use crate::parser::line_info::Lined;
+use crate::parser::index::IndexNode;
+use crate::parser::line_info::{LineInfo, Lined};
+use crate::parser::name::NameNode;
 use crate::parser::operator_sp::OpSpTypeNode;
+use crate::parser::test_node::TestNode;
 use crate::util::levenshtein;
 
 use super::access_handler::AccessLevel;
@@ -158,6 +161,29 @@ impl TypeObject {
     #[inline]
     pub fn optional(obj: TypeObject) -> TypeObject {
         OptionTypeObject::new(obj).into()
+    }
+
+    pub fn of(info: &CompilerInfo, arg: &TestNode) -> CompileResult<Option<TypeObject>> {
+        match arg {
+            TestNode::Name(NameNode::Variable(var)) => Ok(info.class_of(var.get_name())),
+            TestNode::Name(NameNode::Index(idx)) => Self::of_index(info, idx),
+            _ => Ok(None),
+        }
+    }
+
+    pub fn of_index(info: &CompilerInfo, idx: &IndexNode) -> CompileResult<Option<TypeObject>> {
+        let cls = match Self::of(info, idx.get_var())? {
+            Some(x) => x,
+            None => return Ok(None),
+        };
+        let args = idx.get_indices();
+        let generics = args
+            .iter()
+            .map(|arg| Self::of(info, arg))
+            .collect::<CompileResult<Option<_>>>()?;
+        generics
+            .map(|gen| cls.generify(LineInfo::empty_ref(), gen))
+            .transpose()
     }
 
     pub fn name(&self) -> Cow<'_, str> {

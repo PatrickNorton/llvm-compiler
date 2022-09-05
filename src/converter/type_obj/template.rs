@@ -305,12 +305,19 @@ mod tests {
     use crate::converter::generic::GenericInfo;
     use crate::converter::type_obj::{StdTypeObject, TemplateParam, UserTypeLike};
     use crate::macros::hash_map;
+    use crate::parser::line_info::LineInfo;
 
     #[test]
     fn eq_generify_as() {
         let param = TemplateParam::new("T".into(), 0, OBJECT.into());
         let generic_info = GenericInfo::new(vec![param.clone()]);
-        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        let parent = StdTypeObject::new(
+            "parent".into(),
+            Some(Vec::new()),
+            generic_info,
+            true,
+            LineInfo::empty(),
+        );
         parent.set_generic_parent();
         assert_eq!(
             param.clone().generify_as(&parent.into(), &param.into()),
@@ -322,7 +329,13 @@ mod tests {
     fn template_generify_as() {
         let param = TemplateParam::new("T".into(), 0, OBJECT.into());
         let generic_info = GenericInfo::new(vec![param.clone()]);
-        let parent = StdTypeObject::new("parent".into(), Some(Vec::new()), generic_info, true);
+        let parent = StdTypeObject::new(
+            "parent".into(),
+            Some(Vec::new()),
+            generic_info,
+            true,
+            LineInfo::empty(),
+        );
         parent.set_generic_parent();
         assert_eq!(
             param.generify_as(&parent.into(), &OBJECT.into()),

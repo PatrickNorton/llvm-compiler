@@ -192,8 +192,7 @@ impl UnionTypeObject {
         args: Vec<TypeObject>,
     ) -> CompileResult<TypeObject> {
         let generic_info = self.get_generic_info();
-        // TODO: Remove clone
-        match generic_info.generify(args.clone()) {
+        match generic_info.generify(&args) {
             Result::Ok(true_args) => {
                 if true_args.len() != generic_info.len() {
                     Err(CompilerException::from_builder(

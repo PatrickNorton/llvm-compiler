@@ -349,7 +349,7 @@ impl UserType {
         user_match_all!(self: x => x.is_final())
     }
 
-    pub fn get_supers(&self) -> SuperRef {
+    pub fn get_supers(&self) -> SuperRef<'_> {
         user_match_all!(self: x => x.get_supers())
     }
 

@@ -138,6 +138,7 @@ impl TypeTypeObject {
         builtins: BuiltinRef<'_>,
     ) -> Option<FunctionInfo> {
         self.value.generic.as_ref().and_then(|gen| {
+            // TODO? Add index operator instead of special-casing IndexConverter
             if o == OpSpTypeNode::Call {
                 let mut_gen = gen.make_mut();
                 let op_info = mut_gen
