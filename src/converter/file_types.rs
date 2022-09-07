@@ -337,6 +337,9 @@ impl FileTypes {
                 ty.into()
             }
         };
+        type_val
+            .get_generic_info()
+            .set_parent(type_val.clone().into());
         if let Option::Some(builtin) =
             annotation::is_builtin(stmt, self.permissions, stmt.get_annotations())?
         {

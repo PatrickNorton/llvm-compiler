@@ -38,7 +38,7 @@ impl LangObject {
         match self {
             LangObject::Constant(c) => c.get_type(builtins),
             LangObject::Instance(i) => Cow::Borrowed(&i.value.cls),
-            LangObject::Type(t) => Cow::Borrowed(t),
+            LangObject::Type(t) => Cow::Owned(t.get_type()),
         }
     }
 

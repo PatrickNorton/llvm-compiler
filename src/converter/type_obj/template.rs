@@ -154,10 +154,14 @@ impl TemplateParam {
     }
 
     pub fn set_parent(&self, parent: TypeObject) {
-        self.value
-            .parent
-            .set(parent)
-            .expect("Parent should only be written to once")
+        match self.value.parent.try_insert(parent) {
+            Result::Ok(_) => {}
+            Result::Err((ty, parent)) => {
+                if !ty.same_base_type(&parent) {
+                    panic!("Parent should only be written to once")
+                }
+            }
+        }
     }
 
     pub fn parse_generics(
