@@ -98,13 +98,13 @@ impl<'a> ReturnListConverter<'a> {
                     )
                     .into())
                 } else if info.builtins().iterable().is_superclass(&return_type) {
-                    return Err(CompilerException::of(
+                    Err(CompilerException::of(
                         format!("Cannot unpack iterable in {} statement", self.return_name()),
                         stmt,
                     )
-                    .into());
+                    .into())
                 } else {
-                    return Err(CompilerException::of(
+                    Err(CompilerException::of(
                         format!(
                             "Can only unpack tuples in {} stateemnt, not '{}'",
                             self.return_name(),
@@ -112,7 +112,7 @@ impl<'a> ReturnListConverter<'a> {
                         ),
                         stmt,
                     )
-                    .into());
+                    .into())
                 }
             }
             VarargType::Double => Err(CompilerException::of(
@@ -225,7 +225,7 @@ impl<'a> ReturnListConverter<'a> {
         ret_type: &TypeObject,
         fn_ret: &TypeObject,
     ) -> CompilerException {
-        return CompilerException::of(
+        CompilerException::of(
             format!(
                 "Value {}ed in position {}, of type '{}', \
                  is not a subclass of the required return '{}'",
@@ -235,7 +235,7 @@ impl<'a> ReturnListConverter<'a> {
                 fn_ret.name()
             ),
             lined,
-        );
+        )
     }
 }
 
