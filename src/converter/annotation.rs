@@ -418,9 +418,9 @@ where
             }
         }
     }
-    Err(CompilerException::of(
-        "Invalid format for inline attribute:\n\
-         The only valid attributes are $inline, $inline(always), and $inline(never)",
+    Err(CompilerException::with_note(
+        "Invalid format for inline attribute",
+        "The only valid forms are $inline, $inline(always), and $inline(never)",
         inline,
     )
     .into())
@@ -694,7 +694,8 @@ fn builtin_values(
         );
     }
     match &*map_arguments(func.get_parameters()) {
-        [] => Err(CompilerException::of(
+        [] => Err(CompilerException::with_note(
+            "Ill formed 'builtin' annotation",
             "'builtin' annotation must have at least 1 parameter",
             annotation,
         )
@@ -710,7 +711,14 @@ fn builtin_values(
             false,
         ))),
         [TestNode::String(s), TestNode::Number(n), TestNode::Name(NameNode::Variable(v))] => {
-            assert_eq!(v.get_name(), "hidden");
+            if v.get_name() != "hidden" {
+                return Err(CompilerException::with_note(
+                    "Ill-formed 'builtin' annotation",
+                    "Third parameter of 'builtin' annotation must be the literal 'hidden'",
+                    annotation,
+                )
+                .into());
+            }
             Ok(Some(BuiltinInfo::new(
                 s.get_contents().to_string(),
                 Some(n.get_value().to_usize().unwrap()),

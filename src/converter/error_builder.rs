@@ -28,6 +28,7 @@ pub struct ErrorBuilder<'a> {
     line_info: ErrorLineInfo<'a>,
     message: Option<Box<dyn Display + 'a>>,
     notes: Vec<Box<dyn Display + 'a>>,
+    helps: Vec<(Box<dyn Display + 'a>, Option<Box<dyn Display + 'a>>)>,
     value_def: Option<ValueDef<'a>>,
 }
 
@@ -83,6 +84,7 @@ impl<'a> ErrorBuilder<'a> {
             line_info: ErrorLineInfo::Standard(line_info.line_info()),
             message: None,
             notes: Vec::new(),
+            helps: Vec::new(),
             value_def: None,
         }
     }
@@ -105,6 +107,7 @@ impl<'a> ErrorBuilder<'a> {
             line_info: ErrorLineInfo::DoubleDef(info_1.line_info(), info_2.line_info()),
             message: Some(Box::new(format!("Name '{}' defined twice", name))),
             notes: Vec::new(),
+            helps: Vec::new(),
             value_def: None,
         }
     }
@@ -131,6 +134,14 @@ impl<'a> ErrorBuilder<'a> {
         let mut msg = format!("{}: {}", ty.message(), self.true_message());
         for note in &self.notes {
             write!(msg, "\nNote: {}", note).unwrap();
+        }
+        for (help, suggestion) in &self.helps {
+            write!(msg, "\nNote: {}", help).unwrap();
+            if let Option::Some(suggestion) = suggestion {
+                // NOTE: I'm not a fan of this format for help suggestions, is
+                // there a better way?
+                write!(msg, "\n```\n{}\n```", suggestion);
+            }
         }
         match &self.line_info {
             ErrorLineInfo::Standard(s) => write!(
@@ -212,6 +223,61 @@ impl<'a> ErrorBuilder<'a> {
     #[inline]
     pub fn with_note(mut self, note: impl Display + 'a) -> Self {
         self.notes.push(Box::new(note));
+        self
+    }
+
+    /// Adds a help item to the given ErrorBuilder.
+    ///
+    /// A help item is similar to a note, but generally has an actionable
+    /// suggestion instead of simply more context. In addition, help actions can
+    /// include a code snippet suggestion, for that use
+    /// [`Self::with_help_example`].
+    ///
+    /// This takes `self` by value because it is intended to be used in
+    /// method-chaining style.
+    ///
+    /// This method can be called multiple times on the same object without
+    /// issue; all help items are guaranteed to be printed on final display of
+    /// the error.
+    ///
+    /// # Examples
+    /// ```
+    /// let builder = ErrorBuilder::new(LineInfo::empty_ref())
+    ///     .with_help("This error now has a help item")
+    ///     .with_help("Errors can have multiple help items at the same time");
+    /// ```
+    #[inline]
+    pub fn with_help(mut self, note: impl Display + 'a) -> Self {
+        self.helps.push((Box::new(note), None));
+        self
+    }
+
+    /// Adds a help item to the given ErrorBuilder.
+    ///
+    /// A help item is similar to a note, but generally has an actionable
+    /// suggestion instead of simply more context. In addition, help items can
+    /// include a code example for what to replace. In the future, this may be
+    /// usable as an automatic replacement, but that has not yet been
+    /// implemented.
+    ///
+    /// This takes `self` by value because it is intended to be used in
+    /// method-chaining style.
+    ///
+    /// This method can be called multiple times on the same object without
+    /// issue; all help items are guaranteed to be printed on final display of
+    /// the error.
+    ///
+    /// # Examples
+    /// ```
+    /// let builder = ErrorBuilder::new(LineInfo::empty_ref())
+    ///     .with_help_example("This error now has a help item", "print(\"code suggestion\")");
+    /// ```
+    pub fn with_help_example(
+        mut self,
+        note: impl Display + 'a,
+        example: impl Display + 'a,
+    ) -> Self {
+        self.helps.push((Box::new(note), Some(Box::new(example))));
         self
     }
 

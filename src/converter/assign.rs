@@ -22,6 +22,7 @@ use super::compiler_info::CompilerInfo;
 use super::convertible::{base_convertible, ConverterBase, ConverterTest, TestConvertible};
 use super::dotted_var::DotConverter;
 use super::error::{CompilerException, CompilerInternalError};
+use super::error_builder::ErrorBuilder;
 use super::index::IndexConverter;
 use super::test_converter::TestConverter;
 use super::type_obj::{OptionTypeObject, TypeObject};
@@ -598,13 +599,10 @@ fn check_def(info: &CompilerInfo, variable: &VariableNode) -> CompileResult<()> 
 fn def_error(info: &CompilerInfo, variable: &VariableNode) -> CompilerException {
     let name = variable.get_name();
     if let Option::Some(closest) = levenshtein::closest_name(name, info.defined_names()) {
-        CompilerException::of(
-            format!(
-                "Attempted to assign to undefined name {}\n\
-                 Help: Did you mean {}?",
-                name, closest
-            ),
-            variable,
+        CompilerException::from_builder(
+            ErrorBuilder::new(variable)
+                .with_message(format!("Attempted to assign to undefined name {}", name))
+                .with_help(format!("Did you mean {}?", closest)),
         )
     } else {
         CompilerException::of(

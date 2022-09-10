@@ -602,7 +602,7 @@ impl<'a> FunctionCallConverter<'a> {
     }
 }
 
-fn get_args(info: &mut CompilerInfo, args: &[ArgumentNode]) -> CompileResult<Vec<Argument>> {
+pub fn get_args(info: &mut CompilerInfo, args: &[ArgumentNode]) -> CompileResult<Vec<Argument>> {
     args.iter()
         .map(|arg| {
             let type_val = first(TestConverter::return_type(info, arg.get_argument(), 1)?);

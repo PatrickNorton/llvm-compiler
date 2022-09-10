@@ -91,9 +91,15 @@ fn convert_feature(value: &FunctionCallNode) -> CompileResult<bool> {
     assert_eq!(value.get_variable().map(|x| x.get_name()), Some("feature"));
     let args = value.get_parameters();
     if args.len() != 1 {
-        return Err(
-            CompilerException::of("Invalid format for 'feature' cfg attribute", value).into(),
-        );
+        return Err(CompilerException::with_note(
+            "Invalid format for 'feature' cfg attribute",
+            format!(
+                "'cfg' attribute takes exactly 1 argument, not {}",
+                args.len()
+            ),
+            value,
+        )
+        .into());
     }
     let str_value = get_string(args[0].get_argument())?;
     Ok(STABLE_FEATURES.contains(&str_value))
@@ -103,17 +109,21 @@ fn convert_version(value: &FunctionCallNode) -> CompileResult<bool> {
     assert_eq!(value.get_variable().map(|x| x.get_name()), Some("version"));
     let args = value.get_parameters();
     if args.len() != 1 {
-        return Err(
-            CompilerException::of("Invalid format for 'version' cfg attribute", value).into(),
-        );
+        return Err(CompilerException::with_note(
+            "Invalid format for 'version' cfg attribute",
+            format!(
+                "'cfg(version(...))' attribute takes exactly 1 argument, not {}",
+                args.len()
+            ),
+            value,
+        )
+        .into());
     }
     let str_value = get_string(args[0].get_argument())?;
     match str_value.parse::<Version>() {
-        Result::Err(err) => Err(CompilerException::of(
-            format!("Invalid version format: \n{}", err),
-            &args[0],
-        )
-        .into()),
+        Result::Err(err) => {
+            Err(CompilerException::with_note("Invalid version format", err, &args[0]).into())
+        }
         Result::Ok(version) => Ok(version <= CURRENT_VERSION),
     }
 }
@@ -121,8 +131,20 @@ fn convert_version(value: &FunctionCallNode) -> CompileResult<bool> {
 fn convert_all(info: &mut CompilerInfo, value: &FunctionCallNode) -> CompileResult<bool> {
     assert_eq!(value.get_variable().map(|x| x.get_name()), Some("all"));
     for arg in value.get_parameters() {
-        if arg.is_vararg() || !arg.get_variable().is_empty() {
-            return Err(CompilerException::of("Invalid format for cfg(all)", value).into());
+        if arg.is_vararg() {
+            return Err(CompilerException::with_note(
+                "Invalid format for cfg(all)",
+                "Arguments in 'all(...)' may not be varargs",
+                value,
+            )
+            .into());
+        } else if !arg.get_variable().is_empty() {
+            return Err(CompilerException::with_note(
+                "Invalid format for cfg(all)",
+                "Arguments in 'all(...)' may not be keyword arguments",
+                value,
+            )
+            .into());
         } else if !value_of(info, arg.get_argument())? {
             return Ok(false);
         }
@@ -133,8 +155,20 @@ fn convert_all(info: &mut CompilerInfo, value: &FunctionCallNode) -> CompileResu
 fn convert_any(info: &mut CompilerInfo, value: &FunctionCallNode) -> CompileResult<bool> {
     assert_eq!(value.get_variable().map(|x| x.get_name()), Some("any"));
     for arg in value.get_parameters() {
-        if arg.is_vararg() || !arg.get_variable().is_empty() {
-            return Err(CompilerException::of("Invalid format for cfg(any)", value).into());
+        if arg.is_vararg() {
+            return Err(CompilerException::with_note(
+                "Invalid format for cfg(any)",
+                "Arguments in 'any(...)' may not be varargs",
+                value,
+            )
+            .into());
+        } else if !arg.get_variable().is_empty() {
+            return Err(CompilerException::with_note(
+                "Invalid format for cfg(any)",
+                "Arguments in 'any(...)' may not be keyword arguments",
+                value,
+            )
+            .into());
         } else if value_of(info, arg.get_argument())? {
             return Ok(true);
         }

@@ -17,6 +17,7 @@ use super::compiler_info::CompilerInfo;
 use super::convertible::{base_convertible, ConverterTest, TestConvertible};
 use super::diverge::DivergingInfo;
 use super::error::CompilerException;
+use super::error_builder::ErrorBuilder;
 use super::loop_converter::LoopConverter;
 use super::type_obj::TypeObject;
 use super::warning::{self, WarningType};
@@ -273,13 +274,9 @@ pub fn add_iter(
     bytes.add(Bytecode::LoadConst(
         info.builtins().iter_constant().clone().into(),
     ));
-    bytes.extend(convert_iter(info, value_converter)?);
+    bytes.extend(value_converter.try_convert_slice(info)?);
     bytes.add(Bytecode::CallTos(1.into()));
     Ok(())
-}
-
-fn convert_iter(info: &mut CompilerInfo, converter: &mut impl ConverterTest) -> CompileBytes {
-    converter.try_convert_slice(info)
 }
 
 fn variable_exception<'a>(
@@ -288,21 +285,19 @@ fn variable_exception<'a>(
 ) -> CompilerException {
     let name = var.get_name();
     if let Option::Some(closest) = levenshtein::closest_name(name, names) {
-        CompilerException::of(
-            format!(
-                "Variable {} not defined. Did you mean {}?\n\
-                 Help: If not, consider adding 'var' before the variable",
-                name, closest
-            ),
-            var,
+        CompilerException::from_builder(
+            ErrorBuilder::new(var)
+                .with_message(format!(
+                    "Variable {} not defined. Did you mean {}?",
+                    name, closest
+                ))
+                .with_help("If not, consider adding 'var' before the variable"),
         )
     } else {
-        CompilerException::of(
-            format!(
-                "Variable {} not defined.\nHelp: consider adding 'var' before the variable",
-                name
-            ),
-            var,
+        CompilerException::from_builder(
+            ErrorBuilder::new(var)
+                .with_message(format!("Variable {} not defined", name))
+                .with_help("Consider adding 'var' before the variable"),
         )
     }
 }

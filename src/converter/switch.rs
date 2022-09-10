@@ -101,9 +101,9 @@ impl<'a> LoopConverter for SwitchConverter<'a> {
             if case_stmt.is_default() {
                 had_default = true;
             } else if had_default {
-                warning::warn(
-                    "Default statement before case statement in switch\n\
-                     Help: In unoptimized switch statements, cases are run through in order \
+                warning::warn_note(
+                    "Default statement before case statement in switch",
+                    "In unoptimized switch statements, cases are run through in order \
                      and thus this is unreachable",
                     WarningType::Unreachable,
                     info,

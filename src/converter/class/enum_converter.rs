@@ -11,12 +11,13 @@ use crate::converter::convertible::{base_convertible, ConverterBase};
 use crate::converter::default_holder::DefaultHolder;
 use crate::converter::diverge::DivergingInfo;
 use crate::converter::error::CompilerException;
+use crate::converter::error_builder::ErrorBuilder;
 use crate::converter::fn_info::FunctionInfo;
 use crate::converter::generic::GenericInfo;
 use crate::converter::test_converter::TestConverter;
 use crate::converter::type_loader::TypeLoader;
 use crate::converter::type_obj::{StdTypeObject, UserTypeLike};
-use crate::converter::{CompileBytes, CompileResult};
+use crate::converter::{fn_call, CompileBytes, CompileResult};
 use crate::parser::annotation::AnnotatableRef;
 use crate::parser::definition::BaseClassRef;
 use crate::parser::descriptor::DescriptorNode;
@@ -179,17 +180,17 @@ impl<'a> EnumConverter<'a> {
                 .iter()
                 .map(|x| info.convert_type(x)),
             |iter| {
-                CompilerException::of(
-                    format!(
-                        "Enums are not allowed to have generic types\n\
-                         Help: If this is a list of superclasses, put \
-                         it in a 'from' clause:\n\
-                         enum {} from {}",
-                        self.node.get_name().str_name(),
-                        // TODO: Remove to_string call
-                        iter.map(|x| x.name().to_string()).format(", ")
-                    ),
-                    self.node.get_name(),
+                CompilerException::from_builder(
+                    ErrorBuilder::new(self.node.get_name())
+                        .with_message("Enums are not allowed to have generic types")
+                        .with_help_example(
+                            "If this is a list of superclasses, put it in a 'from' clause",
+                            format!(
+                                "enum {} from {}",
+                                self.node.get_name().str_name(),
+                                iter.map(|x| x.name().to_string()).format(", ")
+                            ),
+                        ),
                 )
             },
         )
@@ -218,18 +219,14 @@ impl<'a> EnumConverter<'a> {
             match name {
                 EnumKeywordNode::Variable(_) => {
                     if !new_operator_info.matches(&[]) {
-                        return Err(CompilerException::of(
-                            "Incorrect number of arguments for enum \
-                             (parentheses may only be omitted when enum \
-                             constructor may take 0 arguments)",
-                            name,
-                        )
-                        .into());
+                        return Err(Self::invalid_var_error(name).into());
                     }
                 }
                 EnumKeywordNode::Function(fn_node) => {
-                    // NOTE: Is this actually the correct thing to match against here?
-                    if !new_operator_info.matches(&[]) {
+                    // TODO? Merge with FunctionCallNode
+                    // FIXME: Doesn't convert "non-standard" arguments correctly
+                    let args = fn_call::get_args(info, fn_node.get_parameters())?;
+                    if !new_operator_info.matches(&args) {
                         return Err(CompilerException::of(
                             "Invalid arguments for enum constructor",
                             name,
@@ -249,6 +246,14 @@ impl<'a> EnumConverter<'a> {
         bytes.add(Bytecode::PopTop());
         bytes.add_label(loop_label);
         Ok(bytes)
+    }
+
+    fn invalid_var_error(name: &EnumKeywordNode) -> CompilerException {
+        CompilerException::with_note(
+            "Incorrect number of arguments for enum",
+            "Parentheses may only be omitted when enum constructor may take 0 arguments",
+            name,
+        )
     }
 
     fn default_new(&self) -> (MethodInfo, RawMethod<'a>) {
