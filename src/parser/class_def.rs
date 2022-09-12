@@ -356,3 +356,32 @@ impl<'a> IntoIterator for &'a ClassBodyNode {
         self.statements.iter()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use crate::parser::tokenizer::Tokenizer;
+
+    use super::ClassDefinitionNode;
+
+    #[test]
+    fn empty_class() {
+        let mut token_list = Tokenizer::parse_str("class Foo {}", PathBuf::from("/"), 0).unwrap();
+        let class_def = ClassDefinitionNode::parse(&mut token_list).unwrap();
+        assert_eq!(class_def.get_name().str_name(), "Foo");
+        assert!(class_def.get_superclasses().is_empty());
+        assert_eq!(class_def.get_body().into_iter().count(), 0); // No is_empty method
+    }
+
+    #[test]
+    fn class_supers() {
+        let mut token_list =
+            Tokenizer::parse_str("class Foo from Bar {}", PathBuf::from("/"), 0).unwrap();
+        let class_def = ClassDefinitionNode::parse(&mut token_list).unwrap();
+        assert_eq!(class_def.get_name().str_name(), "Foo");
+        assert_eq!(class_def.get_superclasses().len(), 1);
+        assert_eq!(class_def.get_superclasses()[0].str_name(), "Bar");
+        assert_eq!(class_def.get_body().into_iter().count(), 0);
+    }
+}
