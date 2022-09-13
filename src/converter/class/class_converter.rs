@@ -20,6 +20,7 @@ use crate::parser::descriptor::DescriptorNode;
 use crate::parser::line_info::Lined;
 use crate::parser::operator_sp::OpSpTypeNode;
 
+use super::base_class::BaseClass;
 use super::converter_holder::ConverterHolder;
 use super::{check_contract, convert_supers, ensure_proper_inheritance, ClassConverterBase};
 
@@ -112,8 +113,6 @@ impl<'a> ClassConverter<'a> {
             .re_parse(info, self.node.get_name().get_subtypes())?;
         obj.set_generic_parent();
         info.add_local_types(obj.clone().into(), obj.get_generic_info().get_param_map());
-        let supers = convert_supers(self.node, info.types_of(self.node.get_superclasses())?)?;
-        obj.set_supers(supers.into_iter().map_into().collect());
         let is_const = self.node.get_descriptors().contains(&DescriptorNode::Const);
         if !is_const {
             // TODO: Remove cloning

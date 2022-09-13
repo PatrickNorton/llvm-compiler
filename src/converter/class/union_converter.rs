@@ -155,7 +155,6 @@ impl<'a> UnionConverter<'a> {
         if is_const {
             self.check_const_supers(obj, &supers)?;
         }
-        obj.set_supers(supers.iter().map(|x| x.clone().into()).collect_vec());
         ensure_proper_inheritance(self.node, &obj.clone().into(), &supers)?;
         info.access_handler_mut().add_cls(obj.clone().into());
         info.add_local_types(obj.clone().into(), obj.get_generic_info().get_param_map());

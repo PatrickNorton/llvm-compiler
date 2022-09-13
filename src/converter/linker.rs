@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::iter::zip;
 
 use crate::parser::base::IndependentNode;
@@ -9,6 +10,7 @@ use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::parse::TopNode;
 
 use super::annotation::{self, should_compile, BuiltinInfo};
+use super::class::BaseClass;
 use super::compiler_info::CompilerInfo;
 use super::constant::{ClassConstant, FunctionConstant, LangConstant};
 use super::convertible::BaseConvertible;
@@ -18,7 +20,7 @@ use super::lang_obj::LangInstance;
 use super::test_converter::TestConverter;
 use super::type_loader::TypeLoader;
 use super::type_obj::{TypeObject, TypeTypeObject, UserType};
-use super::CompileResult;
+use super::{class, CompileResult};
 
 #[derive(Debug)]
 pub struct Linker {
@@ -76,6 +78,15 @@ pub fn link<'a>(
     info.remove_stack_frame();
     info.add_globals(&linker.globals, &linker.constants);
     Ok(linker)
+}
+
+pub fn set_supers(info: &mut CompilerInfo, node: &TopNode) -> CompileResult<()> {
+    for stmt in node {
+        if let Result::Ok(def) = BaseClassRef::try_from(stmt) {
+            class::set_supers(info, def)?;
+        }
+    }
+    Ok(())
 }
 
 impl Linker {

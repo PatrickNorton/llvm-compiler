@@ -11,7 +11,10 @@ mod property;
 mod union_converter;
 mod variant;
 
+use itertools::Itertools;
+
 pub use self::attribute::AttributeInfo;
+pub use self::base_class::{BaseClass, BodiedClass};
 pub use self::class_converter::ClassConverter;
 pub use self::class_info::ClassInfo;
 pub use self::enum_converter::EnumConverter;
@@ -21,16 +24,17 @@ pub use self::union_converter::UnionConverter;
 pub use self::variant::VariantConverter;
 
 use std::collections::{HashMap, HashSet};
+use std::convert::TryInto;
 use std::hash::Hash;
 use std::iter::zip;
 
 use crate::parser::annotation::AnnotatableNode;
 use crate::parser::class_def::ClassStatementNode;
+use crate::parser::definition::BaseClassRef;
 use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::operator_sp::OpSpTypeNode;
 use crate::util::reborrow_option;
 
-use self::base_class::{BaseClass, BodiedClass};
 use self::converter_holder::ConverterHolder;
 use self::method::{Method, RawMethod};
 
@@ -374,6 +378,24 @@ fn convert_method<U: IsOperatorNew + Eq + Hash>(
     info.fn_returns_mut().pop_fn_returns();
     let line_info = method_info.line_info.clone();
     Ok(Method::new(line_info, method_info.into(), bytes))
+}
+
+pub fn set_supers(info: &mut CompilerInfo, node: BaseClassRef<'_>) -> CompileResult<()> {
+    let type_val = info.get_type_obj(node.str_name()).unwrap();
+    let user_type: UserType = type_val.clone().try_into().unwrap();
+    info.add_local_types(
+        type_val.clone(),
+        user_type.get_generic_info().get_param_map(),
+    );
+    let supers = convert_supers(&node, info.types_of(node.get_superclasses())?)?;
+    let true_supers = supers.into_iter().map_into().collect();
+    match user_type {
+        UserType::Interface(_) => {} // TODO
+        UserType::Std(s) => s.set_supers(true_supers),
+        UserType::Union(u) => u.set_supers(true_supers),
+    }
+    info.remove_local_types();
+    Ok(())
 }
 
 pub(self) fn convert_supers(

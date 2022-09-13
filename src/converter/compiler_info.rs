@@ -52,6 +52,7 @@ pub struct CompilerInfo<'a> {
 
     compiled: bool,
     linked: bool,
+    supers_set: bool,
 }
 
 impl<'a> CompilerInfo<'a> {
@@ -119,6 +120,7 @@ impl<'a> CompilerInfo<'a> {
             permission_level: perms,
             compiled: false,
             linked: false,
+            supers_set: false,
         })
     }
 
@@ -155,6 +157,13 @@ impl<'a> CompilerInfo<'a> {
         let linker = linker::link(self, node, defaults)?;
         self.import_handler.set_from_linker(linker)?;
         self.linked = true;
+        Ok(())
+    }
+
+    pub fn set_supers(&mut self, node: &TopNode) -> CompileResult<()> {
+        assert!(!self.supers_set);
+        linker::set_supers(self, node)?;
+        self.supers_set = true;
         Ok(())
     }
 

@@ -131,6 +131,9 @@ pub fn compile_all(
         })
         .collect::<CompileResult<HashMap<_, _>>>()?;
     for (&file, info) in &mut all_infos {
+        info.set_supers(&all_files[file].0)?;
+    }
+    for (&file, info) in &mut all_infos {
         let mut defaults = default_holders.remove(file).unwrap();
         info.link(&all_files[file].0, &mut defaults)?;
         defaults.compile(info)?;

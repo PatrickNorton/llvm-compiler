@@ -65,11 +65,13 @@ impl<'a> AnnotatableConverter<'a> for InterfaceConverter<'a> {
         self.generic_ops.clear();
         self.generic_attrs.clear();
         let mut converter = ConverterHolder::new();
-        let true_supers = convert_supers(self.node, info.types_of(self.node.get_superclasses())?)?;
         let type_val;
         let has_type = info.has_type(self.node.get_name().str_name());
         if !has_type {
             let generics = GenericInfo::parse(info, self.node.get_name().get_subtypes())?;
+            // FIXME: Add local types here
+            let true_supers =
+                convert_supers(self.node, info.types_of(self.node.get_superclasses())?)?;
             type_val = InterfaceType::new(
                 self.node.get_name().str_name().to_string(),
                 generics,
