@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::iter::zip;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::iter::{zip, FusedIterator};
 
 use itertools::Itertools;
 use once_cell::sync::OnceCell;
@@ -897,3 +897,5 @@ impl<'a> Iterator for RecursiveSuperIter<'a> {
         }
     }
 }
+
+impl<'a> FusedIterator for RecursiveSuperIter<'a> {}

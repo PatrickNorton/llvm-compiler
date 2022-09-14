@@ -1,4 +1,4 @@
-use std::env::args;
+use std::env::{self, args};
 use std::error::Error;
 use std::fs::create_dir;
 use std::process::ExitCode;
@@ -24,6 +24,7 @@ fn main() -> ExitCode {
 }
 
 fn inner_main() -> Result<(), Box<dyn Error>> {
+    env::set_var("RUST_BACKTRACE", "1");
     let arguments = CLArgs::parse(args())?;
     let file = arguments.target().to_owned();
     let dest_folder = file.parent().unwrap().join("__ncache__");

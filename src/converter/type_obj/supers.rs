@@ -1,3 +1,5 @@
+use std::iter::FusedIterator;
+
 use once_cell::sync::OnceCell;
 
 use super::TypeObject;
@@ -95,6 +97,8 @@ impl<'a> Iterator for SuperRefIter<'a> {
         self.fulfilled.count() + self.supers.count()
     }
 }
+
+impl<'a> FusedIterator for SuperRefIter<'a> {}
 
 impl<'a> ExactSizeIterator for SuperRefIter<'a> {
     fn len(&self) -> usize {

@@ -7,7 +7,7 @@ use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
 use crate::parser::type_node::{TypeLikeNode, TypeNode};
 use crate::parser::variable::VariableNode;
-use std::iter::Chain;
+use std::iter::{Chain, FusedIterator};
 use std::mem::take;
 
 use super::type_node::VarNode;
@@ -345,6 +345,8 @@ impl<'a> Iterator for TALNIter<'a> {
         self.iter.count()
     }
 }
+
+impl<'a> FusedIterator for TALNIter<'a> {}
 
 impl Lined for TypedArgumentNode {
     fn line_info(&self) -> &LineInfo {

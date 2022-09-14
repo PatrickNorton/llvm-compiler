@@ -126,6 +126,7 @@ impl Builtins {
     type_getter!(global callable);
     type_getter!(global iterator);
     type_getter!(global throws_type, throws);
+    type_getter!(hashable);
 
     pub fn de_iterable(&self, val: &TypeObject) -> CompileResult<Vec<TypeObject>> {
         if val.same_base_type(self.iterable()) {

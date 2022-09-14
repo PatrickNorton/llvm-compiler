@@ -180,7 +180,6 @@ macro_rules! bytecode_size {
 }
 
 // NOTE: feature(macro_metavar_expressions) (#83527) would improve this
-// NOTE: ${ignore} is being stabilized in 1.62.0
 macro_rules! count {
     () => {
         0

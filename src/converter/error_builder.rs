@@ -140,7 +140,7 @@ impl<'a> ErrorBuilder<'a> {
             if let Option::Some(suggestion) = suggestion {
                 // NOTE: I'm not a fan of this format for help suggestions, is
                 // there a better way?
-                write!(msg, "\n```\n{}\n```", suggestion);
+                write!(msg, "\n```\n{}\n```", suggestion).unwrap();
             }
         }
         match &self.line_info {

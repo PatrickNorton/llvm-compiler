@@ -191,6 +191,22 @@ impl LineInfo {
             Option::None => LineInfo::empty(),
         }
     }
+
+    /// Returns whether the [`LineInfo`] is [empty](LineInfo::empty()).
+    ///
+    /// # Examples
+    /// ```
+    /// assert!(LineInfo::empty().is_empty());
+    /// assert!(LineInfo::empty_ref.is_empty());
+    ///
+    /// let non_empty = LineInfo::new(
+    ///     Arc::from(Path::new("/dev/null")), 17, "test_line", 5
+    /// );
+    /// assert!(!non_empty.is_empty());
+    /// ```
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_none()
+    }
 }
 
 impl Default for LineInfo {

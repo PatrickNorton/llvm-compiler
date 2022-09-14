@@ -40,6 +40,23 @@ pub use self::reference::BuiltinRef;
 // amount of inter-process synchronization, it makes more sense to have the
 // values cached locally, since they won't change post-initialization.
 
+/// Strings that are not keywords, but are still reserved, so they may not be
+/// overwritten by variable names.
+///
+/// Reserving these prevents potentially misleading code, and reduces some
+/// complexity in the codebase related to checking common names (for example,
+/// "true" will always refer to the boolean `true` thanks to this, so there is
+/// no need to do full variable lookup whenever "true" is seen).
+///
+/// # Examples of misleading code
+/// ```text
+/// var true = 0  // Illegal
+/// // Looks like it will always branch, but it actually never will (were this
+/// // allowed)!
+/// if true {
+///     doSomething()
+/// }
+/// ```
 pub const FORBIDDEN_NAMES: &[&str] = &[
     "true",
     "false",
