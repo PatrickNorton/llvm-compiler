@@ -77,32 +77,6 @@ macro_rules! parse_if_matches {
     };
 }
 
-/// If the first token in the given [`TokenList`] matches the given pattern,
-/// parses and returns it, otherwise constructs and returns an error with the
-/// given message (via [`TokenList::error_expected`]).
-///
-/// # Examples
-/// ```
-/// let mut tokens = Tokenizer::parse_str("123 456", PathBuf::from("/"), 0).unwrap();
-///
-/// assert!(expect_matches!(tokens, TokenType::Number(_), "should work").is_ok());
-///
-/// let error = expect_matches!(tokens, TokenType::Keyword(_), "should fail");
-/// assert!(error.is_err());
-/// assert_eq!(error.unwrap_err().get_message(), "should fail");
-/// ```
-macro_rules! expect_matches {
-    ($tokens:expr, $pattern:pat, $message:expr) => {
-        match $tokens.token_type() {
-            Result::Ok(x) => match x {
-                $pattern => $tokens.next_token(),
-                _ => Result::Err($tokens.error_expected($message)),
-            },
-            Result::Err(x) => Result::Err(x),
-        }
-    };
-}
-
 /// Returns whether or not the current line contains a token whose token type
 /// matches the given pattern.
 ///
@@ -126,7 +100,7 @@ macro_rules! line_matches {
     };
 }
 
-pub(crate) use {expect_matches, line_matches, parse_if_matches};
+pub(crate) use {line_matches, parse_if_matches};
 
 #[cfg(test)]
 mod tests {
@@ -137,7 +111,6 @@ mod tests {
     use crate::parser::token::TokenType;
     use crate::parser::token_list::TokenList;
     use crate::parser::tokenizer::Tokenizer;
-    use crate::parser::ParserError;
 
     fn create_token_list(text: &str) -> TokenList {
         Tokenizer::parse_str(text, PathBuf::from(file!()), 0).expect("Tokenizer should not fail")
@@ -187,19 +160,5 @@ mod tests {
             .unwrap()
             .is_some());
         assert_eq!(tokens.token_type().unwrap(), &TokenType::Newline);
-    }
-
-    #[test]
-    fn expect_success() -> Result<(), ParserError> {
-        let mut tokens = create_token_list("123 456");
-        expect_matches!(tokens, TokenType::Number(_), "number")?;
-        Result::Ok(())
-    }
-
-    #[test]
-    fn expect_err() {
-        let mut tokens = create_token_list("123 456");
-        let result = expect_matches!(tokens, TokenType::Newline, "newline");
-        assert!(result.is_err());
     }
 }

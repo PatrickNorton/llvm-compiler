@@ -137,13 +137,6 @@ impl ClassDefinitionNode {
         &self.body
     }
 
-    /// The string name of the type.
-    ///
-    /// This is equivalent to `self.get_name().str_name()`.
-    pub fn str_name(&self) -> &str {
-        self.name.str_name()
-    }
-
     /// Parses a class definition from the list of tokens.
     ///
     /// The token list must begin with the `class` keyword, or the method will
