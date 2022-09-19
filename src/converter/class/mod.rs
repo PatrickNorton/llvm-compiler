@@ -361,7 +361,12 @@ fn convert_method<U: IsOperatorNew + Eq + Hash>(
     }
     let returns = fn_returns(fn_info, info.builtins())?;
     let ret_info = info.fn_returns_mut();
-    ret_info.add_fn_returns(fn_info.is_generator(), returns);
+    ret_info.add_fn_returns(
+        fn_info.is_generator(),
+        returns,
+        fn_info.line_info().clone(),
+        Some(method_info.info.get_name().to_string()),
+    );
     if key.is_operator_new() {
         info.access_handler_mut()
             .enter_constructor(type_val.clone().into());

@@ -14,6 +14,7 @@ use crate::util::levenshtein;
 
 use super::constant::LangConstant;
 use super::error::CompilerException;
+use super::error_builder::ErrorBuilder;
 use super::file_types::FileTypes;
 use super::global_info::GlobalCompilerInfo;
 use super::linker::Linker;
@@ -415,28 +416,18 @@ impl ExportInfo {
         name: &str,
         global_info: &GlobalCompilerInfo,
     ) -> CompilerException {
-        if let Option::Some(closest) =
-            self.closest_exported_name(name, &mut HashSet::new(), global_info)
-        {
-            CompilerException::of(
-                format!(
-                    "No value '{}' was exported from file '{}'\nDid you mean {}?",
-                    name,
-                    self.path.display(),
-                    closest
-                ),
-                line_info,
-            )
-        } else {
-            CompilerException::of(
-                format!(
+        CompilerException::from_builder(
+            ErrorBuilder::new(&line_info)
+                .with_message(format!(
                     "No value '{}' was exported from file '{}'",
                     name,
                     self.path.display()
+                ))
+                .when_some(
+                    self.closest_exported_name(name, &mut HashSet::new(), global_info),
+                    |builder, closest| builder.with_help(format!("Did you mean '{}'?", closest)),
                 ),
-                line_info,
-            )
-        }
+        )
     }
 
     fn closest_exported_name<'a>(

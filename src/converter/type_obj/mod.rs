@@ -51,6 +51,7 @@ use super::access_handler::AccessLevel;
 use super::builtins::{BuiltinRef, OBJECT};
 use super::compiler_info::CompilerInfo;
 use super::error::CompilerException;
+use super::error_builder::ErrorBuilder;
 use super::fn_info::FunctionInfo;
 use super::{CompileResult, CompileTypes};
 
@@ -600,27 +601,17 @@ impl TypeObject {
             let closest = self
                 .get_defined()
                 .and_then(|x| levenshtein::closest_name(name, x));
-            if let Option::Some(closest) = closest {
-                CompilerException::of(
-                    format!(
-                        "Attribute '{}' does not exist in type '{}'\n\
-                         Did you mean '{}'?",
-                        name,
-                        self.name(),
-                        closest
-                    ),
-                    line_info,
-                )
-            } else {
-                CompilerException::of(
-                    format!(
+            CompilerException::from_builder(
+                ErrorBuilder::new(&line_info)
+                    .with_message(format!(
                         "Attribute '{}' does not exist in type '{}'",
                         name,
                         self.name()
-                    ),
-                    line_info,
-                )
-            }
+                    ))
+                    .when_some(closest, |builder, closest| {
+                        builder.with_help(format!("Did you mean '{}'?", closest))
+                    }),
+            )
         }
     }
 
@@ -693,27 +684,17 @@ impl TypeObject {
             let closest = self
                 .static_defined()
                 .and_then(|x| levenshtein::closest_name(name, x));
-            if let Option::Some(closest) = closest {
-                CompilerException::of(
-                    format!(
-                        "Static attribute '{}' does not exist in type '{}'\n\
-                         Did you mean '{}'?",
-                        name,
-                        self.name(),
-                        closest
-                    ),
-                    line_info,
-                )
-            } else {
-                CompilerException::of(
-                    format!(
+            CompilerException::from_builder(
+                ErrorBuilder::new(line_info)
+                    .with_message(format!(
                         "Static attribute '{}' does not exist in type '{}'",
                         name,
                         self.name()
-                    ),
-                    line_info,
-                )
-            }
+                    ))
+                    .when_some(closest, |builder, closest| {
+                        builder.with_help(format!("Did you mean '{}'?", closest))
+                    }),
+            )
         }
     }
 

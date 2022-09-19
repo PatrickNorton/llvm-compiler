@@ -122,6 +122,7 @@ pub fn convert_to_file(
     let end = Instant::now();
     let elapsed = end.duration_since(start);
     let counter = global_info.get_warnings();
+    // TODO? Print timing on error
     println!(
         "Compilation finished in {:.2}s with {} errors and {} warnings",
         elapsed.as_secs_f64(),
@@ -212,10 +213,13 @@ fn get_path(mut end_file: PathBuf, name: &str, line_info: &dyn Lined) -> Compile
     if end_file.is_dir() {
         end_file.push(EXPORTS_FILENAME);
         if !end_file.exists() {
-            Err(
-                CompilerException::of(format!("No exports file for module {}", name), line_info)
-                    .into(),
+            Err(CompilerException::with_note(
+                format!("No exports file for module {}", name),
+                "To use a directory as a module, it must contain a file \
+                 named '__exports__.newlang'",
+                line_info,
             )
+            .into())
         } else {
             Ok(end_file)
         }

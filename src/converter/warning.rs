@@ -21,6 +21,7 @@ pub enum WarningType {
     Unreachable,
     InfiniteLoop,
     ZeroDivision,
+    IncompleteSwitch,
     Todo,
 }
 
@@ -39,6 +40,7 @@ struct WarningFrame {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum FrameType {
     Allow,
+    Warn,
     Deny,
     Forbid,
 }
@@ -128,17 +130,18 @@ impl WarningHolder {
 
     pub fn warning_level(&self, warning: WarningType) -> WarningLevel {
         if self.levels.is_empty() {
-            return WarningLevel::Warn;
+            return warning.default_level();
         }
         for frame in self.levels.iter().rev() {
             if frame.values.contains(&warning) {
                 return match frame.level {
                     FrameType::Allow => WarningLevel::Allow,
+                    FrameType::Warn => WarningLevel::Warn,
                     FrameType::Deny | FrameType::Forbid => WarningLevel::Deny,
                 };
             }
         }
-        WarningLevel::Warn
+        warning.default_level()
     }
 
     pub fn pop_warnings(&mut self) {
@@ -149,6 +152,13 @@ impl WarningHolder {
         self.levels.push(WarningFrame {
             level: FrameType::Allow,
             values: allowed,
+        })
+    }
+
+    pub fn warn(&mut self, warned: HashSet<WarningType>) {
+        self.levels.push(WarningFrame {
+            level: FrameType::Warn,
+            values: warned,
         })
     }
 
@@ -168,6 +178,10 @@ impl WarningHolder {
 
     pub fn allow_all(&mut self) {
         self.allow(WARNING_TYPES.iter().cloned().collect())
+    }
+
+    pub fn warn_all(&mut self) {
+        self.warn(WARNING_TYPES.iter().cloned().collect())
     }
 
     pub fn deny_all(&mut self) {
@@ -193,11 +207,12 @@ pub const WARNING_TYPES: &[WarningType] = &[
     WarningType::Unreachable,
     WarningType::InfiniteLoop,
     WarningType::ZeroDivision,
+    WarningType::IncompleteSwitch,
     WarningType::Todo,
 ];
 
 impl WarningType {
-    pub fn annotation_name(&self) -> Option<&'static str> {
+    pub const fn annotation_name(&self) -> Option<&'static str> {
         match self {
             WarningType::NoType => None,
             WarningType::Deprecated => Some("deprecated"),
@@ -206,7 +221,22 @@ impl WarningType {
             WarningType::Unreachable => Some("unreachable"),
             WarningType::InfiniteLoop => Some("infinite"),
             WarningType::ZeroDivision => Some("zero"),
+            WarningType::IncompleteSwitch => Some("incompleteSwitch"),
             WarningType::Todo => Some("todo"),
+        }
+    }
+
+    pub const fn default_level(&self) -> WarningLevel {
+        match self {
+            WarningType::NoType
+            | WarningType::Deprecated
+            | WarningType::Unused
+            | WarningType::TrivialValue
+            | WarningType::Unreachable
+            | WarningType::InfiniteLoop
+            | WarningType::ZeroDivision => WarningLevel::Warn,
+            WarningType::IncompleteSwitch => WarningLevel::Allow,
+            WarningType::Todo => WarningLevel::Warn,
         }
     }
 }
@@ -222,6 +252,7 @@ impl FromStr for WarningType {
             "unreachable" => Ok(WarningType::Unreachable),
             "infinite" => Ok(WarningType::InfiniteLoop),
             "zero" => Ok(WarningType::ZeroDivision),
+            "incompleteSwitch" => Ok(WarningType::IncompleteSwitch),
             _ => Err(()),
         }
     }

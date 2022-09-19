@@ -11,6 +11,7 @@ use super::bytecode_list::BytecodeList;
 use super::compiler_info::CompilerInfo;
 use super::convertible::{base_convertible, ConverterBase, ConverterTest, TestConvertible};
 use super::error::CompilerException;
+use super::error_builder::ErrorBuilder;
 use super::if_converter::IfConverter;
 use super::ret_list::{RetListBytecode, ReturnListConverter};
 use super::type_obj::{OptionTypeObject, TypeObject};
@@ -33,8 +34,11 @@ impl<'a> ConverterBase for YieldConverter<'a> {
             self.convert_from(info, &mut bytes)?;
         } else {
             let ret_info = info.get_fn_returns();
+            if ret_info.not_in_function() {
+                return Err(self.not_in_fn().into());
+            }
             if !ret_info.is_generator() {
-                return Err(self.no_generator_error().into());
+                return Err(self.no_generator_error(info).into());
             }
             let fn_returns = ret_info.current_fn_returns().to_vec();
             let mut converter = ReturnListConverter::new(
@@ -55,8 +59,11 @@ impl<'a> YieldConverter<'a> {
     fn convert_from(&self, info: &mut CompilerInfo, bytes: &mut BytecodeList) -> CompileResult<()> {
         debug_assert!(self.node.is_from());
         let ret_info = info.get_fn_returns();
+        if ret_info.not_in_function() {
+            return Err(self.not_in_fn().into());
+        }
         if !ret_info.is_generator() {
-            return Err(self.no_generator_error().into());
+            return Err(self.no_generator_error(info).into());
         }
         let mut converter =
             self.node.get_yielded()[0].test_converter(ret_info.current_fn_returns().len() as u16);
@@ -100,13 +107,17 @@ impl<'a> YieldConverter<'a> {
                 if !fn_return.is_superclass(ret_type)
                     && !OptionTypeObject::needs_and_super(fn_return, ret_type)
                 {
-                    return Err(CompilerException::of(
+                    return Err(CompilerException::with_note(
                         format!(
-                            "Type mismatch: in position {}, function expected \
-                         a superclass of type '{}' to be yielded, got type '{}'",
+                            "Type mismatch: value yielded in position {} is not a subclass \
+                             of the required type '{}'",
                             i,
-                            fn_return.name(),
-                            ret_type.name()
+                            fn_return.name()
+                        ),
+                        format!(
+                            "The given value has type '{}', which is not a subclass of '{}'",
+                            ret_type.name(),
+                            fn_return.name()
                         ),
                         self.node,
                     )
@@ -117,8 +128,24 @@ impl<'a> YieldConverter<'a> {
         }
     }
 
-    fn no_generator_error(&self) -> CompilerException {
-        CompilerException::of("'yield' is only valid in a generator", self.node)
+    fn no_generator_error(&self, info: &CompilerInfo) -> CompilerException {
+        let ret_info = info.get_fn_returns();
+        let name = ret_info.current_fn_name();
+        CompilerException::from_builder(
+            ErrorBuilder::new(self.node)
+                .with_message("'yield' is only valid in a generator")
+                .with_value_def(name.unwrap_or_default(), ret_info.current_fn_info())
+                .when_some(name, |builder, name| {
+                    builder.with_help_example(
+                        "Try adding 'generator' before the function definition",
+                        format!("'generator func {}(...)'", name),
+                    )
+                }),
+        )
+    }
+
+    fn not_in_fn(&self) -> CompilerException {
+        CompilerException::of("'yield' is only valid in a function or method", self.node)
     }
 }
 

@@ -225,12 +225,15 @@ impl<'a> ReturnListConverter<'a> {
         ret_type: &TypeObject,
         fn_ret: &TypeObject,
     ) -> CompilerException {
-        CompilerException::of(
+        CompilerException::with_note(
             format!(
-                "Value {}ed in position {}, of type '{}', \
-                 is not a subclass of the required return '{}'",
+                "Value {}ed in position {} is not a subclass of the required return '{}'",
                 self.return_name(),
                 index,
+                fn_ret.name()
+            ),
+            format!(
+                "The given value has type '{}', which is not a subclass of '{}'",
                 ret_type.name(),
                 fn_ret.name()
             ),

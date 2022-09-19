@@ -74,11 +74,13 @@ impl<'a> InConverter<'a> {
         if !op_info.matches(&[Argument::new(String::new(), contained_type.clone())]) {
             let args = op_info.get_args().get_normal_args();
             let arg_types = args.iter().map(|x| x.get_type().name()).format(", ");
-            return Err(CompilerException::of(
+            return Err(CompilerException::with_note(
                 format!(
-                    "Cannot call operator 'in' on type {}\n\
-                         Arguments received: {}\nArguments expected: {}",
-                    contained_type.name(),
+                    "Cannot call operator 'in' on type '{}'",
+                    contained_type.name()
+                ),
+                format!(
+                    "\nArguments received: {}\nArguments expected: {}",
                     contained_type.name(),
                     arg_types,
                 ),

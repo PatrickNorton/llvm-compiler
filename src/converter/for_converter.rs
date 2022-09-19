@@ -42,12 +42,9 @@ impl<'a> LoopConverter for ForConverter<'a> {
         let var_len = self.node.get_vars().len();
         let iter_len = self.node.get_iterables().len();
         if iter_len > var_len {
-            Err(CompilerException::of(
-                format!(
-                    "For-loops may not have more iterables than variables\n\
-                     (got {} iterables, {} variables)",
-                    iter_len, var_len
-                ),
+            Err(CompilerException::with_note(
+                "For-loops may not have more iterables than variables",
+                format!("Got {} iterables, but {} variables", iter_len, var_len),
                 self.node,
             )
             .into())
@@ -287,10 +284,8 @@ fn variable_exception<'a>(
     if let Option::Some(closest) = levenshtein::closest_name(name, names) {
         CompilerException::from_builder(
             ErrorBuilder::new(var)
-                .with_message(format!(
-                    "Variable {} not defined. Did you mean {}?",
-                    name, closest
-                ))
+                .with_message(format!("Variable {} not defined", name))
+                .with_note(format!("Did you mean '{}'?", closest))
                 .with_help("If not, consider adding 'var' before the variable"),
         )
     } else {

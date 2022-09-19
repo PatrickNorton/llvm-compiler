@@ -2,6 +2,8 @@ use std::fmt::{Display, Write};
 
 use crate::parser::line_info::{LineInfo, Lined};
 
+type DispBox<'a> = Box<dyn Display + 'a>;
+
 /// A struct for building detailed error messages.
 ///
 /// This is meant to be used in conjunction with the `from_builder` methods on
@@ -26,9 +28,9 @@ use crate::parser::line_info::{LineInfo, Lined};
 #[must_use]
 pub struct ErrorBuilder<'a> {
     line_info: ErrorLineInfo<'a>,
-    message: Option<Box<dyn Display + 'a>>,
-    notes: Vec<Box<dyn Display + 'a>>,
-    helps: Vec<(Box<dyn Display + 'a>, Option<Box<dyn Display + 'a>>)>,
+    message: Option<DispBox<'a>>,
+    notes: Vec<DispBox<'a>>,
+    helps: Vec<(DispBox<'a>, Option<DispBox<'a>>)>,
     value_def: Option<ValueDef<'a>>,
 }
 
@@ -79,7 +81,7 @@ impl<'a> ErrorBuilder<'a> {
     /// ```
     /// let builder = ErrorBuilder::new(&LineInfo::empty());
     /// ```
-    pub fn new(line_info: &'a impl Lined) -> Self {
+    pub fn new(line_info: &'a (impl Lined + ?Sized)) -> Self {
         Self {
             line_info: ErrorLineInfo::Standard(line_info.line_info()),
             message: None,
@@ -324,10 +326,47 @@ impl<'a> ErrorBuilder<'a> {
     #[inline]
     pub fn try_value_def(self, name: impl Display + 'a, line_info: &'a impl Lined) -> Self {
         let line_info = line_info.line_info();
-        if line_info.is_empty() {
-            self
+        self.when(!line_info.is_empty(), |x| x.with_value_def(name, line_info))
+    }
+
+    /// Applies the given closure only if `value` is `true`.
+    ///
+    /// # Examples
+    /// ```
+    /// let builder = ErrorBuilder::new(LineInfo::empty_ref())
+    ///     .when(true, |builder| builder.with_message("This will have a message"));
+    ///
+    /// let builder = ErrorBuilder::new(LineInfo::empty_ref())
+    ///     .when(false, |builder| builder.with_message("This will not have a message"));
+    /// ```
+    #[inline]
+    pub fn when(self, value: bool, closure: impl FnOnce(Self) -> Self) -> Self {
+        if value {
+            closure(self)
         } else {
-            self.with_value_def(name, line_info)
+            self
+        }
+    }
+
+    /// Applies the given closure only if `value` is [`Some`].
+    ///
+    /// This is intended to be used for partial application of functions, such
+    /// as applying a value definition only if the value has a name known to the
+    /// compiler (for example, excluding lambdas).
+    ///
+    /// # Examples
+    /// ```
+    /// let builder = ErrorBuilder::new(LineInfo::empty_ref())
+    ///     .when_some(Some(()), |builder, ()| builder.with_message("This will have a message"));
+    ///
+    /// let builder = ErrorBuilder::new(LineInfo::empty_ref())
+    ///     .when_some(None, |builder, ()| builder.with_message("This will not have a message"));
+    /// ```
+    #[inline]
+    pub fn when_some<T>(self, value: Option<T>, closure: impl FnOnce(Self, T) -> Self) -> Self {
+        match value {
+            Some(x) => closure(self, x),
+            None => self,
         }
     }
 

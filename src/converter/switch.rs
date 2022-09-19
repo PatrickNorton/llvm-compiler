@@ -25,6 +25,7 @@ use super::constant::{CharConstant, LangConstant};
 use super::convertible::{test_convertible, ConverterBase, ConverterTest, TestConvertible};
 use super::diverge::DivergingInfo;
 use super::error::{CompilerException, CompilerTodoError};
+use super::error_builder::ErrorBuilder;
 use super::int_arithmetic::convert_const;
 use super::loop_converter::LoopConverter;
 use super::switch_table::{
@@ -339,6 +340,7 @@ impl<'a> SwitchConverter<'a> {
                         entry.insert(lbl);
                     }
                     Entry::Occupied(entry) => {
+                        // TODO: Reference previous entry in error message
                         return Err(CompilerException::of(
                             format!(
                                 "Cannot define {} twice in switch statement",
@@ -346,7 +348,7 @@ impl<'a> SwitchConverter<'a> {
                             ),
                             self.node,
                         )
-                        .into())
+                        .into());
                     }
                 }
             }
@@ -480,33 +482,7 @@ impl<'a> SwitchConverter<'a> {
             }
         }
         let mut will_return = will_return.unwrap_or_default();
-        if default_val.is_none() && self.ret_count > 0 {
-            if let Option::Some(missing) = incomplete_union(union, &used_variants) {
-                return Err(CompilerException::of(
-                    format!(
-                        "Cannot get return type of switch: Missing union variant{} {}",
-                        if missing.len() == 1 { "" } else { "s" },
-                        missing.into_iter().format(", ")
-                    ),
-                    self.node,
-                )
-                .into());
-            }
-        } else if default_val.is_some() {
-            if incomplete_union(union, &used_variants).is_none() {
-                let default_info = self
-                    .default_stmt()
-                    .expect("Should be a default statement here");
-                warning::warn(
-                    "Default statement in switch with all variants covered",
-                    WarningType::Unreachable,
-                    info,
-                    default_info,
-                )?;
-            }
-        } else if incomplete_union(union, &used_variants).is_some() {
-            will_return.make_uncertain();
-        }
+        self.check_complete_union(info, &mut will_return, &default_val, union, &used_variants)?;
         let default_val = default_val.unwrap_or_else(|| {
             let label = Label::new();
             bytes.add_label(label.clone());
@@ -517,6 +493,56 @@ impl<'a> SwitchConverter<'a> {
             diverging_info: will_return,
             default_val,
         })
+    }
+
+    fn check_complete_union(
+        &self,
+        info: &mut CompilerInfo,
+        will_return: &mut DivergingInfo,
+        default_val: &Option<Label>,
+        union: &UnionTypeObject,
+        used_variants: &HashSet<u16>,
+    ) -> CompileResult<()> {
+        if default_val.is_none() && self.ret_count > 0 {
+            if let Option::Some(missing) = incomplete_union(union, used_variants) {
+                return Err(CompilerException::with_note(
+                    "Cannot get return type of switch",
+                    format!(
+                        "Missing union variant{} {}",
+                        if missing.len() == 1 { "" } else { "s" },
+                        missing.into_iter().format(", ")
+                    ),
+                    self.node,
+                )
+                .into());
+            }
+        } else if default_val.is_some() {
+            if incomplete_union(union, used_variants).is_none() {
+                let default_info = self
+                    .default_stmt()
+                    .expect("Should be a default statement here");
+                warning::warn(
+                    "Default statement in switch with all variants covered",
+                    WarningType::Unreachable,
+                    info,
+                    default_info,
+                )?;
+            }
+        } else if let Option::Some(missing) = incomplete_union(union, used_variants) {
+            warning::warn_note(
+                "Switch on union does not cover all variants",
+                format!(
+                    "Missing union variant{} {}",
+                    if missing.len() == 1 { "" } else { "s" },
+                    missing.into_iter().format(", ")
+                ),
+                WarningType::IncompleteSwitch,
+                info,
+                self.node,
+            )?;
+            will_return.make_uncertain();
+        }
+        Ok(())
     }
 
     fn convert_body(

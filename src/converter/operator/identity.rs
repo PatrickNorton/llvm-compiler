@@ -62,12 +62,12 @@ impl<'a> IsConverter<'a> {
         info: &mut CompilerInfo,
     ) -> CompileResult<(BytecodeList, TypeObject)> {
         if self.args.len() != 2 {
-            return Err(CompilerException::of(
+            return Err(CompilerException::with_note(
                 format!(
-                    "'is' comparison with 'as' clause may only have 2 parameters, not {}\n\
-                     (only statements of the form 'x is not null' are allowed)",
+                    "'is' comparison with 'as' clause may only have 2 parameters, not {}",
                     self.args.len()
                 ),
+                "Only statements of the form 'x is not null' are allowed in an 'as' clause",
                 &self.line_info,
             )
             .into());
@@ -78,8 +78,9 @@ impl<'a> IsConverter<'a> {
         let arg0 = self.args[0].get_argument();
         let arg1 = self.args[1].get_argument();
         if !<&VariableNode>::try_from(arg1).map_or_else(|_| false, |x| x.get_name() == "null") {
-            return Err(CompilerException::of(
-                "Cannot use 'as' here, 'is not' comparison must be done to null",
+            return Err(CompilerException::with_note(
+                "Cannot use 'as' here",
+                "'is not' comparison must be done to null when with an 'as' clause",
                 arg1,
             )
             .into());
@@ -120,7 +121,7 @@ impl<'a> IsConverter<'a> {
         assert!(self.args.is_empty() || self.args.len() == 1);
         warning::warn(
             format!(
-                "'{}' with < 2 operands will always be {}",
+                "'{}' with fewer than 2 operands will always be {}",
                 self.is_name(),
                 self.is_type
             ),
@@ -155,7 +156,7 @@ impl<'a> IsConverter<'a> {
         if !self.is_type {
             return Err(CompilerException::of(
                 format!(
-                    "'is not' requires 2 or fewer bottles (got {})",
+                    "'is not' requires 2 or fewer values (got {})",
                     self.args.len()
                 ),
                 &self.line_info,
@@ -165,11 +166,11 @@ impl<'a> IsConverter<'a> {
         if let Option::Some(bytes) = self.get_constant(info)? {
             return Ok(bytes);
         }
-        // Since object identity is transitive, it's much easier if we
-        // simply compare everything to the first object given.
-        // Since nothing in life is ever simple, we have to do some
-        // shenanigans with the stack to ensure everything winds
-        // up in the right place.
+        // Since object identity is transitive (and non-overloadable, so
+        // transitivity is guaranteed), it's much easier if we simply compare
+        // everything to the first object given. Since nothing in life is ever
+        // simple, we have to do some shenanigans with the stack to ensure
+        // everything winds up in the right place.
         let mut bytes = BytecodeList::new();
         bytes.add(Bytecode::LoadConst(builtins::TRUE.into()));
         bytes.extend(TestConverter::bytes(self.args[0].get_argument(), info, 1)?);

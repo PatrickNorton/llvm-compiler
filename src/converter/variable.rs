@@ -8,6 +8,7 @@ use super::bytecode_list::BytecodeList;
 use super::compiler_info::CompilerInfo;
 use super::convertible::{test_convertible, ConverterBase, ConverterTest};
 use super::error::CompilerException;
+use super::error_builder::ErrorBuilder;
 use super::warning::WarningType;
 use super::{warning, CompileBytes, CompileConstant, CompileResult, CompileTypes};
 
@@ -78,17 +79,14 @@ impl<'a> VariableConverter<'a> {
 
     fn name_error(&self, info: &CompilerInfo) -> CompilerException {
         let name = self.node.get_name();
-        if let Option::Some(closest) = levenshtein::closest_name(name, info.defined_names()) {
-            CompilerException::of(
-                format!(
-                    "Variable '{}' not defined\nDid you mean '{}'?",
-                    name, closest
+        CompilerException::from_builder(
+            ErrorBuilder::new(self.node)
+                .with_message(format!("Variable '{}' not defined", name))
+                .when_some(
+                    levenshtein::closest_name(name, info.defined_names()),
+                    |builder, closest| builder.with_help(format!("Did you mean '{}'?", closest)),
                 ),
-                self.node,
-            )
-        } else {
-            CompilerException::of(format!("Variable '{}' not defined", name), self.node)
-        }
+        )
     }
 }
 

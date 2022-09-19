@@ -300,7 +300,12 @@ impl<'a> FunctionDefConverter<'a> {
         ret_types: Vec<TypeObject>,
     ) -> CompileResult<()> {
         let has_returns = !ret_types.is_empty();
-        info.fn_returns_mut().add_fn_returns(is_gen, ret_types);
+        info.fn_returns_mut().add_fn_returns(
+            is_gen,
+            ret_types,
+            self.node.line_info().clone(),
+            Some(self.node.get_name().get_name().to_string()),
+        );
         self.add_args(info)?;
         let (bytecode, diverging_info) =
             BaseConverter::bytes_with_return(self.node.get_body(), info)?;

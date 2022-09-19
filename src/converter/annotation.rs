@@ -498,6 +498,21 @@ fn warn_all(
             }
             warning_holder.allow_all();
         }
+        "warn" => {
+            for &warned in WARNING_TYPES {
+                if warning_holder.is_forbidden(warned) {
+                    return Err(CompilerException::of(
+                        format!(
+                            "Cannot warn on forbidden warning {}",
+                            warned.annotation_name().unwrap()
+                        ),
+                        annotation,
+                    )
+                    .into());
+                }
+            }
+            warning_holder.allow_all();
+        }
         "deny" => warning_holder.deny_all(),
         "forbid" => warning_holder.forbid_all(),
         _ => {
@@ -528,6 +543,21 @@ fn warn_some(
                         format!(
                             "Cannot allow forbidden warning {}",
                             allowed.annotation_name().unwrap()
+                        ),
+                        annotation,
+                    )
+                    .into());
+                }
+            }
+            warning_holder.allow(allowed_types)
+        }
+        "warn" => {
+            for &warned in &allowed_types {
+                if warning_holder.is_forbidden(warned) {
+                    return Err(CompilerException::of(
+                        format!(
+                            "Cannot warn on forbidden warning {}",
+                            warned.annotation_name().unwrap()
                         ),
                         annotation,
                     )

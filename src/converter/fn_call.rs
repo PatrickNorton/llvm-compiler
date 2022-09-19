@@ -671,12 +671,15 @@ fn arg_error<'a>(
 ) -> CompilerException {
     let args_str = args.iter().map(|x| x.get_type().name()).format(", ");
     let expected_str = expected.map(|x| x.get_type().name()).format(", ");
-    CompilerException::of(
+    CompilerException::with_note(
         format!(
             "Cannot call object of type '{}': arguments given \
-             do not match the arguments of the function\n\
-             Arguments received: {}\nArguments expected: {}",
-            name, args_str, expected_str
+             do not match the arguments of the function\n",
+            name
+        ),
+        format!(
+            "Arguments received: {}\nArguments expected: {}",
+            args_str, expected_str
         ),
         node,
     )

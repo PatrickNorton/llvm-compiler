@@ -78,7 +78,12 @@ impl<'a> LambdaConverter<'a> {
     fn convert_body(&self, info: &mut CompilerInfo) -> CompileBytes {
         info.add_stack_frame();
         let lambda_ret = self.lambda_return_type(info)?;
-        info.fn_returns_mut().add_fn_returns(false, lambda_ret);
+        info.fn_returns_mut().add_fn_returns(
+            false,
+            lambda_ret,
+            self.node.line_info().clone(),
+            None,
+        );
         for arg in self.node.get_args() {
             let arg_type = info.convert_type(arg.get_type().as_type())?;
             info.add_variable(

@@ -124,6 +124,8 @@ impl<'a> WhileConverter<'a> {
         if !has_as {
             // TODO:
             if let Result::Ok(var) = <&VariableNode>::try_from(self.node.get_cond()) {
+                // Because "true" is a reserved name, we can simply test for
+                // string equality as opposed to a full name lookup
                 if var.get_name() == "true" {
                     return Ok((true, Some(true)));
                 }
