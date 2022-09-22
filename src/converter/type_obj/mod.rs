@@ -35,6 +35,7 @@ pub use self::user::{UserType, UserTypeLike};
 use std::borrow::Cow;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
+use std::fmt::format;
 use std::hash::Hasher;
 use std::iter::zip;
 
@@ -491,12 +492,9 @@ impl TypeObject {
                 .op_info_access(o, AccessLevel::Private, builtins)
                 .is_some()
         {
-            Ok(CompilerException::of(
-                format!(
-                    "Cannot get '{}' from type '{}' operator has too strict of an access level",
-                    o,
-                    self.name()
-                ),
+            Ok(CompilerException::with_note(
+                format!("Cannot get '{}' from type '{}'", o, self.name()),
+                "Operator has too strict of an access level",
                 line_info,
             ))
         } else if self
@@ -579,13 +577,13 @@ impl TypeObject {
         if access != AccessLevel::Private
             && self.attr_type_access(name, AccessLevel::Private).is_some()
         {
-            CompilerException::of(
+            CompilerException::with_note(
                 format!(
-                    "Cannot get attribute '{}' from type '{}': \
-                     too strict of an access level required",
+                    "Cannot get attribute '{}' from type '{}'",
                     name,
                     self.name()
                 ),
+                "Too strict of an access level required",
                 line_info,
             )
         } else if self.make_mut().attr_type_access(name, access).is_some() {
