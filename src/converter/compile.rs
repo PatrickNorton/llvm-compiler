@@ -292,7 +292,8 @@ fn node_to_ty(
         return Err(CompilerTodoError::of("Conversion of typedefs to dotted types", node).into());
     }
     let ty_name = node.str_name();
-    let base = name_to_ty(node, ty_name, global_info, path, all_files)?;
+    let base = name_to_ty(node, ty_name, global_info, path, all_files)?
+        .ok_or_else(|| CompilerException::of(format!("Could not find type '{}'", ty_name), node))?;
     if !node.get_subtypes().is_empty() {
         let subtypes = node
             .get_subtypes()
@@ -306,23 +307,59 @@ fn node_to_ty(
 }
 
 fn name_to_ty(
-    node: impl Lined,
+    node: &impl Lined,
     ty_name: &str,
     global_info: &GlobalCompilerInfo,
     path: &Path,
     all_files: &HashMap<PathBuf, (TopNode, FileTypes)>,
-) -> CompileResult<TypeObject> {
+) -> CompileResult<Option<TypeObject>> {
     let (_, types) = &all_files[path];
     if let Option::Some((ty, _)) = types.types.get(ty_name) {
-        return Ok(ty.clone());
+        return Ok(Some(ty.clone()));
     }
-    // TODO: Check from-imports that (may) refer to other types
+    for (path, imports) in &types.imports {
+        for import_info in imports {
+            let name = import_info.as_name.as_deref().unwrap_or(&import_info.name);
+            if name == ty_name {
+                // We use import_info.name here to account for as-imports
+                return name_to_ty(node, &import_info.name, global_info, path, all_files);
+            }
+        }
+    }
+    for path in &types.wildcard_imports {
+        if let Option::Some(ty) = wildcard_import_ty(node, ty_name, global_info, path, all_files)? {
+            return Ok(Some(ty));
+        }
+    }
 
     let builtins = global_info
         .global_builtins()
-        .ok_or_else(|| CompilerInternalError::of("Builtins should be set by now", &node))?;
+        .ok_or_else(|| CompilerInternalError::of("Builtins should be set by now", node))?;
     if let Option::Some(LangObject::Type(ty)) = builtins.get_name(ty_name) {
-        return Ok(ty.clone());
+        return Ok(Some(ty.clone()));
     }
-    Err(CompilerException::of(format!("Could not find type '{}'", ty_name), node).into())
+    Ok(None)
+}
+
+fn wildcard_import_ty(
+    node: &impl Lined,
+    ty_name: &str,
+    global_info: &GlobalCompilerInfo,
+    path: &Path,
+    all_files: &HashMap<PathBuf, (TopNode, FileTypes)>,
+) -> CompileResult<Option<TypeObject>> {
+    let (_, types) = &all_files[path];
+    if let Option::Some(val) = types.exports.get(ty_name) {
+        return match val {
+            Either::Left(_) => Ok(types.types.get(ty_name).map(|(x, _)| x.clone())),
+            // FIXME? As-names
+            Either::Right(_) => name_to_ty(node, ty_name, global_info, path, all_files),
+        };
+    }
+    for path in &types.wildcard_imports {
+        if let Option::Some(ty) = wildcard_import_ty(node, ty_name, global_info, path, all_files)? {
+            return Ok(Some(ty));
+        }
+    }
+    Ok(None)
 }

@@ -35,7 +35,6 @@ pub use self::user::{UserType, UserTypeLike};
 use std::borrow::Cow;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
-use std::fmt::format;
 use std::hash::Hasher;
 use std::iter::zip;
 
