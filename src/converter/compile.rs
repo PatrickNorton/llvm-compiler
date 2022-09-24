@@ -1,18 +1,22 @@
-use std::collections::HashMap;
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::mem::take;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 use either::Either;
 use itertools::Itertools;
 
 use crate::converter::builtins::ParsedBuiltins;
+use crate::converter::error_builder::ErrorBuilder;
 use crate::macros::hash_map;
 use crate::parser::base::IndependentNode;
 use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::parse::TopNode;
 use crate::parser::type_node::TypeNode;
 use crate::parser::typedef::TypedefStatementNode;
+use crate::util::levenshtein;
 
 use super::compiler_info::CompilerInfo;
 use super::convertible::BaseConvertible;
@@ -84,7 +88,8 @@ pub fn compile_all(
             .map(|(x, _)| x.clone())
             .collect(),
     );
-    // TODO? See if it's possible to calculate typedefs in an earlier pass
+    // TODO? See if it's possible to calculate typedefs as part of an earlier
+    // pass
     let addl_typedefs = all_files
         .iter()
         .map(|(file, (node, _))| {
@@ -293,7 +298,7 @@ fn node_to_ty(
     }
     let ty_name = node.str_name();
     let base = name_to_ty(node, ty_name, global_info, path, all_files)?
-        .ok_or_else(|| CompilerException::of(format!("Could not find type '{}'", ty_name), node))?;
+        .ok_or_else(|| ty_not_found_err(node, ty_name, path, all_files))?;
     if !node.get_subtypes().is_empty() {
         let subtypes = node
             .get_subtypes()
@@ -304,6 +309,22 @@ fn node_to_ty(
     } else {
         Ok(base)
     }
+}
+
+fn ty_not_found_err(
+    node: &TypeNode,
+    ty_name: &str,
+    path: &Path,
+    all_files: &HashMap<PathBuf, (TopNode, FileTypes)>,
+) -> CompilerException {
+    CompilerException::from_builder(
+        ErrorBuilder::new(node)
+            .with_message(format!("Could not find type '{}'", ty_name))
+            .when_some(
+                levenshtein::closest_name(ty_name, exported_names(path, all_files)),
+                |builder, closest| builder.with_help(format!("Did you mean '{}'?", closest)),
+            ),
+    )
 }
 
 fn name_to_ty(
@@ -362,4 +383,103 @@ fn wildcard_import_ty(
         }
     }
     Ok(None)
+}
+
+fn exported_names<'a>(
+    path: &Path,
+    all_files: &'a HashMap<PathBuf, (TopNode, FileTypes)>,
+) -> impl Iterator<Item = &'a str> {
+    let file_types = &all_files[path].1;
+    ExportedNamesIter {
+        all_files,
+        export_iter: file_types.exports.iter(),
+        wildcard_iter: file_types.wildcard_exports.iter(),
+        recursive: None,
+        already_checked: Rc::new(RefCell::new(HashSet::new())),
+    }
+}
+
+type IterTy<T> = <T as IntoIterator>::IntoIter;
+
+#[derive(Debug)]
+struct ExportedNamesIter<'a> {
+    /// The set of file export information; used for wildcard exports
+    all_files: &'a HashMap<PathBuf, (TopNode, FileTypes)>,
+    /// The iterator of names exported from the current file
+    export_iter: IterTy<&'a HashMap<String, Either<Option<TypeObject>, PathBuf>>>,
+    /// The iter over files that are wildcard-exported.
+    ///
+    /// To avoid throwing out data, this should only be advanced when
+    /// `self.recursive` is either `None` or an exhausted iterator.
+    wildcard_iter: IterTy<&'a HashSet<PathBuf>>,
+    /// The current wildcard-exported file being iterated over.
+    recursive: Option<Box<ExportedNamesIter<'a>>>,
+    /// The set of files that have already been wildcard-exported, to protect
+    /// against multiple runs of the same file, as well as recursive imports.
+    ///
+    /// This is shared among all recursive instances of the iterator.
+    already_checked: Rc<RefCell<HashSet<&'a Path>>>,
+}
+
+impl<'a> Iterator for ExportedNamesIter<'a> {
+    type Item = &'a str;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // The first thing we iterate over is the list of explicitly exported
+        // names
+        if let Option::Some((x, _)) = self.export_iter.next() {
+            return Some(x);
+        }
+        // Once we've finished those, we check if the current recursive export
+        // has finished iterating; if not, return the next one in the list
+        if let Option::Some(x) = self.recursive.as_mut().and_then(|x| x.next()) {
+            return Some(x);
+        }
+        // If we have finished iterating over the current recursive export list,
+        // we need to find the next wildcard-exported file that we haven't
+        // checked yet (and that has a non-zero number of exports).
+        loop {
+            // First, we increment the iterator over wildcard exports: if it
+            // returns None, we have completed our iterator and there are no
+            // more values to export.
+            let next = self.wildcard_iter.next()?;
+            // Next, check if we have already wildcard-exported this file (and
+            // mark that we're wildcard-exporting this file). This guards
+            // against circular wildcard-exports, which could result in an
+            // infinite iterator. Additionally, this prevents wildcard-exporting
+            // from the same file multiple times, which is slow and won't
+            // actually result in any new names being iterated over.
+            if self.already_checked.borrow_mut().insert(next) {
+                let file_types = &self.all_files[next].1;
+                // Recursively create an ExportedNamesIter for the inner file,
+                // but sharing the same `already_checked` as the current
+                // iterator
+                let mut iter = ExportedNamesIter {
+                    all_files: self.all_files,
+                    export_iter: file_types.exports.iter(),
+                    wildcard_iter: file_types.wildcard_exports.iter(),
+                    recursive: None,
+                    already_checked: self.already_checked.clone(),
+                };
+                // Grab the next item from the iterator before assigning it--
+                // this (somewhat strange) order of operations removes the need
+                // for an unwrap() call
+                let next = iter.next();
+                // This is our new recursive file, so we have to move it to
+                // self.recursive.
+                self.recursive = Some(Box::new(iter));
+                if let Option::Some(x) = next {
+                    return Some(x);
+                }
+            }
+            // If we've gotten here, the file we tried has either already been
+            // iterated over or has no exports--either way, we need to move on
+            // to the next wildcard export before returning
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let min = self.export_iter.size_hint().0 + self.wildcard_iter.size_hint().0;
+        (min, None)
+    }
 }
