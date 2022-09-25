@@ -144,6 +144,7 @@ impl IntAllocator {
     /// ```
     pub fn next(&mut self) -> usize {
         // NOTE: This will be massively improved by feature(map_first_last) (#62924)
+        // Coming in 1.66
         if !self.removed.is_empty() {
             let min = *self.removed.iter().next().unwrap();
             self.removed.remove(&min);
@@ -266,6 +267,10 @@ mod tests {
 
 #[cfg(test)]
 mod sync_test {
+    use std::collections::HashSet;
+    use std::sync::Arc;
+    use std::thread;
+
     use super::SyncIntAllocator;
 
     #[test]
@@ -274,5 +279,56 @@ mod sync_test {
         for i in 0..10 {
             assert_eq!(allocator.next(), i);
         }
+    }
+
+    #[test]
+    fn multithread_increasing() {
+        let allocator = Arc::new(SyncIntAllocator::new());
+        let mut threads = Vec::with_capacity(10);
+        for _ in 0..10 {
+            let allocator = allocator.clone();
+            let handle = thread::spawn(move || {
+                let mut prev = allocator.next();
+                for _ in 0..9 {
+                    let next = allocator.next();
+                    assert!(next > prev);
+                    prev = next;
+                }
+            });
+            threads.push(handle);
+        }
+        for thread in threads {
+            thread.join().unwrap();
+        }
+        assert_eq!(allocator.next(), 100);
+    }
+
+    #[test]
+    fn multithread_unique() {
+        let allocator = Arc::new(SyncIntAllocator::new());
+        let mut threads = Vec::with_capacity(10);
+        for _ in 0..10 {
+            let allocator = allocator.clone();
+            let handle = thread::spawn(move || {
+                let mut all_numbers = HashSet::with_capacity(10);
+                for _ in 0..10 {
+                    let next = allocator.next();
+                    assert!(!all_numbers.contains(&next));
+                    all_numbers.insert(next);
+                }
+                all_numbers
+            });
+            threads.push(handle);
+        }
+        let mut all_tables = Vec::<HashSet<usize>>::with_capacity(threads.len());
+        for thread in threads {
+            let result = thread.join().unwrap();
+            for table in &all_tables {
+                let mut intersection = table.intersection(&result);
+                assert!(intersection.next().is_none());
+            }
+            all_tables.push(result);
+        }
+        assert_eq!(allocator.next(), 100);
     }
 }

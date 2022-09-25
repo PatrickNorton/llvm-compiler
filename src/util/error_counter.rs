@@ -1,5 +1,9 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+/// A counter for the number of warnings and errors emitted.
+///
+/// This is a thread-safe counter, so it can be incremented through a shared
+/// reference.
 #[derive(Debug)]
 pub struct ErrorCounter {
     warnings: AtomicUsize,
@@ -7,6 +11,14 @@ pub struct ErrorCounter {
 }
 
 impl ErrorCounter {
+    /// Creates a new [`ErrorCounter`].
+    ///
+    /// Both the warning and error counts are set to 0 by default.
+    ///
+    /// # Examples
+    /// ```
+    /// let x = ErrorCounter::new();
+    /// ```
     pub fn new() -> Self {
         Self {
             warnings: AtomicUsize::new(0),
@@ -14,18 +26,22 @@ impl ErrorCounter {
         }
     }
 
+    /// Returns the current warning count.
     pub fn get_warnings(&self) -> usize {
         self.warnings.load(Ordering::Relaxed)
     }
 
+    /// Returns the current error count.
     pub fn get_errors(&self) -> usize {
         self.errors.load(Ordering::Relaxed)
     }
 
+    /// Increments the current warning count.
     pub fn add_warning(&self) {
         self.warnings.fetch_add(1, Ordering::Relaxed);
     }
 
+    /// Increments the current error count.
     pub fn add_error(&self) {
         self.errors.fetch_add(1, Ordering::Relaxed);
     }
@@ -39,13 +55,21 @@ impl Default for ErrorCounter {
 
 #[cfg(test)]
 mod tests {
-    use std::{sync::Arc, thread};
+    use std::sync::Arc;
+    use std::thread;
 
     use super::ErrorCounter;
 
     #[test]
     fn empty() {
         let counter = ErrorCounter::new();
+        assert_eq!(counter.get_warnings(), 0);
+        assert_eq!(counter.get_errors(), 0);
+    }
+
+    #[test]
+    fn default() {
+        let counter = ErrorCounter::default();
         assert_eq!(counter.get_warnings(), 0);
         assert_eq!(counter.get_errors(), 0);
     }

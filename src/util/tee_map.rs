@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::VecDeque;
+use std::iter::FusedIterator;
 use std::rc::Rc;
 
 #[derive(Debug)]
@@ -147,6 +148,20 @@ where
         let buffer = self.rc_buffer.borrow();
         buffer.iter.len() + buffer.backlog_b.len()
     }
+}
+
+impl<T, U, I, F> FusedIterator for LeftTeeMap<T, U, I, F>
+where
+    Self: Iterator,
+    I: FusedIterator,
+{
+}
+
+impl<T, U, I, F> FusedIterator for RightTeeMap<T, U, I, F>
+where
+    Self: Iterator,
+    I: FusedIterator,
+{
 }
 
 #[cfg(test)]

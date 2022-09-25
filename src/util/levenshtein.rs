@@ -23,7 +23,7 @@ where
         })
         .min_by_key(|x| x.1)?;
     let max_distance = max(name.len(), 3) / 3;
-    (dist <= max_distance).then(|| min)
+    (dist <= max_distance).then_some(min)
 }
 
 /// Find the Levenshtein distance between two strings.
