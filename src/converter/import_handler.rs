@@ -349,9 +349,10 @@ impl ExportInfo {
             previous_files.push((line_info, name));
             for path in &self.wildcard_exports {
                 let handler = global_info.export_info(path);
-                match handler.exported_const(name, line_info, global_info, previous_files) {
-                    Result::Ok(res) => return Ok(res),
-                    Result::Err(_) => {}
+                if let Result::Ok(res) =
+                    handler.exported_const(name, line_info, global_info, previous_files)
+                {
+                    return Ok(res);
                 }
             }
             return Err(self.export_error(line_info, name, global_info).into());
@@ -382,21 +383,13 @@ impl ExportInfo {
         previous_files: &mut Vec<(&'a LineInfo, &'b str)>,
     ) -> CompileResult<TypeObject> {
         assert_ne!(name, "*");
+        // FIXME: This won't work (will fail when it shouldn't) on circular
+        // paths of wildcard exports
         self.check_circular(name, previous_files)?;
-        if !self.exports.contains_key(name) {
-            previous_files.push((line_info, name));
-            for path in &self.wildcard_exports {
-                let handler = global_info.export_info(path);
-                match handler.type_of_export(name, line_info, global_info, previous_files) {
-                    Result::Ok(res) => return Ok(res),
-                    Result::Err(_) => {}
-                }
-            }
-            return Err(self.export_error(line_info, name, global_info).into());
-        }
-        let export = self.exports.get(name);
-        if let Option::Some(export) = export {
-            Ok(export.clone().unwrap())
+        if let Option::Some(export) = self.exports.get(name) {
+            Ok(export
+                .clone()
+                .unwrap_or_else(|| panic!("Export of {} has no type", name)))
         } else if let Option::Some(path) = self.from_exports.get(name) {
             previous_files.push((line_info, name));
             global_info.export_info(path).type_of_export(
@@ -406,6 +399,15 @@ impl ExportInfo {
                 previous_files,
             )
         } else {
+            previous_files.push((line_info, name));
+            for path in &self.wildcard_exports {
+                let handler = global_info.export_info(path);
+                if let Result::Ok(res) =
+                    handler.type_of_export(name, line_info, global_info, previous_files)
+                {
+                    return Ok(res);
+                }
+            }
             Err(self.export_error(line_info, name, global_info).into())
         }
     }
