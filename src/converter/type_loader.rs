@@ -92,14 +92,8 @@ impl TypeLoader {
         let builtins = info.builtins();
         if name == "null" {
             Ok(Some(builtins.null_type_constant().clone()))
-        } else if builtins.has_type(&name) {
-            builtins
-                .constant_of(&name)
-                .map(|x| x.into_owned())
-                .ok_or_else(|| {
-                    CompilerException::of(format!("Type {} not found", name), line_info).into()
-                })
-                .map(Some)
+        } else if let Option::Some(ty) = builtins.type_constant(&name) {
+            Ok(Some(ty))
         } else if let Result::Ok(user) = UserType::try_from(value.clone()) {
             let index = info.class_index(&user);
             let constant = ClassConstant::new(&name, index, user);

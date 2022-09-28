@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::fmt::Debug;
 
 use itertools::Itertools;
@@ -73,11 +74,15 @@ impl Builtins {
         &self.all_builtins
     }
 
-    pub fn has_type(&self, name: &str) -> bool {
-        self.all_builtins
+    pub fn type_constant(&self, name: &str) -> Option<LangConstant> {
+        let builtin = self
+            .all_builtins
             .get(name)
-            .filter(|x| matches!(x, LangObject::Type(_)))
-            .is_some()
+            .filter(|x| matches!(x, LangObject::Type(_)))?;
+        self.true_builtins
+            .iter()
+            .position(|x| x == builtin)
+            .map(|index| BuiltinConstant::new(index.try_into().unwrap()).into())
     }
 
     pub fn constant_of(&self, name: &str) -> Option<Cow<'_, LangConstant>> {

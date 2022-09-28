@@ -22,9 +22,9 @@ impl<'a> BuiltinRef<'a> {
         }
     }
 
-    pub fn has_type(self, name: &str) -> bool {
+    pub fn type_constant(self, name: &str) -> Option<LangConstant> {
         match self {
-            BuiltinRef::Standard(s) => s.has_type(name),
+            BuiltinRef::Standard(s) => s.type_constant(name),
             BuiltinRef::Parsed(_) => todo!(),
         }
     }
