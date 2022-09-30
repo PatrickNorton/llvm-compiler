@@ -674,7 +674,7 @@ fn arg_error<'a>(
     CompilerException::with_note(
         format!(
             "Cannot call object of type '{}': arguments given \
-             do not match the arguments of the function\n",
+             do not match the arguments of the function",
             name
         ),
         format!(

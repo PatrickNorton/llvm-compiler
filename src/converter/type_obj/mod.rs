@@ -80,6 +80,8 @@ impl TypeObject {
         Self::union_hash(info.builtins(), values.into_iter().collect())
     }
 
+    // FIXME? Does this really need to be a HashSet? The only HashSet-specific
+    // operation on this is the .remove() call and that doesn't feel worth it
     fn union_hash(builtins: BuiltinRef<'_>, mut values: HashSet<TypeObject>) -> TypeObject {
         if values.len() == 1 {
             values.into_iter().next().unwrap()

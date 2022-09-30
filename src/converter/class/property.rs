@@ -143,7 +143,7 @@ impl<'a> PropertyConverter<'a> {
                     false,
                     setter_info,
                     info.setter.into(),
-                    info.line_info.clone(),
+                    info.line_info,
                 );
                 (k, (getter_method, setter_method))
             })

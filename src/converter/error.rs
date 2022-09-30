@@ -61,6 +61,9 @@ impl CompilerException {
     pub fn from_builder(builder: ErrorBuilder<'_>) -> Self {
         Self {
             message: builder.get_message(ErrorType::Standard),
+            // NOTE: When feature(backtrace) (#53487) is stabilized, replace
+            // this with std::backtrace::Backtrace
+            // Coming in 1.65.0!
             backtrace: Backtrace::new(),
         }
     }
