@@ -82,9 +82,13 @@ impl<T: LoopConverter> ConverterBase for T {
     ) -> CompileResult<(BytecodeList, DivergingInfo)> {
         info.loop_manager().enter_loop(Self::HAS_CONTINUE);
         info.add_stack_frame();
-        let (mut bytes, div) = self.true_convert_with_return(info)?;
+        let (mut bytes, mut div) = self.true_convert_with_return(info)?;
         info.loop_manager().exit_loop(&mut bytes);
         info.remove_stack_frame();
+        div.decrement_breaks();
+        if Self::HAS_CONTINUE {
+            div.clear_continue();
+        }
         Ok((bytes, div))
     }
 }

@@ -100,6 +100,25 @@ impl DivergingInfo {
     pub fn may_continue(&self) -> bool {
         self.may_continue
     }
+
+    pub fn decrement_breaks(&mut self) {
+        // TODO: Reuse allocations
+        self.will_break = self
+            .will_break
+            .iter()
+            .filter_map(|&x| x.checked_sub(1))
+            .collect();
+        self.may_break = self
+            .may_break
+            .iter()
+            .filter_map(|&x| x.checked_sub(1))
+            .collect();
+    }
+
+    pub fn clear_continue(&mut self) {
+        self.will_continue = false;
+        self.may_continue = false;
+    }
 }
 
 impl Default for DivergingInfo {
