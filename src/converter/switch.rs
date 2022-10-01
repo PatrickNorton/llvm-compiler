@@ -15,7 +15,7 @@ use crate::parser::switch_stmt::{CaseStatementNode, SwitchStatementNode};
 use crate::parser::test_node::TestNode;
 use crate::parser::variable::VariableNode;
 use crate::util::fmt_with::format_with;
-use crate::util::{first, string_escape};
+use crate::util::{first, levenshtein, string_escape};
 
 use super::base_converter::BaseConverter;
 use super::bytecode::{Bytecode, Label};
@@ -440,6 +440,7 @@ impl<'a> SwitchConverter<'a> {
                 let lbl_no = label_to_variant_no(info, label, union)?;
                 if used_variants.contains(&lbl_no) {
                     let name = union.variant_name(lbl_no).unwrap();
+                    // TODO: Use double_def here & refer to previous label
                     return Err(CompilerException::of(
                         format!("Variant {} defined twice in switch statement", name),
                         stmt,
@@ -695,11 +696,7 @@ fn label_to_pair<'a>(
                     {
                         if lbl_second[0].get_dot_prefix().is_empty() {
                             return switched_type.variant_info(name.get_name()).ok_or_else(|| {
-                                CompilerException::of(
-                                    format!("Invalid name for union variant: {}", name.get_name()),
-                                    label,
-                                )
-                                .into()
+                                invalid_variant_err(name.get_name(), switched_type, label).into()
                             });
                         }
                     }
@@ -724,9 +721,25 @@ fn label_to_pair<'a>(
     .into())
 }
 
+fn invalid_variant_err(
+    name: &str,
+    switched_type: &UnionTypeObject,
+    label: &TestNode,
+) -> CompilerException {
+    CompilerException::from_builder(
+        ErrorBuilder::new(label)
+            .with_message(format!("Invalid name for union variant: {}", name))
+            .when_some(
+                levenshtein::closest_name(name, switched_type.variant_names()),
+                |builder, closest| builder.with_help(format!("Did you mean '{}'?", closest)),
+            ),
+    )
+}
+
 fn get_tbl(mut jumps: HashMap<BigInt, Label>, default_val: Label) -> SwitchTable {
     let threshold = jumps.len().saturating_mul(2);
     let zero = BigInt::zero();
+    // TODO: Does this mean `jumps` should be a BTreeMap?
     let max = jumps.keys().max().unwrap_or(&zero);
     if max > &threshold.into() {
         BigSwitchTable::new(jumps, default_val).into()

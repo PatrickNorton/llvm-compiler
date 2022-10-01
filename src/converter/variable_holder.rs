@@ -484,14 +484,14 @@ impl VariableHolder {
         let names = self.type_map.keys().map(|x| &**x).chain(self.local_types());
         let builtin_iter = builtins.builtin_names();
         let names = names.chain(builtin_iter);
-        if let Option::Some(suggestion) = levenshtein::closest_name(name, names) {
-            CompilerException::of(
-                format!("Unknown type '{}'. Did you mean '{}'?", name, suggestion),
-                node,
-            )
-        } else {
-            CompilerException::of(format!("Unknown type '{}'", name), node)
-        }
+        CompilerException::from_builder(
+            ErrorBuilder::new(node)
+                .with_message(format!("Unknown type '{}'", name))
+                .when_some(
+                    levenshtein::closest_name(name, names),
+                    |builder, closest| builder.with_help(format!("Did you mean '{}'?", closest)),
+                ),
+        )
     }
 
     fn generify(

@@ -471,9 +471,9 @@ impl ArgumentInfo {
         for arg in args {
             if arg.is_vararg {
                 if !arg.name.is_empty() {
-                    return Err(CompilerException::of(
-                        "Illegal parameter expansion in argument: \
-                         Named arguments cannot be expanded",
+                    return Err(CompilerException::with_note(
+                        "Illegal parameter expansion in argument",
+                        "Named arguments cannot be expanded",
                         arg,
                     )
                     .into());
@@ -482,11 +482,9 @@ impl ArgumentInfo {
                         result.push(Argument::new(String::new(), generic.clone()).into())
                     }
                 } else {
-                    return Err(CompilerException::of(
-                        format!(
-                            "Illegal parameter expansion in argument: type '{}' is not a tuple",
-                            arg.type_val.name()
-                        ),
+                    return Err(CompilerException::with_note(
+                        "Illegal parameter expansion in argument",
+                        format!("Type '{}' is not a tuple", arg.type_val.name()),
                         arg,
                     )
                     .into());
