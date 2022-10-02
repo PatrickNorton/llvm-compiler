@@ -168,6 +168,16 @@ impl UnionTypeObject {
         self.variant_info(index).map(|(_, x)| x)
     }
 
+    pub fn variant_names(&self) -> impl Iterator<Item = &'_ str> {
+        self.value
+            .info
+            .variants
+            .get()
+            .into_iter()
+            .flatten()
+            .map(|(x, _)| x.as_str())
+    }
+
     pub(super) fn get_info(&self) -> &UserInfo<MethodInfo, AttributeInfo> {
         &self.value.info.info
     }
