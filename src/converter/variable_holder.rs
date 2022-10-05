@@ -4,7 +4,6 @@ use std::iter::zip;
 use std::mem::replace;
 
 use either::Either;
-use itertools::Itertools;
 
 use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::type_node::TypeNode;
@@ -15,6 +14,7 @@ use super::access_handler::AccessHandler;
 use super::builtins::{BuiltinRef, Builtins, ParsedBuiltins};
 use super::constant::{LangConstant, ModuleConstant};
 use super::error::CompilerException;
+use super::error_builder::ErrorBuilder;
 use super::global_info::GlobalCompilerInfo;
 use super::import_handler::{ImportHandler, ImportInfo};
 use super::lang_obj::LangObject;
@@ -346,6 +346,7 @@ impl VariableHolder {
     ) -> CompileResult<()> {
         self.type_map.reserve(types.len());
         for (name, (obj, line_info)) in types {
+            // NOTE: This might be made cleaner with feature(map_try_insert) (#82766)
             match self.type_map.entry(name) {
                 Entry::Occupied(e) => {
                     return Err(CompilerException::double_def(
@@ -558,11 +559,11 @@ impl VariableInfo {
     }
 
     pub fn get_location(&self) -> Option<u16> {
-        (!self.is_static).then(|| self.location)
+        (!self.is_static).then_some(self.location)
     }
 
     pub fn get_static_location(&self) -> Option<u16> {
-        self.is_static.then(|| self.location)
+        self.is_static.then_some(self.location)
     }
 
     pub fn has_const_value(&self) -> bool {
