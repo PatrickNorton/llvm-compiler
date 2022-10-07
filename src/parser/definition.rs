@@ -18,6 +18,7 @@ use crate::parser::union_def::UnionDefinitionNode;
 
 use super::line_info::LineInfo;
 
+/// A definition of a class, function/method, operator, or similar.
 #[derive(Debug)]
 pub enum DefinitionNode {
     BaseClass(BaseClassNode),
@@ -28,6 +29,7 @@ pub enum DefinitionNode {
     Property(PropertyDefinitionNode),
 }
 
+/// A definition of a class or class-like object.
 #[derive(Debug)]
 pub enum BaseClassNode {
     Class(ClassDefinitionNode),
@@ -36,6 +38,7 @@ pub enum BaseClassNode {
     Union(UnionDefinitionNode),
 }
 
+/// A reference to a [`DefinitionNode`].
 #[derive(Debug, Clone, Copy)]
 pub enum DefinitionRef<'a> {
     BaseClass(BaseClassRef<'a>),
@@ -46,6 +49,7 @@ pub enum DefinitionRef<'a> {
     Property(&'a PropertyDefinitionNode),
 }
 
+/// A reference to a [`BaseClassNode`].
 #[derive(Debug, Clone, Copy)]
 pub enum BaseClassRef<'a> {
     Class(&'a ClassDefinitionNode),
@@ -54,6 +58,13 @@ pub enum BaseClassRef<'a> {
     Union(&'a UnionDefinitionNode),
 }
 
+/// Creates a `match` statement across a [`DefinitionNode`] which runs the given
+/// expression on each variant of the enum.
+///
+/// The `$name` parameter is the identifier representing the node variant; that
+/// is to say, it is the variable that should be used in $value to represent the
+/// node. `$self` represents the unmatched node; it should not be used in the
+/// main `match` statement (unless you want the full enum).
 macro_rules! definition_each {
     ($self:ident: $name:ident => $value:expr) => {
         match $self {
