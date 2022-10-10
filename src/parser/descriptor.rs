@@ -17,25 +17,207 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Formatter};
 use unicode_xid::UnicodeXID;
 
+/// A node representing a descriptor, such as `public` or `private`.
+///
+/// These are prepended to certain nodes, all of which are members of the
+/// [`DescribableNode`] enum; see that for more details.
+///
+/// # Ordering
+///
+/// Descriptors must appear in a certain order when prefixing a statement. That order
+/// is:
+///
+/// 1. Access-level descriptors
+/// 2. Mutability descriptors
+/// 3. Inheritance descriptors
+/// 4. `native`
+/// 5. `generator`
+/// 6. `synced`
+/// 7. `const`
+/// 8. `auto`
+///
+/// # Categories
+///
+/// Descriptors are separated into several categories based on type. For the
+/// most part, these are mutually exclusive per statement, e.g. no more than one
+/// of each category may be included as part of any statement. Note that some
+/// descriptors may appear in different categories depending on context, for
+/// example [`final`](DescriptorNode::Final), which may be either a mutability
+/// descriptor or an inheritance descriptor.
+///
+/// ## Access-level descriptors
+///
+/// The four access-level descriptors are
+/// - [`public`](DescriptorNode::Public)
+/// - [`private`](DescriptorNode::Private)
+/// - [`protected`](DescriptorNode::Protected)
+/// - [`pubget`](DescriptorNode::Pubget)
+///
+/// These descriptors each correspond to an [access level](AccessLevel). No more
+/// than one of these may exist per declaration, however, having none is legal
+/// and defaults to [`AccessLevel::File`], where such descriptors are allowed.
+///
+/// ## Mutability descriptors
+///
+/// The four mutability descriptors are
+/// - [`mut`](DescriptorNode::Mut)
+/// - [`mref`](DescriptorNode::Mref)
+/// - [`readonly`](DescriptorNode::Readonly)
+/// - [`final`](DescriptorNode::Final)
+///
+/// These descriptors each correspond to a different type of variable
+/// mutability. Each descriptor is mutually exclusive, however having none is
+/// legal and defaults to immutability (which is not representable by any
+/// descriptor).
+///
+/// Not all describable nodes take a mutability descriptor. For example, class
+/// and class-like definitions do not, as there is no meaning that makes sense
+/// for them. In addition, `final` is both a mutability descriptor and an
+/// inheritance descriptor. There are no statements that can take both of those
+/// categories, so there is no possibility for confusion.
+///
+/// ## Inheritance descriptors
+///
+/// The two inheritance descriptors are
+/// - [`final`](DescriptorNode::Final)
+/// - [`nonfinal`](DescriptorNode::Nonfinal)
+///
+/// These descriptors correspond to class (and class-like) inheritability:
+/// `final` means the class may not be inherited from and `nonfinal` means it
+/// may. These two descriptors are mutually exclusive. When neither is specified
+/// and one was expected, `final` is the default. `final` may also be a
+/// mutability descriptor depending on context; there are no statements on which
+/// both are legal, so the meaning is always clear.
+///
+/// ## Miscellaneous descriptors
+///
+/// All other descriptors are miscellaneous. These are
+/// - [`static`](DescriptorNode::Static)
+/// - [`native`](DescriptorNode::Native)
+/// - [`generator`](DescriptorNode::Generator)
+/// - [`synced`](DescriptorNode::Synced)
+/// - [`auto`](DescriptorNode::Auto)
+/// - [`const`](DescriptorNode::Const)
+///
+/// These descriptors all have unique meanings; see their respective
+/// documentation for details. At present, none within this set are mutually
+/// exclusive, although not all are available on all declaration types.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum DescriptorNode {
+    /// The node representing the `public` descriptor.
+    ///
+    /// This corresponds to the `public` access level, meaning the described
+    /// object may be accessed from any place within the codebase.
     Public,
+
+    /// The node representing the `private` descriptor.
+    ///
+    /// This corresponds to the `private` access level, meaning the described
+    /// object may only be accessed by the class within which it is defined.
     Private,
+
+    /// The node representing the `protected` descriptor.
+    ///
+    /// This corresponds to the `protected` access level, meaning the described
+    /// object may only be accessed by the class within which it is defined, or
+    /// any subclass of that class.
     Protected,
+
+    /// The node representing the `pubget` descriptor.
+    ///
+    /// This corresponds to the `pubget` access level, corresponding to the
+    /// `public` level for immutable access, but the `private` level for mutable
+    /// access.
     Pubget,
+
+    /// The node repsresenting the `static` descriptor.
+    ///
+    /// When used on a method definition, it means the method is a static
+    /// method, i.e. it is not used on a class instance, but the class itself.
+    /// When used on a variable definition, it means the variable is static, so
+    /// it is only initialized once per run, which occurs the first time it is
+    /// reached.
     Static,
+
+    /// The node representing the `mut` descriptor.
+    ///
+    /// This represents the `mut` mutability type, meaning both the variable is
+    /// mutable and the underlying data is mutable. When used on a type, it
+    /// means the type is mutable.
     Mut,
+
+    /// The node representing the `mref` descriptor.
+    ///
+    /// This represents the `mref` mutability type, meaning the variable is
+    /// mutable, but the underlying data is immutable.
     Mref,
+
+    /// The node representing the `readonly` descriptor.
+    ///
+    /// This represents the `readonly` mutability type, meaning the variable
+    /// cannot be explicitly changed, but may change value regardless. One
+    /// example of this is properties without a setter.
     Readonly,
+
+    /// The node representing the `final` descriptor.
+    ///
+    /// When used as a mutability descriptor, it represents the `final` mutability
+    /// type. This means the variable cannot be changed, but the underlying data
+    /// may.
+    ///
+    /// When used as an inheritance descriptor it represents the `final`
+    /// inheritance type. This means no subclasses may inherit from the
+    /// described class.
     Final,
+
+    /// The node representing the `nonfinal` descriptor.
+    ///
+    /// This represents the `nonfinal` inheritance type, meaning the described
+    /// class may be inherited from.
     Nonfinal,
+
+    /// The node representing the `native` descriptor.
+    ///
+    /// A function or method described with `native` is defined in external code
+    /// using the FFI interface. It is therefore not allowed to have a non-empty
+    /// body.
     Native,
+
+    /// The node representing the `generator` descriptor.
+    ///
+    /// A function or method described with `generator` is a generator function.
+    /// This makes it implicitly an iterator and is allowed to use `yield`
+    /// statements.
     Generator,
+
+    /// The node representing the `synced` descriptor.
+    ///
+    /// A function or method with the `synced` descriptor is synchronized across
+    /// threads, and may only be run by one thread at any given time.
     Synced,
+
+    /// The node representing the `auto` descriptor.
+    ///
+    /// An interface with the `auto` descriptor is an auto interface, meaning it
+    /// is automatically implemented on any class that fulfills its contract.
     Auto,
+
+    /// The node representing the `const` descriptor.
+    ///
+    /// A class or enum with this descriptor is a const class. Const classes
+    /// feature no interior mutability, and therefore may freely be cast between
+    /// their non-`mut` and `mut` versions. Furthermore, every superclass of a
+    /// const class, as well as all data members, must themselves be `const`
+    /// classes.
     Const,
 }
 
+// TODO: Make this a trait
+/// Any node which may be preceded by descriptors.
+///
+/// This is mostly used through the [`DescribableNode::parse`] method, which
+/// allows parsing of any statement beginning with a [descriptor
+/// token](DescriptorNode).
 #[derive(Debug)]
 pub enum DescribableNode {
     Assign(AssignmentNode),
@@ -93,6 +275,7 @@ static SETS: Lazy<Vec<&'static HashSet<DescriptorNode>>> = Lazy::new(|| {
     ]
 });
 
+/// The set of descriptors valid for use on a [`DefinitionNode`].
 pub static DEFINITION_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
     hash_set!(
         DescriptorNode::Public,
@@ -106,6 +289,8 @@ pub static DEFINITION_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
         DescriptorNode::Const,
     )
 });
+
+/// The set of descriptors valid for use on a [`FunctionDefinitionNode`].
 pub static FUNCTION_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
     hash_set!(
         DescriptorNode::Generator,
@@ -113,6 +298,8 @@ pub static FUNCTION_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
         DescriptorNode::Native,
     )
 });
+
+/// The set of descriptors valid for use on a [`DeclarationNode`].
 pub static DECLARATION_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
     hash_set!(
         DescriptorNode::Public,
@@ -127,6 +314,8 @@ pub static DECLARATION_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
         DescriptorNode::Native,
     )
 });
+
+/// The set of descriptors valid for use on a [`ContextDefinitionNode`].
 pub static CONTEXT_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
     hash_set!(
         DescriptorNode::Public,
@@ -140,6 +329,8 @@ pub static CONTEXT_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
         DescriptorNode::Native,
     )
 });
+
+/// The set of descriptors valid for use on a [`MethodDefinitionNode`].
 pub static METHOD_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
     hash_set!(
         DescriptorNode::Public,
@@ -154,7 +345,15 @@ pub static METHOD_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
         DescriptorNode::Synced,
     )
 });
+
+/// The set of descriptors valid for use on a [`StaticBlockNode`].
+///
+/// There are no descriptors valid on this node (besides the `static` at the
+/// beginning of the block, but that is parsed as part of the node, not here),
+/// so the set is empty.
 pub static STATIC_BLOCK_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| hash_set!());
+
+/// The set of descriptors valid for use on an [`InterfaceDefinitionNode`].
 pub static INTERFACE_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
     hash_set!(
         DescriptorNode::Public,
@@ -168,6 +367,7 @@ pub static INTERFACE_VALID: Lazy<HashSet<DescriptorNode>> = Lazy::new(|| {
         DescriptorNode::Auto,
     )
 });
+
 static VALUES: Lazy<HashMap<&'static str, DescriptorNode>> = Lazy::new(|| {
     hash_map!(
         "public" => DescriptorNode::Public,
@@ -189,6 +389,7 @@ static VALUES: Lazy<HashMap<&'static str, DescriptorNode>> = Lazy::new(|| {
 });
 
 impl DescriptorNode {
+    /// The textual representation of the descriptor.
     pub fn name(&self) -> &'static str {
         match self {
             DescriptorNode::Public => "public",
@@ -209,6 +410,7 @@ impl DescriptorNode {
         }
     }
 
+    /// Returns whether or not the descriptor is a mutability descriptor.
     pub fn is_mut_node(&self) -> bool {
         MUT_NODES.contains(self)
     }
@@ -220,13 +422,20 @@ impl DescriptorNode {
         }
     }
 
+    /// Attempts to parse a [`DescriptorNode`] off the front of the given
+    /// string.
+    ///
+    /// If the string does not begin with a descriptor, [`None`] is returned.
+    /// Otherwise, two values are returned: a [`TokenType::Descriptor`]
+    /// containing the parsed descriptor, and a [`usize`] with the number of
+    /// characters parsed.
     pub fn pattern(input: &str) -> Option<(TokenType, usize)> {
         for (key, value) in &*VALUES {
             if input.starts_with(key)
                 && input[key.len()..]
                     .chars()
                     .next()
-                    .map_or_else(|| true, |x| !UnicodeXID::is_xid_continue(x))
+                    .map_or(true, |x| !UnicodeXID::is_xid_continue(x))
             {
                 return Option::Some((TokenType::Descriptor(*value), key.len()));
             }
@@ -234,6 +443,13 @@ impl DescriptorNode {
         Option::None
     }
 
+    /// Parses a list of descriptors from the given [`TokenList`].
+    ///
+    /// This only parses the descriptors, not anything that may be described by
+    /// them. This will throw an error if two mutually-exclusive descriptors are
+    /// parsed, or if the descriptors come in the wrong order. However, it will
+    /// stop at the first non-descriptor node it finds, and it does not ensure
+    /// that the descriptors are valid for the node that follows.
     pub fn parse_list(tokens: &mut TokenList) -> ParseResult<HashSet<DescriptorNode>> {
         let mut sets_num = 0;
         let mut descriptors = HashSet::new();
@@ -257,6 +473,10 @@ impl DescriptorNode {
 }
 
 impl DescribableNode {
+    /// The set of descriptors that are valid to use on the given node.
+    ///
+    /// This is simply a forwarding implementation to the constituent variants'
+    /// methods.
     pub fn valid_descriptors(&self) -> &'static HashSet<DescriptorNode> {
         match self {
             DescribableNode::Assign(a) => a.valid_descriptors(),
@@ -265,6 +485,10 @@ impl DescribableNode {
         }
     }
 
+    /// Adds the given descriptors to the current node.
+    ///
+    /// This is simply a forwarding implementation to the constituent variants'
+    /// methods.
     pub fn add_descriptors(&mut self, descriptors: HashSet<DescriptorNode>) {
         match self {
             DescribableNode::Assign(a) => a.add_descriptors(descriptors),
@@ -273,6 +497,7 @@ impl DescribableNode {
         }
     }
 
+    /// Parses a [`DescribableNode`] from the given list of tokens.
     pub fn parse(tokens: &mut TokenList) -> ParseResult<DescribableNode> {
         let descriptors = if let TokenType::Descriptor(_) = tokens.token_type()? {
             DescriptorNode::parse_list(tokens)?
