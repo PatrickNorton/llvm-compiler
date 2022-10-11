@@ -5,6 +5,16 @@ use crate::parser::test_node::TestNode;
 use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
 
+/// The class representing a container literal.
+///
+/// This is not used to represent dictionary literals due to their special
+/// syntax, for that, use [`DictLiteralNode`].
+///
+/// # Syntax
+///
+/// ```text
+/// OPEN_BRACE [[["*"] TestNode *("," ["*"] TestNode) [","]]] CLOSE_BRACE
+/// ```
 #[derive(Debug)]
 pub struct LiteralNode {
     line_info: LineInfo,
@@ -12,6 +22,25 @@ pub struct LiteralNode {
     builders: Vec<(String, TestNode)>,
 }
 
+/// The class representing a dictionary literal.
+///
+/// This class is separate from [`LiteralNode`] because it has a slightly
+/// different syntax and nodal representation.
+///
+/// See also the difference between [`ComprehensionNode`] and
+/// [`DictComprehensionNode`].
+///
+/// # Syntax
+///
+/// ```text
+/// "{" TestNode ":" TestNode *("," TestNode ":" TestNode) [","] "}"
+/// ```
+///
+/// Note that empty dict literals have a distinct syntax, which is:
+///
+/// ```text
+/// "{" ":" "}"
+/// ```
 #[derive(Debug)]
 pub struct DictLiteralNode {
     line_info: LineInfo,
@@ -27,18 +56,28 @@ impl LiteralNode {
         }
     }
 
+    /// Consumes the [`LiteralNode`] and returns the list of values within it.
     pub fn into_builders(self) -> Vec<(String, TestNode)> {
         self.builders
     }
 
+    /// The type of brace used to define the node.
+    ///
+    /// # Definitions by brace type
+    ///
+    /// - `(`: Generator literal
+    /// - `[`: List literal
+    /// - `{`: Set literal
     pub fn get_brace_type(&self) -> char {
         self.brace_type
     }
 
+    /// Returns a reference to the nodes & varargs in this node.
     pub fn get_builders(&self) -> &[(String, TestNode)] {
         &self.builders
     }
 
+    /// Parses a [`LiteralNode`] from the given list of tokens.
     pub fn parse(tokens: &mut TokenList) -> ParseResult<LiteralNode> {
         let (line_info, brace_type) = match tokens.next_tok(true)?.deconstruct() {
             (l, TokenType::OpenBrace(c)) => (l, c),
