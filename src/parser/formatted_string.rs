@@ -102,6 +102,10 @@ impl FormattedStringNode {
         &self.formats
     }
 
+    pub fn get_flags(&self) -> &HashSet<StringPrefix> {
+        &self.flags
+    }
+
     pub fn parse(text: String, info: LineInfo) -> ParseResult<FormattedStringNode> {
         let mut inside = StringLikeNode::get_contents(&text);
         let prefixes = StringLikeNode::get_prefixes(&text)?;

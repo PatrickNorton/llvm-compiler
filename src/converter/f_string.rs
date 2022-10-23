@@ -4,6 +4,7 @@ use num::ToPrimitive;
 use crate::parser::formatted_string::{FormatInfo, FormatSign, FormatType, FormattedStringNode};
 use crate::parser::line_info::Lined;
 use crate::parser::operator_sp::OpSpTypeNode;
+use crate::parser::string_like::StringPrefix;
 use crate::parser::test_node::TestNode;
 use crate::util::decimal::DecimalRef;
 use crate::util::first;
@@ -27,7 +28,15 @@ pub struct FormattedStringConverter<'a> {
 
 impl<'a> ConverterTest for FormattedStringConverter<'a> {
     fn return_type(&mut self, info: &mut CompilerInfo) -> CompileTypes {
-        Ok(vec![info.builtins().str_type().clone()])
+        if self.node.get_flags().contains(&StringPrefix::Bytes) {
+            // NOTE: The implementation of formatted bytes literals has not yet
+            // been written, but this is still here so as to keep type analysis
+            // working. Note that neither formatted char nor formatted byte
+            // literals are allowed, so we don't need to check for those.
+            Ok(vec![info.builtins().bytes_type().clone()])
+        } else {
+            Ok(vec![info.builtins().str_type().clone()])
+        }
     }
 }
 
@@ -54,6 +63,12 @@ impl<'a> ConverterBase for FormattedStringConverter<'a> {
         let strings = self.node.get_strings();
         let formats = self.node.get_formats();
         let tests = self.node.get_tests();
+        let flags = self.node.get_flags();
+        if flags.contains(&StringPrefix::Bytes) {
+            return Err(CompilerTodoError::of("Formatted bytes literals", self.node).into());
+        } else if flags.contains(&StringPrefix::Regex) {
+            return Err(CompilerTodoError::of("Formatted regex literals", self.node).into());
+        }
         assert!(
             strings.len() == tests.len() || strings.len() == tests.len() + 1,
             "Unbalanced strings and tests ({} vs {})",
@@ -72,7 +87,7 @@ impl<'a> ConverterBase for FormattedStringConverter<'a> {
             if let Option::Some(test) = tests.get(i) {
                 let format = &formats[i];
                 let str_value = self.arg_constant(info, test, format)?;
-                // This would be improved with feature(if_let_chains), (#53667)
+                // NOTE: This would be improved with feature(if_let_chains), (#53667)
                 if let (true, Option::Some(str_value)) = (!format.is_empty(), str_value) {
                     let string = strings[i].clone() + &str_value;
                     bytes.add(Bytecode::LoadConst(string.into()));
