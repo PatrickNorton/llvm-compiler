@@ -386,8 +386,12 @@ fn load_file(
     let (path, is_stdlib) = if node.get_pre_dots() > 0 {
         let mut parent_path = current_path;
         for _ in 0..node.get_pre_dots() {
-            // FIXME: Error message here
-            parent_path = parent_path.parent().unwrap();
+            parent_path = parent_path.parent().ok_or_else(|| {
+                CompilerException::of(
+                    "Cannot load parent: file referred to is beyond the root of the filesystem",
+                    node,
+                )
+            })?;
         }
         let local_path = local_module_path(parent_path, module_name, node.line_info())?;
         (local_path, false)
@@ -399,17 +403,24 @@ fn load_file(
 
 fn check_as(node: &ImportExportNode) -> CompileResult<()> {
     match node.get_as() {
-        Some(as_stmt) if as_stmt.len() != node.get_values().len() => Err(CompilerException::of(
-            format!(
-                "'{}' statement had {} 'as' clauses, expected {} \
-                 (equal to number of imported names)",
-                node.get_type(),
-                as_stmt.len(),
-                node.get_values().len()
-            ),
-            node,
-        )
-        .into()),
+        Some(as_stmt) if as_stmt.len() != node.get_values().len() => {
+            Err(CompilerException::with_note(
+                format!(
+                    "'{}' statement had {} 'as' clauses, expected {}",
+                    node.get_type(),
+                    as_stmt.len(),
+                    node.get_values().len()
+                ),
+                format!(
+                    "In {art} {ty} with an 'as' clause, the number of values in that clause \
+                     must be equal to the number of {ty}s",
+                    ty = node.get_type(),
+                    art = node.get_type().article(),
+                ),
+                node,
+            )
+            .into())
+        }
         _ => Ok(()),
     }
 }

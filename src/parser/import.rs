@@ -184,6 +184,13 @@ impl ImportExportType {
         }
     }
 
+    pub const fn article(&self) -> &'static str {
+        match self {
+            ImportExportType::Import | ImportExportType::Export => "an",
+            ImportExportType::Typeget => "a",
+        }
+    }
+
     pub fn parse(tokens: &mut TokenList) -> ParseResult<ImportExportType> {
         let token = match tokens.token_type()? {
             TokenType::Keyword(Keyword::Import) => ImportExportType::Import,
