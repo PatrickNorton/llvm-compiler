@@ -16,6 +16,7 @@ use crate::parser::typed_arg::{TypedArgumentListNode, TypedArgumentNode};
 use crate::util::first;
 use crate::util::maybe_ref::MaybeRef;
 
+use super::builtins::FORBIDDEN_NAMES;
 use super::bytecode::Bytecode;
 use super::bytecode_list::BytecodeList;
 use super::compiler_info::CompilerInfo;
@@ -761,7 +762,13 @@ fn get_args<'a>(
 ) -> CompileResult<Vec<Argument>> {
     args.iter()
         .map(|arg| {
-            if arg.get_default_val().is_empty() {
+            if FORBIDDEN_NAMES.contains(&arg.get_name().get_name()) {
+                Err(CompilerException::of(
+                    format!("Illegal name for variable '{}'", arg.get_name().get_name()),
+                    arg.get_name(),
+                )
+                .into())
+            } else if arg.get_default_val().is_empty() {
                 Ok(Argument::new_full(
                     arg.get_name().get_name().to_string(),
                     info.convert_type(arg.get_type().as_type())?,
