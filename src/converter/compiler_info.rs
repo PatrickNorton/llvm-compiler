@@ -13,7 +13,7 @@ use crate::parser::variable::VariableNode;
 
 use super::access_handler::{AccessHandler, AccessLevel};
 use super::base_converter::BaseConverter;
-use super::builtins::{BuiltinRef, Builtins, ParsedBuiltins};
+use super::builtins::{BuiltinRef, Builtins, ParsedBuiltins, FORBIDDEN_NAMES};
 use super::bytecode_list::BytecodeList;
 use super::class::ClassInfo;
 use super::constant::{LangConstant, TempConstant};
@@ -333,7 +333,12 @@ impl<'a> CompilerInfo<'a> {
     }
 
     pub fn check_definition(&self, name: &str, lined: impl Lined) -> CompileResult<()> {
-        if let Option::Some(info) = self.var_holder.var_def_in_current_frame(name) {
+        if FORBIDDEN_NAMES.contains(&name) {
+            Err(
+                CompilerException::of(format!("Illegal name for variable '{}'", name), lined)
+                    .into(),
+            )
+        } else if let Option::Some(info) = self.var_holder.var_def_in_current_frame(name) {
             Err(CompilerException::double_def(name, info.declaration_info(), lined).into())
         } else {
             Ok(())
