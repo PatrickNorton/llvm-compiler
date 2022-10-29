@@ -6,7 +6,7 @@ use crate::parser::test_node::TestNode;
 use crate::parser::token::TokenType;
 use crate::parser::token_list::TokenList;
 use std::collections::HashSet;
-use std::str::CharIndices;
+use std::str::Chars;
 
 #[derive(Debug)]
 pub enum StringLikeNode {
@@ -50,46 +50,66 @@ impl StringLikeNode {
 
     pub fn process_escapes(text: &str, info: &LineInfo) -> ParseResult<String> {
         let mut sb = String::with_capacity(text.len());
-        let mut chars = text.char_indices();
-        while let Option::Some((i, chr)) = chars.next() {
-            if chr != '\\' {
-                sb.push(chr);
-                continue;
-            }
-            let (_, chr2) = chars.next().unwrap();
-            match chr2 {
-                '\n' => {}
-                '\\' => sb.push('\\'),
-                '"' => sb.push('"'),
-                '{' => sb.push('{'),
-                '}' => sb.push('}'),
-                '\'' => sb.push('\''),
-                '0' => sb.push('\0'),
-                'a' => sb.push('\x07'),
-                'b' => sb.push('\x08'),
-                'f' => sb.push('\x0c'),
-                'n' => sb.push('\n'),
-                'r' => sb.push('\r'),
-                't' => sb.push('\t'),
-                'v' => sb.push('\x0b'),
-                'o' => sb.push(Self::process_octal_literal(info, &mut chars)?),
-                'x' => sb.push(Self::process_hex_literal(info, &mut chars)?),
-                'u' => sb.push(Self::process_unicode_literal(info, &mut chars)?),
-                'U' => sb.push(Self::process_big_unicode_literal(info, &mut chars)?),
-                _ => {
-                    return Err(ParserError::Normal(ParserException::of(
-                        format!("Unknown escape sequence: {}", &text[i..i + 2]),
-                        info,
-                    )))
+        let mut trailing_backslash = false;
+        for slice in text.split('\\') {
+            if !trailing_backslash {
+                sb.push_str(slice);
+                trailing_backslash = true;
+            } else {
+                let mut chars = slice.chars();
+                match chars.next() {
+                    // None means multiple backslashes in a row
+                    None => {
+                        sb.push('\\');
+                        trailing_backslash = false;
+                    }
+                    Some(chr) => {
+                        if let Option::Some(ch) = Self::escape_to_chr(chr, &mut chars, info)? {
+                            sb.push(ch);
+                        }
+                        sb.push_str(chars.as_str());
+                        trailing_backslash = true;
+                    }
                 }
             }
         }
-        ParseResult::Ok(sb)
+        Ok(sb)
     }
 
-    fn process_octal_literal(info: &LineInfo, chars: &mut CharIndices<'_>) -> ParseResult<char> {
-        let ch1 = chars.next().unwrap().1;
-        let ch2 = chars.next().unwrap().1;
+    fn escape_to_chr(
+        signifier: char,
+        chars: &mut Chars<'_>,
+        info: &LineInfo,
+    ) -> ParseResult<Option<char>> {
+        match signifier {
+            '\n' => Ok(None),
+            '\\' => Ok(Some('\\')),
+            '"' => Ok(Some('"')),
+            '{' => Ok(Some('{')),
+            '}' => Ok(Some('}')),
+            '\'' => Ok(Some('\'')),
+            '0' => Ok(Some('\0')),
+            'a' => Ok(Some('\x07')),
+            'b' => Ok(Some('\x08')),
+            'f' => Ok(Some('\x0c')),
+            'n' => Ok(Some('\n')),
+            'r' => Ok(Some('\r')),
+            't' => Ok(Some('\t')),
+            'v' => Ok(Some('\x0b')),
+            'o' => Ok(Some(Self::process_octal_literal(info, chars)?)),
+            'x' => Ok(Some(Self::process_hex_literal(info, chars)?)),
+            'u' => Ok(Some(Self::process_unicode_literal(info, chars)?)),
+            'U' => Ok(Some(Self::process_big_unicode_literal(info, chars)?)),
+            x => Err(ParserError::Normal(ParserException::of(
+                format!("Unknown escape sequence: \\{}", x),
+                info,
+            ))),
+        }
+    }
+
+    fn process_octal_literal(info: &LineInfo, chars: &mut Chars<'_>) -> ParseResult<char> {
+        let ch1 = chars.next().unwrap();
+        let ch2 = chars.next().unwrap();
         let dig1 = Self::ch_to_digit(ch1, 8, info, "octal")?;
         let dig2 = Self::ch_to_digit(ch2, 8, info, "octal")?;
         match char::from_u32(dig1 * 8 + dig2) {
@@ -104,9 +124,9 @@ impl StringLikeNode {
         }
     }
 
-    fn process_hex_literal(info: &LineInfo, chars: &mut CharIndices<'_>) -> ParseResult<char> {
-        let ch1 = chars.next().unwrap().1;
-        let ch2 = chars.next().unwrap().1;
+    fn process_hex_literal(info: &LineInfo, chars: &mut Chars<'_>) -> ParseResult<char> {
+        let ch1 = chars.next().unwrap();
+        let ch2 = chars.next().unwrap();
         let dig1 = Self::ch_to_digit(ch1, 16, info, "hex")?;
         let dig2 = Self::ch_to_digit(ch2, 16, info, "hex")?;
         match char::from_u32(dig1 * 16 + dig2) {
@@ -121,11 +141,11 @@ impl StringLikeNode {
         }
     }
 
-    fn process_unicode_literal(info: &LineInfo, chars: &mut CharIndices<'_>) -> ParseResult<char> {
-        let ch1 = chars.next().unwrap().1;
-        let ch2 = chars.next().unwrap().1;
-        let ch3 = chars.next().unwrap().1;
-        let ch4 = chars.next().unwrap().1;
+    fn process_unicode_literal(info: &LineInfo, chars: &mut Chars<'_>) -> ParseResult<char> {
+        let ch1 = chars.next().unwrap();
+        let ch2 = chars.next().unwrap();
+        let ch3 = chars.next().unwrap();
+        let ch4 = chars.next().unwrap();
         let dig1 = Self::ch_to_digit(ch1, 16, info, "unicode")?;
         let dig2 = Self::ch_to_digit(ch2, 16, info, "unicode")?;
         let dig3 = Self::ch_to_digit(ch3, 16, info, "unicode")?;
@@ -142,13 +162,10 @@ impl StringLikeNode {
         }
     }
 
-    fn process_big_unicode_literal(
-        info: &LineInfo,
-        chars: &mut CharIndices<'_>,
-    ) -> ParseResult<char> {
+    fn process_big_unicode_literal(info: &LineInfo, chars: &mut Chars<'_>) -> ParseResult<char> {
         let mut digs = [0; 8];
         for dig in &mut digs {
-            let ch = chars.next().unwrap().1;
+            let ch = chars.next().unwrap();
             *dig = Self::ch_to_digit(ch, 16, info, "unicode")?;
         }
         let u32_char = Self::from_be_digits(16, &digs);
