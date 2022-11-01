@@ -48,3 +48,11 @@ pub fn reborrow_option<'a, 'b, T>(opt: &'a mut Option<&'b mut T>) -> Option<&'a 
         None => None,
     }
 }
+
+pub fn minmax<T: PartialOrd>(x: T, y: T) -> (T, T) {
+    if x < y {
+        (x, y)
+    } else {
+        (y, x)
+    }
+}

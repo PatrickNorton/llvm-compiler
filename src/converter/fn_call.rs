@@ -12,7 +12,7 @@ use crate::parser::operator_fn::EscapedOperatorNode;
 use crate::parser::operator_sp::OpSpTypeNode;
 use crate::parser::test_node::TestNode;
 use crate::parser::variable::VariableNode;
-use crate::util::first;
+use crate::util::{first, minmax};
 
 use super::argument::{ArgPosition, Argument};
 use super::assign::AssignConverter;
@@ -699,7 +699,7 @@ fn argument_list_is_cap(args: &[ArgumentNode]) -> bool {
 
 fn add_swap(bytes: &mut BytecodeList, d1: u16, d2: u16) {
     assert_ne!(d1, d2);
-    let (d1, d2) = if d1 < d2 { (d1, d2) } else { (d2, d1) };
+    let (d1, d2) = minmax(d1, d2);
     if d1 == 0 && d2 == 1 {
         bytes.add(Bytecode::Swap2())
     } else {
