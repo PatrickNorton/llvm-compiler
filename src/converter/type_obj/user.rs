@@ -586,7 +586,7 @@ mod private {
         builtins: BuiltinRef<'_>,
     ) -> CompileResult<Vec<TypeObject>> {
         let auto_interfaces;
-        // If the default interfaces haven't been set yet (occurrs when parsing
+        // If the default interfaces haven't been set yet (occurs when parsing
         // builtins), get only the global default interfaces
         let default_interfaces = match global_info.get_default_interfaces() {
             Option::Some(x) => x,

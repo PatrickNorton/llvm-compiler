@@ -116,6 +116,7 @@ impl FunctionInfoType {
         if other.same_base_type(&CALLABLE) {
             let generics = other.get_generics();
             // NOTE: feature(let_else) (#87335) would make this nicer
+            // let [TypeObject::List(args), TypeObject::List(rets)] = generics else {panic!()};
             let (args, rets) = if let [TypeObject::List(args), TypeObject::List(rets)] = generics {
                 (args.get_values(), rets.get_values())
             } else {

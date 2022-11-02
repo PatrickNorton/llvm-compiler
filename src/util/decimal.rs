@@ -223,6 +223,7 @@ fn check_scale(int_val: &BigInt, scale: i128) -> isize {
 
 fn big_multiply_power_ten(value: &BigInt, n: isize) -> BigInt {
     if n <= 0 {
+        // FIXME? Is this the desired behavior for negative numbers?
         value.clone()
     } else if let Option::Some(x) = LONG_TEN_POWERS_TABLE.get(n as usize) {
         value * x

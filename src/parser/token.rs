@@ -196,7 +196,7 @@ fn whitespace(input: &str) -> Option<(TokenType, usize)> {
 }
 
 fn epsilon(input: &str) -> Option<(TokenType, usize)> {
-    input.is_empty().then(|| (TokenType::Epsilon, 0))
+    input.is_empty().then_some((TokenType::Epsilon, 0))
 }
 
 fn newline(input: &str) -> Option<(TokenType, usize)> {
