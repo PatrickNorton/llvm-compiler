@@ -8,6 +8,7 @@ use crate::util::BYTECODE_EXTENSION;
 
 mod arguments;
 mod converter;
+mod error;
 #[macro_use]
 mod macros;
 mod parser;
