@@ -6,7 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-backtrace = "0.3.64"
 crossbeam = "0.8.1"
 dashmap = "5.2.0"
 derive-new = "0.5.9"

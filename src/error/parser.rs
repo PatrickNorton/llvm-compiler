@@ -1,7 +1,6 @@
+use std::backtrace::Backtrace;
 use std::error::Error;
 use std::fmt::{Display, Write};
-
-use backtrace::Backtrace;
 
 use crate::parser::line_info::Lined;
 
@@ -47,7 +46,7 @@ impl ParserException {
         .unwrap();
         ParserException {
             message,
-            backtrace: Backtrace::new(),
+            backtrace: Backtrace::capture(),
         }
     }
 
@@ -65,7 +64,7 @@ impl ParserException {
         .unwrap();
         ParserException {
             message,
-            backtrace: Backtrace::new(),
+            backtrace: Backtrace::capture(),
         }
     }
 }
@@ -84,7 +83,7 @@ impl ParserInternalError {
         .unwrap();
         ParserInternalError {
             message,
-            backtrace: Backtrace::new(),
+            backtrace: Backtrace::capture(),
         }
     }
 }
@@ -143,12 +142,12 @@ impl Display for ParserError {
 
 impl Display for ParserException {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}\n{:?}", self.message, self.backtrace)
+        write!(f, "{}\n{}", self.message, self.backtrace)
     }
 }
 
 impl Display for ParserInternalError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}\n{:?}", self.message, self.backtrace)
+        write!(f, "{}\n{}", self.message, self.backtrace)
     }
 }

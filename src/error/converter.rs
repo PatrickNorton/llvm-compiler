@@ -1,7 +1,6 @@
+use std::backtrace::Backtrace;
 use std::error::Error;
 use std::fmt::Display;
-
-use backtrace::Backtrace;
 
 use crate::parser::line_info::Lined;
 use crate::parser::operator_sp::OpSpTypeNode;
@@ -61,10 +60,7 @@ impl CompilerException {
     pub fn from_builder(builder: ErrorBuilder<'_>) -> Self {
         Self {
             message: builder.get_message(ErrorType::Standard),
-            // NOTE: When feature(backtrace) (#53487) is stabilized, replace
-            // this with std::backtrace::Backtrace
-            // Coming in 1.65.0!
-            backtrace: Backtrace::new(),
+            backtrace: Backtrace::capture(),
         }
     }
 }
@@ -89,7 +85,7 @@ impl CompilerInternalError {
     pub fn from_builder(builder: ErrorBuilder<'_>) -> Self {
         Self {
             message: builder.get_message(ErrorType::Internal),
-            backtrace: Backtrace::new(),
+            backtrace: Backtrace::capture(),
         }
     }
 }
@@ -103,7 +99,7 @@ impl CompilerTodoError {
     pub fn from_builder(builder: ErrorBuilder<'_>) -> Self {
         Self {
             message: builder.get_message(ErrorType::Todo),
-            backtrace: Backtrace::new(),
+            backtrace: Backtrace::capture(),
         }
     }
 }
@@ -120,19 +116,19 @@ impl Display for CompilerError {
 
 impl Display for CompilerException {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}\n{:?}", self.message, self.backtrace)
+        write!(f, "{}\n{}", self.message, self.backtrace)
     }
 }
 
 impl Display for CompilerInternalError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}\n{:?}", self.message, self.backtrace)
+        write!(f, "{}\n{}", self.message, self.backtrace)
     }
 }
 
 impl Display for CompilerTodoError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}\n{:?}", self.message, self.backtrace)
+        write!(f, "{}\n{}", self.message, self.backtrace)
     }
 }
 
