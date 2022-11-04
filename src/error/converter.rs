@@ -2,10 +2,10 @@ use std::backtrace::Backtrace;
 use std::error::Error;
 use std::fmt::Display;
 
-use crate::parser::line_info::Lined;
 use crate::parser::operator_sp::OpSpTypeNode;
 
 use super::builder::{ErrorBuilder, ErrorType};
+use super::line_info::Lined;
 
 #[derive(Debug)]
 pub enum CompilerError {

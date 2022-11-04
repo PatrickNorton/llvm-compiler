@@ -1,8 +1,9 @@
 use std::backtrace::Backtrace;
 use std::error::Error;
-use std::fmt::{Display, Write};
+use std::fmt::Display;
 
-use crate::parser::line_info::Lined;
+use super::builder::{ErrorBuilder, ErrorType};
+use super::line_info::Lined;
 
 pub type ParseResult<T> = Result<T, ParserError>;
 
@@ -33,58 +34,36 @@ pub enum InvalidToken {
 }
 
 impl ParserException {
-    pub fn of<T: ToString, U: Lined>(message: T, line_info: U) -> Self {
-        let mut message = message.to_string();
-        let line_info = line_info.line_info();
-        write!(
-            &mut message,
-            "\nError: File {} Line {}\n{}",
-            line_info.get_path().display(),
-            line_info.get_line_number(),
-            line_info.info_string()
-        )
-        .unwrap();
-        ParserException {
-            message,
+    pub fn from_builder(builder: ErrorBuilder<'_>) -> Self {
+        Self {
+            message: builder.get_message(ErrorType::Standard),
             backtrace: Backtrace::capture(),
         }
     }
 
-    pub fn with_note<T: ToString, D: Display, U: Lined>(message: T, note: D, line_info: U) -> Self {
-        let mut message = message.to_string();
-        let line_info = line_info.line_info();
-        write!(
-            &mut message,
-            "\nNote: {}\nError: File {} Line {}\n{}",
-            note,
-            line_info.get_path().display(),
-            line_info.get_line_number(),
-            line_info.info_string()
+    pub fn of<D: Display, U: Lined>(message: D, line_info: U) -> Self {
+        Self::from_builder(ErrorBuilder::new(&line_info).with_message(&message))
+    }
+
+    pub fn with_note<T: Display, D: Display, U: Lined>(message: T, note: D, line_info: U) -> Self {
+        Self::from_builder(
+            ErrorBuilder::new(&line_info)
+                .with_message(message)
+                .with_note(note),
         )
-        .unwrap();
-        ParserException {
-            message,
-            backtrace: Backtrace::capture(),
-        }
     }
 }
 
 impl ParserInternalError {
-    pub fn of<T: ToString, U: Lined>(message: T, line_info: U) -> Self {
-        let mut message = message.to_string();
-        let line_info = line_info.line_info();
-        write!(
-            &mut message,
-            "\nError: File {} Line {}\n{}",
-            line_info.get_path().display(),
-            line_info.get_line_number(),
-            line_info.info_string()
-        )
-        .unwrap();
-        ParserInternalError {
-            message,
+    pub fn from_builder(builder: ErrorBuilder<'_>) -> Self {
+        Self {
+            message: builder.get_message(ErrorType::Standard),
             backtrace: Backtrace::capture(),
         }
+    }
+
+    pub fn of<D: Display, U: Lined>(message: D, line_info: U) -> Self {
+        Self::from_builder(ErrorBuilder::new(&line_info).with_message(&message))
     }
 }
 
@@ -115,7 +94,7 @@ impl InvalidToken {
         }
     }
 
-    pub fn message(&self) -> &'static str {
+    pub const fn message(&self) -> &'static str {
         match self {
             InvalidToken::Exclamation => "! is invalid",
             InvalidToken::Semicolon => "; is not allowed, go use Java or something",

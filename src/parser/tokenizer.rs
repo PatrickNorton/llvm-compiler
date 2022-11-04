@@ -3,6 +3,7 @@ use crate::parser::line_info::LineInfo;
 use crate::parser::token::{Token, TokenType};
 use crate::parser::token_list::TokenList;
 use std::collections::BTreeSet;
+use std::fmt::Display;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Cursor, Read};
 use std::path::{Path, PathBuf};
@@ -234,7 +235,7 @@ impl Tokenizer {
         self.token_err("Invalid syntax")
     }
 
-    fn token_err<T: ToString>(&self, msg: T) -> ParserException {
+    fn token_err<D: Display>(&self, msg: D) -> ParserException {
         ParserException::of(msg, self.line_info())
     }
 

@@ -1,6 +1,6 @@
 use std::fmt::{Display, Write};
 
-use crate::parser::line_info::{LineInfo, Lined};
+use super::line_info::{LineInfo, Lined};
 
 type DispBox<'a> = Box<dyn Display + 'a>;
 
