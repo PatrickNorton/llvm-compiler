@@ -128,7 +128,7 @@ fn add_variables(bytes: &mut Vec<u8>, byte_map: &HashMap<String, u16>) {
     bytes.extend(usize_to_bytes(byte_map.len()));
     for (name, &index) in byte_map {
         bytes.extend(StringConstant::str_bytes(name));
-        bytes.extend(&index.to_be_bytes())
+        bytes.extend(index.to_be_bytes())
     }
 }
 
@@ -163,7 +163,7 @@ fn add_properties(
     properties: &HashMap<String, (Method, Method)>,
     constants: &ConstantSet,
 ) {
-    bytes.extend(&usize_to_bytes(properties.len()));
+    bytes.extend(usize_to_bytes(properties.len()));
     for (name, (getter, setter)) in properties {
         bytes.extend(StringConstant::str_bytes(name));
         let getter_bytes = getter.get_bytes().convert_to_bytes(constants);

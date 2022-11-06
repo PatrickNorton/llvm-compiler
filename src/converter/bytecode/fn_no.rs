@@ -30,7 +30,7 @@ impl BytecodeType for FunctionNoBytecode {
     }
 
     fn assemble(&self, buffer: &mut Vec<u8>, _constants: &ConstantSet) {
-        buffer.extend(&self.value.to_be_bytes())
+        buffer.extend(self.value.to_be_bytes())
     }
 }
 

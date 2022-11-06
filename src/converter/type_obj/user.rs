@@ -51,7 +51,7 @@ pub trait UserTypeLike: UserTypeInner + PartialEq<TypeObject> {
     fn get_supers(&self) -> SuperRef<'_>;
 
     fn is_subclass(&self, other: &TypeObject) -> bool {
-        if self == other || self.same_base_type(&*THROWS_TYPE) {
+        if self == other || self.same_base_type(&THROWS_TYPE) {
             true
         } else if other.is_user_type() && self.same_base_type(other) {
             if !self.const_semantics() && !user_is_const(other) && self.is_const() {

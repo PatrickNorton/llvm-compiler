@@ -37,7 +37,7 @@ impl StringConstant {
 
     pub fn str_bytes(text: &str) -> Vec<u8> {
         let mut result = Vec::with_capacity(text.len() + 4);
-        result.extend(&usize_to_bytes(text.len()));
+        result.extend(usize_to_bytes(text.len()));
         result.extend(text.as_bytes());
         result
     }

@@ -125,11 +125,7 @@ impl ArgumentNode {
     pub fn parse_brace_free_list(tokens: &mut TokenList) -> ParseResult<Vec<ArgumentNode>> {
         let mut args = Vec::new();
         while tokens.token_eq_either("*", "**")? || TestNode::next_is_test(tokens)? {
-            let offset = if tokens.token_eq_either("*", "**")? {
-                1
-            } else {
-                0
-            };
+            let offset = usize::from(tokens.token_eq_either("*", "**")?);
             let var;
             if matches!(tokens.get_token(offset)?.token_type(), TokenType::Name(_))
                 && after_var_is_eq(tokens, offset)?

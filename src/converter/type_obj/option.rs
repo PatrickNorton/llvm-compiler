@@ -91,7 +91,7 @@ impl OptionTypeObject {
     pub fn super_with_option(maybe_option: &TypeObject, other: &TypeObject) -> bool {
         debug_assert!(Self::needs_make_option(maybe_option, other));
         // TODO: Refer to Builtins
-        other.same_base_type(&*NULL_TYPE)
+        other.same_base_type(&NULL_TYPE)
             || maybe_option.is_superclass(&TypeObject::optional(other.clone()))
     }
 

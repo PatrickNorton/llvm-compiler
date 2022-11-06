@@ -27,7 +27,7 @@ impl BytecodeType for VariantBytecode {
     }
 
     fn assemble(&self, buffer: &mut Vec<u8>, _constants: &ConstantSet) {
-        buffer.extend(&self.variant.to_be_bytes())
+        buffer.extend(self.variant.to_be_bytes())
     }
 }
 

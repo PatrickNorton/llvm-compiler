@@ -33,7 +33,7 @@ impl BytecodeType for ConstantBytecode {
 
     fn assemble(&self, buffer: &mut Vec<u8>, constants: &ConstantSet) {
         let index = constants.get_index_of(&self.value).unwrap();
-        buffer.extend(&usize_to_short_bytes(index))
+        buffer.extend(usize_to_short_bytes(index))
     }
 }
 

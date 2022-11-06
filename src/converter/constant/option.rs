@@ -44,7 +44,7 @@ impl OptionConstant {
     pub fn to_bytes(&self, constants: &ConstantSet) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(U16_BYTES + 1);
         bytes.push(ConstantBytes::Option as u8);
-        let const_index = constants.get_index_of(&*self.value).unwrap();
+        let const_index = constants.get_index_of(&self.value).unwrap();
         bytes.extend(usize_to_short_bytes(const_index));
         bytes
     }

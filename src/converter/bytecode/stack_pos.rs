@@ -27,7 +27,7 @@ impl BytecodeType for StackPosBytecode {
     }
 
     fn assemble(&self, buffer: &mut Vec<u8>, _constants: &ConstantSet) {
-        buffer.extend(&self.position.to_be_bytes())
+        buffer.extend(self.position.to_be_bytes())
     }
 }
 

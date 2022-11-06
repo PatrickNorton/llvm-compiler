@@ -26,7 +26,7 @@ impl BytecodeType for SyscallBytecode {
     }
 
     fn assemble(&self, buffer: &mut Vec<u8>, _constants: &ConstantSet) {
-        buffer.extend(&self.syscall.to_be_bytes())
+        buffer.extend(self.syscall.to_be_bytes())
     }
 }
 

@@ -26,7 +26,7 @@ impl BytecodeType for OperatorBytecode {
     }
 
     fn assemble(&self, buffer: &mut Vec<u8>, _constants: &ConstantSet) {
-        buffer.extend(&(self.value as u16).to_be_bytes())
+        buffer.extend((self.value as u16).to_be_bytes())
     }
 }
 

@@ -286,7 +286,7 @@ impl GlobalCompilerInfo {
     }
 
     pub fn get_test_functions(&mut self) -> &[FunctionConstant] {
-        &**self.test_functions.get_mut()
+        &*self.test_functions.get_mut()
     }
 
     pub fn get_default_interfaces(&self) -> Option<&HashSet<InterfaceType>> {

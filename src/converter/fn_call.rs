@@ -442,7 +442,7 @@ impl<'a> FunctionCallConverter<'a> {
             OpSpTypeNode::Repr => constant.repr_value().map(Into::into),
             OpSpTypeNode::Int => match constant {
                 LangConstant::Bigint(_) | LangConstant::Int(_) => Some(constant),
-                LangConstant::Bool(b) => Some(if b.bool_value() { 1 } else { 0 }.into()),
+                LangConstant::Bool(b) => Some(usize::from(b.bool_value()).into()),
                 _ => None,
             },
             _ => None,
