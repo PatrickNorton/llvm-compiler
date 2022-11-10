@@ -10,7 +10,6 @@ pub struct CharEscape {
     value: char,
 }
 
-// TODO? Return an `impl Display` instead of a `String`
 /// Adds escape codes to the given string.
 ///
 /// # Examples

@@ -17,6 +17,7 @@ where
     S: AsRef<str>,
 {
     let (min, dist) = names
+        .filter(|x| !x.as_ref().is_empty())
         .map(|x| {
             let distance = distance(name, x.as_ref());
             (x, distance)
