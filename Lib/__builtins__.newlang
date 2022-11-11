@@ -8,6 +8,7 @@ const class int {
     public operator new (object o, /) {}
     public operator int -> int {}
     public operator hash {}
+    public operator bool {}
 
     public operator + (int other, /) -> int {}
     public operator - (int other, /) -> int {}
