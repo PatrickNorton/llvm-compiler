@@ -36,7 +36,9 @@ pub fn compute_const(op: OperatorTypeNode, values: Vec<BigInt>) -> Option<LangCo
         OperatorTypeNode::Subtract => exactly_two(values).map(|(x, y)| (x - y).into()),
         OperatorTypeNode::USubtract => values.exactly_one().ok().map(|x| (-x).into()),
         OperatorTypeNode::Multiply => Some(values.product::<BigInt>().into()),
-        OperatorTypeNode::FloorDiv => floor_div_const(values).map(Into::into),
+        OperatorTypeNode::FloorDiv => exactly_two(values)
+            .and_then(|(x, y)| x.checked_div(&y))
+            .map(|x| x.into()),
         OperatorTypeNode::LeftBitshift => {
             exactly_two(values).and_then(|(x, y)| y.to_u32().map(|y| (x << y).into()))
         }
@@ -61,15 +63,6 @@ pub fn compute_const(op: OperatorTypeNode, values: Vec<BigInt>) -> Option<LangCo
         OperatorTypeNode::GreaterEqual => Some(values.tuple_windows().all(|(x, y)| x >= y).into()),
         OperatorTypeNode::LessEqual => Some(values.tuple_windows().all(|(x, y)| x <= y).into()),
         _ => None,
-    }
-}
-
-fn floor_div_const(values: impl Iterator<Item = BigInt>) -> Option<BigInt> {
-    let (x, y) = exactly_two(values)?;
-    if y.is_zero() {
-        None
-    } else {
-        Some(x / y)
     }
 }
 
