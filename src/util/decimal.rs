@@ -131,8 +131,13 @@ impl<'a> DecimalRef<'a> {
         }
     }
 
-    pub fn move_point_left(self, shift: usize) -> DecimalRef<'a> {
-        todo!()
+    pub fn move_point_left(mut self, shift: usize) -> DecimalRef<'a> {
+        self.scale = shift
+            .try_into()
+            .ok()
+            .and_then(|x: isize| x.checked_add(self.scale))
+            .expect("Shift overflow");
+        self
     }
 
     pub fn scale(&self) -> isize {
