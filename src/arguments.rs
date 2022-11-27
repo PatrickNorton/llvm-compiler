@@ -249,6 +249,7 @@ impl CLArgs {
                         debug = Some(false);
                     }
                 }
+                "--help" => print_help(),
                 "--debug" => {
                     if debug.is_some() {
                         return Err(CLArgError::MultipleDebug);
@@ -375,6 +376,24 @@ fn update_optimizations(
             Ok(())
         }
     }
+}
+
+// TODO: Improve help message (move to separate file?)
+fn print_help() {
+    println!(
+        "Help:
+
+-t, --test          Compile in test mode
+--debug             Turn on debug mode (with assertions)
+--ndebug            Turn off debug mode (no assertions)
+-O0, -O1, -O2, -O3  Set the optimization level
+--cfg <argument>    Enable the given cfg value
+--print-bytecode    Print the compiled bytecode to stdout
+-S <file>           Write the bytecode in text form to the given file
+--stdlib <file>     The directory containing the standard library
+-f<optimization>    Turn on the given optimization pass
+-F<optimization>    Turn off the given optimization pass"
+    );
 }
 
 impl FromStr for Optimization {
