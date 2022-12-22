@@ -159,8 +159,8 @@ impl<'a> AttributeConverter<'a> {
     }
 
     pub fn vars_with_ints(self) -> (HashMap<String, u16>, HashMap<String, u16>) {
-        let attrs = self.vars.into_iter().map(|(x, _)| (x, 0)).collect();
-        let static_attrs = self.static_vars.into_iter().map(|(x, _)| (x, 0)).collect();
+        let attrs = self.vars.into_keys().map(|x| (x, 0)).collect();
+        let static_attrs = self.static_vars.into_keys().map(|x| (x, 0)).collect();
         (attrs, static_attrs)
     }
 }

@@ -292,7 +292,7 @@ fn display_dec(
             // Case 2.1, entirely before the decimal point
             // We should prepend zeros
             let zeros = location as usize - abs_int.len();
-            let abs_int = abs_int + "0".repeat(zeros as usize).as_str();
+            let abs_int = abs_int + "0".repeat(zeros).as_str();
             (abs_int, "".to_string())
         } else {
             // Case 2.2, somewhere around the decimal point

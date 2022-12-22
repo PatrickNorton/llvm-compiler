@@ -143,15 +143,12 @@ impl IntAllocator {
     /// assert_eq!(ints.next(), 0); // Smallest unallocated number is always given first
     /// ```
     pub fn next(&mut self) -> usize {
-        // NOTE: This will be massively improved by feature(map_first_last) (#62924)
-        // Coming in 1.66
-        if !self.removed.is_empty() {
-            let min = *self.removed.iter().next().unwrap();
-            self.removed.remove(&min);
-            min
-        } else {
-            self.max += 1;
-            self.max - 1
+        match self.removed.pop_first() {
+            Option::Some(first) => first,
+            Option::None => {
+                self.max += 1;
+                self.max - 1
+            }
         }
     }
 
