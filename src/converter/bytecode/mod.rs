@@ -368,7 +368,7 @@ impl Bytecode {
         bytecode_match!(self => macro dispatch_assemble (self, constants))
     }
 
-    pub fn get_constant(&self) -> Option<&LangConstant> {
+    pub const fn get_constant(&self) -> Option<&LangConstant> {
         match self {
             Bytecode::LoadConst(x) => Some(x.get_value()),
             Bytecode::LoadDot(x) => Some(x.get_value()),
@@ -378,7 +378,7 @@ impl Bytecode {
         }
     }
 
-    pub fn byte_value(&self) -> u8 {
+    pub const fn byte_value(&self) -> u8 {
         // SAFETY: repr(u8) guarantees layout, so this is sound.
         // TODO: When a safe variant of this lands, switch to it instead
         unsafe { *(self as *const _ as *const u8) }

@@ -14,7 +14,7 @@ impl ConstantBytecode {
         Self { value }
     }
 
-    pub fn get_value(&self) -> &LangConstant {
+    pub const fn get_value(&self) -> &LangConstant {
         &self.value
     }
 }
