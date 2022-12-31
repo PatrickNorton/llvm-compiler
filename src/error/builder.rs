@@ -350,9 +350,9 @@ impl<'a> ErrorBuilder<'a> {
 
     /// Applies the given closure only if `value` is [`Some`].
     ///
-    /// This is intended to be used for partial application of functions, such
-    /// as applying a value definition only if the value has a name known to the
-    /// compiler (for example, excluding lambdas).
+    /// This is intended to be used for conditional application of functions,
+    /// such as applying a value definition only if the value has a name known
+    /// to the compiler (for example, excluding lambdas).
     ///
     /// # Examples
     /// ```
