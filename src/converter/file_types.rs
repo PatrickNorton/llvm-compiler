@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 use derive_new::new;
 use either::Either;
 
-use crate::arguments::CLArgs;
 use crate::parser::definition::BaseClassRef;
 use crate::parser::descriptor::DescriptorNode;
 use crate::parser::import::{ImportExportNode, ImportExportType};
@@ -18,6 +17,7 @@ use crate::util::reborrow_option;
 use super::builtins::ParsedBuiltins;
 use super::error::CompilerException;
 use super::generic::GenericInfo;
+use super::global_info::GlobalCompilerInfo;
 use super::permission::PermissionLevel;
 use super::type_obj::{InterfaceType, StdTypeObject, TypeObject, UnionTypeObject, UserType};
 use super::{annotation, find_path, local_module_path, CompileResult};
@@ -57,7 +57,7 @@ impl FileTypes {
         path: PathBuf,
         all_files: &mut HashMap<PathBuf, (TopNode, FileTypes)>,
         default_interfaces: &mut HashMap<PathBuf, Vec<(InterfaceType, usize)>>,
-        args: &CLArgs,
+        global_info: &GlobalCompilerInfo,
         permissions: PermissionLevel,
         mut builtins: Option<&mut ParsedBuiltins>,
     ) -> Result<Vec<(PathBuf, bool)>, Box<dyn Error>> {
@@ -73,10 +73,20 @@ impl FileTypes {
             if let Result::Ok(ie_node) = <&ImportExportNode>::try_from(value) {
                 match ie_node.get_type() {
                     ImportExportType::Import | ImportExportType::Typeget => {
-                        to_compile.extend(file_types.add_imports(&path, ie_node, all_files, args)?);
+                        to_compile.extend(file_types.add_imports(
+                            &path,
+                            ie_node,
+                            all_files,
+                            global_info,
+                        )?);
                     }
                     ImportExportType::Export => {
-                        to_compile.extend(file_types.add_exports(&path, ie_node, all_files, args)?);
+                        to_compile.extend(file_types.add_exports(
+                            &path,
+                            ie_node,
+                            all_files,
+                            global_info,
+                        )?);
                     }
                 }
             } else if let Result::Ok(node) = BaseClassRef::try_from(value) {
@@ -100,14 +110,14 @@ impl FileTypes {
         path: &Path,
         node: &ImportExportNode,
         all_files: &HashMap<PathBuf, (TopNode, FileTypes)>,
-        args: &CLArgs,
+        global_info: &GlobalCompilerInfo,
     ) -> CompileResult<Vec<(PathBuf, bool)>> {
         assert!(matches!(
             node.get_type(),
             ImportExportType::Import | ImportExportType::Typeget
         ));
         if node.is_wildcard() {
-            self.add_wildcard_import(path, node, all_files, args)
+            self.add_wildcard_import(path, node, all_files, global_info)
         } else if node.get_from().is_empty() {
             check_as(node)?;
             let as_strings = node.get_as().unwrap_or(&[]);
@@ -117,7 +127,7 @@ impl FileTypes {
                     .unwrap()
                     .get_name();
                 assert!(val.get_post_dots().is_empty());
-                let (path, is_stdlib) = load_file(pre_dot, node, args, path)?;
+                let (path, is_stdlib) = load_file(pre_dot, node, global_info, path)?;
                 let val_str = val.name_string();
                 let as_str = as_strings.get(i).map(|x| x.name_string());
                 self.imports
@@ -134,7 +144,7 @@ impl FileTypes {
             }
             Ok(result)
         } else {
-            self.add_import_from(path, node, all_files, args)
+            self.add_import_from(path, node, all_files, global_info)
         }
     }
 
@@ -143,10 +153,10 @@ impl FileTypes {
         path: &Path,
         node: &ImportExportNode,
         all_files: &HashMap<PathBuf, (TopNode, FileTypes)>,
-        args: &CLArgs,
+        global_info: &GlobalCompilerInfo,
     ) -> CompileResult<Vec<(PathBuf, bool)>> {
         let module_name = module_name(node, 0);
-        let (path, is_stdlib) = load_file(module_name, node, args, path)?;
+        let (path, is_stdlib) = load_file(module_name, node, global_info, path)?;
         self.wildcard_imports.insert(path.clone());
         Ok(if !all_files.contains_key(&path) {
             vec![(path, is_stdlib)]
@@ -160,10 +170,10 @@ impl FileTypes {
         path: &Path,
         node: &ImportExportNode,
         all_files: &HashMap<PathBuf, (TopNode, FileTypes)>,
-        args: &CLArgs,
+        global_info: &GlobalCompilerInfo,
     ) -> CompileResult<Vec<(PathBuf, bool)>> {
         let module_name = module_name(node, 0);
-        let (path, is_stdlib) = load_file(module_name, node, args, path)?;
+        let (path, is_stdlib) = load_file(module_name, node, global_info, path)?;
         for (i, name) in node.get_values().iter().enumerate() {
             // FIXME? 'as' imports
             assert!(name.get_post_dots().is_empty());
@@ -195,7 +205,7 @@ impl FileTypes {
         path: &Path,
         node: &ImportExportNode,
         all_files: &HashMap<PathBuf, (TopNode, FileTypes)>,
-        args: &CLArgs,
+        global_info: &GlobalCompilerInfo,
     ) -> CompileResult<Vec<(PathBuf, bool)>> {
         let is_from = !node.get_from().is_empty();
         if node.is_wildcard() {
@@ -207,11 +217,11 @@ impl FileTypes {
                 .into());
             }
             let module_name = module_name(node, 0);
-            self.add_wildcard_exports(module_name, node, args)
+            self.add_wildcard_exports(module_name, node, global_info)
         } else {
             let result = if is_from {
-                self.add_from_exports(node, args)?;
-                let (path, is_stdlib) = load_file(module_name(node, 0), node, args, path)?;
+                self.add_from_exports(node, global_info)?;
+                let (path, is_stdlib) = load_file(module_name(node, 0), node, global_info, path)?;
                 if !all_files.contains_key(&path) {
                     vec![(path, is_stdlib)]
                 } else {
@@ -249,7 +259,8 @@ impl FileTypes {
                         name.to_string(),
                         if is_from {
                             // FIXME: Is this necessary?
-                            let (path, _) = load_file(module_name(node, 0), node, args, path)?;
+                            let (path, _) =
+                                load_file(module_name(node, 0), node, global_info, path)?;
                             Either::Right(path)
                         } else {
                             Either::Left(None)
@@ -265,9 +276,9 @@ impl FileTypes {
         &mut self,
         module_name: &str,
         node: &ImportExportNode,
-        args: &CLArgs,
+        global_info: &GlobalCompilerInfo,
     ) -> CompileResult<Vec<(PathBuf, bool)>> {
-        let (path, is_stdlib) = load_file(module_name, node, args, &self.path)?;
+        let (path, is_stdlib) = load_file(module_name, node, global_info, &self.path)?;
         self.wildcard_exports.insert(path.clone());
         Ok(vec![(path, is_stdlib)])
     }
@@ -275,10 +286,10 @@ impl FileTypes {
     fn add_from_exports(
         &mut self,
         node: &ImportExportNode,
-        args: &CLArgs,
+        global_info: &GlobalCompilerInfo,
     ) -> CompileResult<Vec<(PathBuf, bool)>> {
         let module_name = module_name(node, 0);
-        let (path, is_stdlib) = load_file(module_name, node, args, &self.path)?;
+        let (path, is_stdlib) = load_file(module_name, node, global_info, &self.path)?;
         for (i, name) in node.get_values().iter().enumerate() {
             let value = <&VariableNode>::try_from(name.get_pre_dot()).unwrap();
             let import_info = SingleImportInfo::new(
@@ -380,7 +391,7 @@ fn module_name(node: &ImportExportNode, i: usize) -> &str {
 fn load_file(
     module_name: &str,
     node: &ImportExportNode,
-    args: &CLArgs,
+    global_info: &GlobalCompilerInfo,
     current_path: &Path,
 ) -> CompileResult<(PathBuf, bool)> {
     let (path, is_stdlib) = if node.get_pre_dots() > 0 {
@@ -396,7 +407,7 @@ fn load_file(
         let local_path = local_module_path(parent_path, module_name, node.line_info())?;
         (local_path, false)
     } else {
-        find_path(module_name, node, args)?
+        find_path(module_name, node, global_info)?
     };
     Ok((path, is_stdlib))
 }

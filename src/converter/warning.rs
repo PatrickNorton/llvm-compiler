@@ -95,15 +95,28 @@ pub fn warn_builder(
     warn: WarningType,
     holder: &WarningHolder,
 ) -> CompileResult<()> {
-    match holder.warning_level(warn) {
+    warn_level(builder, warn, holder.warning_level(warn), &holder.counter)
+}
+
+pub fn warn_counter(builder: ErrorBuilder<'_>, counter: &ErrorCounter) -> CompileResult<()> {
+    warn_level(builder, WarningType::NoType, WarningLevel::Warn, counter)
+}
+
+fn warn_level(
+    builder: ErrorBuilder<'_>,
+    warn: WarningType,
+    level: WarningLevel,
+    counter: &ErrorCounter,
+) -> CompileResult<()> {
+    match level {
         WarningLevel::Allow => Ok(()),
         WarningLevel::Warn => {
-            holder.counter.add_warning();
+            counter.add_warning();
             eprintln!("{}", builder.get_message(ErrorType::Warning));
             Ok(())
         }
         WarningLevel::Deny => {
-            holder.counter.add_error();
+            counter.add_error();
             if let Option::Some(warn_name) = warn.annotation_name() {
                 Err(CompilerException::from_builder(builder.with_note(format!(
                     "Error because of $deny({}) or $deny(all)",

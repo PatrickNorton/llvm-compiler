@@ -92,12 +92,14 @@ use std::time::Instant;
 use walkdir::WalkDir;
 
 use crate::arguments::{CLArgs, Optimization};
+use crate::error::LineInfo;
 use crate::parser::line_info::Lined;
 use crate::util::{EXPORTS_FILENAME, FILE_EXTENSION};
 
 use self::bytecode_list::BytecodeList;
 use self::constant::LangConstant;
 use self::error::{CompilerError, CompilerException};
+use self::error_builder::ErrorBuilder;
 use self::file_writer::write_to_file;
 use self::global_info::GlobalCompilerInfo;
 use self::type_obj::TypeObject;
@@ -132,10 +134,27 @@ pub fn convert_to_file(
     Ok(())
 }
 
-fn find_path(name: &str, info: &dyn Lined, args: &CLArgs) -> CompileResult<(PathBuf, bool)> {
+fn find_path(
+    name: &str,
+    info: &dyn Lined,
+    global_info: &GlobalCompilerInfo,
+) -> CompileResult<(PathBuf, bool)> {
     // TODO? Make installed packages local to the project instead of global
     // (c.f. Python's packaging disaster)
-    let path = env::var("NEWLANG_PATH").expect("Could not find $NEWLANG_PATH environment variable");
+    let path = match env::var("NEWLANG_PATH") {
+        Ok(path) => path,
+        Err(_) => {
+            warning::warn_counter(
+                ErrorBuilder::new(LineInfo::empty_ref())
+                    .with_message("Could not find $NEWLANG_PATH environment variable")
+                    .with_note(
+                        "Unless $NEWLANG_PATH is defined, locally-installed packages will not work",
+                    ),
+                global_info.get_warnings(),
+            )?;
+            String::new()
+        }
+    };
     for filename in path.split(':') {
         if !filename.is_empty() {
             let result = WalkDir::new(filename).into_iter().find(|x| match x {
@@ -149,7 +168,7 @@ fn find_path(name: &str, info: &dyn Lined, args: &CLArgs) -> CompileResult<(Path
             }
         }
     }
-    for file in read_dir(stdlib_path(args)).unwrap() {
+    for file in read_dir(stdlib_path(global_info.get_arguments())).unwrap() {
         let builtin = file.unwrap().path();
         if is_module(&builtin) && builtin.file_stem() == Some(OsStr::new(name)) {
             return Ok((get_path(builtin, name, info)?, true));

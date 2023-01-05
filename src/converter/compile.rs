@@ -59,7 +59,7 @@ pub fn compile_all(
         root_path,
         &mut all_files,
         &mut default_interfaces,
-        global_info.get_arguments(),
+        global_info,
         PermissionLevel::Normal,
         None,
     )?;
@@ -70,7 +70,7 @@ pub fn compile_all(
                     file.clone(),
                     &mut all_files,
                     &mut default_interfaces,
-                    global_info.get_arguments(),
+                    global_info,
                     if is_stdlib {
                         PermissionLevel::Stdlib
                     } else {
@@ -165,7 +165,7 @@ fn parse_builtins(
         path.clone(),
         &mut all_files,
         default_interfaces,
-        global_info.get_arguments(),
+        global_info,
         PermissionLevel::Builtin,
         Some(&mut builtins),
     )?;
