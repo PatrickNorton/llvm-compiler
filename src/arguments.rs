@@ -215,6 +215,7 @@ impl CLArgs {
     /// The path to the standard library, if present.
     ///
     /// If no stdlib path was given, the default stdlib path should be used.
+    /// This is controlled by the `--stdlib` flag.
     pub fn stdlib_path(&self) -> &Option<PathBuf> {
         &self.stdlib_path
     }
