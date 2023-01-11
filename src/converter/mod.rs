@@ -87,7 +87,7 @@ use std::error::Error;
 use std::ffi::OsStr;
 use std::fs::{canonicalize, read_dir, DirEntry};
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use walkdir::WalkDir;
 
@@ -115,14 +115,19 @@ pub fn convert_to_file(
     start_file: PathBuf,
     args: CLArgs,
 ) -> Result<(), Box<dyn Error>> {
-    let start = Instant::now();
-    let dest_file = file.parent().expect("File must have parent").to_owned();
+    let dest_file = file
+        .parent()
+        .ok_or_else(|| {
+            CompilerException::of("Destination file must have parent", LineInfo::empty())
+        })?
+        .to_owned();
     let mut global_info = GlobalCompilerInfo::new(dest_file, args);
-    compile::compile_all(&global_info, start_file)?;
-    run_optimization_passes(&mut global_info);
-    write_to_file(&mut global_info, file)?;
-    let end = Instant::now();
-    let elapsed = end.duration_since(start);
+    let (elapsed, result) = time(|| {
+        compile::compile_all(&global_info, start_file)?;
+        run_optimization_passes(&mut global_info);
+        write_to_file(&mut global_info, file)?;
+        Ok(())
+    });
     let counter = global_info.get_warnings();
     // TODO? Print timing on error
     println!(
@@ -131,7 +136,14 @@ pub fn convert_to_file(
         counter.get_errors(),
         counter.get_warnings(),
     );
-    Ok(())
+    result
+}
+
+fn time<T, F: FnOnce() -> T>(f: F) -> (Duration, T) {
+    let start = Instant::now();
+    let result = f();
+    let end = Instant::now();
+    (end.duration_since(start), result)
 }
 
 fn find_path(
