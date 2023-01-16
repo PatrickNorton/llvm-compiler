@@ -80,7 +80,7 @@ mod tests {
             0,
             0, 0, 0, 0,
             0, 0, 0, 0,
-            b'c',
+            b's',
         ];
         assert_eq!(
             FormatConstant::new(FormatInfo::empty()).to_bytes(),
