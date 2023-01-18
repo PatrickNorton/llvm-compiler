@@ -97,8 +97,9 @@ impl<'a> IsConverter<'a> {
             bytes.add(Bytecode::LoadConst(builtins::TRUE.into()));
             Ok((bytes, cond_type))
         } else if cond_type == *info.builtins().null_type() {
-            warning::warn(
+            warning::warn_note(
                 "Using 'is not null' comparison on variable that must be null",
+                "This variable has type 'null', so 'is not null' cannot be true",
                 WarningType::TrivialValue,
                 info,
                 arg0,

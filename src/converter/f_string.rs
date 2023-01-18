@@ -1,6 +1,7 @@
 use derive_new::new;
 use num::ToPrimitive;
 
+use crate::error::ErrorBuilder;
 use crate::parser::formatted_string::{FormatInfo, FormatSign, FormatType, FormattedStringNode};
 use crate::parser::line_info::Lined;
 use crate::parser::operator_sp::OpSpTypeNode;
@@ -76,11 +77,12 @@ impl<'a> ConverterBase for FormattedStringConverter<'a> {
             tests.len()
         );
         if tests.is_empty() {
-            warning::warn(
-                "F-string with no formatted arguments",
+            warning::warn_builder(
+                ErrorBuilder::new(self.node)
+                    .with_message("F-string with no formatted arguments")
+                    .with_help("Remove the 'f' prefix on the string"),
                 WarningType::TrivialValue,
-                info,
-                self.node,
+                info.warning_holder(),
             )?;
         }
         for (i, string) in strings.iter().enumerate() {

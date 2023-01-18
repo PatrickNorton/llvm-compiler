@@ -138,7 +138,7 @@ impl<'a> ErrorBuilder<'a> {
             write!(msg, "\nNote: {}", note).unwrap();
         }
         for (help, suggestion) in &self.helps {
-            write!(msg, "\nNote: {}", help).unwrap();
+            write!(msg, "\nHelp: {}", help).unwrap();
             if let Option::Some(suggestion) = suggestion {
                 // NOTE: I'm not a fan of this format for help suggestions, is
                 // there a better way?

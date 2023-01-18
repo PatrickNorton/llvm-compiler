@@ -70,8 +70,9 @@ impl<'a> DotimesConverter<'a> {
                 self.node.get_iterations(),
             )?;
         } else if value.is_one() {
-            warning::warn(
-                "'dotimes 1' is unnecessary, as loop will only execute once",
+            warning::warn_note(
+                "Loop will only execute once",
+                "'dotimes 1' is unnecessary and can be removed",
                 WarningType::TrivialValue,
                 info,
                 self.node.get_iterations(),

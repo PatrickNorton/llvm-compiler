@@ -67,16 +67,18 @@ impl<'a> NullOpConverter<'a> {
             1,
         )?);
         if OptionTypeObject::try_from(ret_type.clone()).is_err() {
-            warning::warn(
+            warning::warn_note(
                 "Using ?? operator on non-optional value",
+                "This statement can be replaced with the first operand",
                 WarningType::TrivialValue,
                 info,
                 &self.args[0],
             )?;
             TestConverter::bytes(self.args[0].get_argument(), info, 1)
         } else if ret_type == *info.builtins().null_type() {
-            warning::warn(
+            warning::warn_note(
                 "Using ?? operator on value that is always null",
+                "This statement can be replaced with the second operand",
                 WarningType::TrivialValue,
                 info,
                 &self.args[0],
@@ -111,8 +113,9 @@ impl<'a> NullOpConverter<'a> {
         } else if ret_type.is_option() {
             unwrap_option(info, &mut bytes, ""); // FIXME: self.args[0].to_string()
         } else {
-            warning::warn(
+            warning::warn_note(
                 "Used !! operator on non-optional value",
+                "Since this cannot be null, this statement does nothing",
                 WarningType::TrivialValue,
                 info,
                 &self.args[0],

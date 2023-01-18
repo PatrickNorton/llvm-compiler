@@ -244,8 +244,17 @@ impl<'a> ForConverter<'a> {
         if (diverging_info.will_break() || diverging_info.will_return())
             && !diverging_info.may_continue()
         {
-            warning::warn(
+            warning::warn_note(
                 "Loop executes no more than once",
+                format!(
+                    "There is a {} statement in this loop that is unavoidable, \
+                     so the loop can never reach the end",
+                    if diverging_info.will_break() {
+                        "break"
+                    } else {
+                        "continue"
+                    }
+                ),
                 WarningType::Unreachable,
                 info,
                 self.node,

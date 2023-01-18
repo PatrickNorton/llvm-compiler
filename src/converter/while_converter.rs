@@ -1,5 +1,6 @@
 use derive_new::new;
 
+use crate::error::ErrorBuilder;
 use crate::parser::line_info::Lined;
 use crate::parser::operator::OperatorNode;
 use crate::parser::variable::VariableNode;
@@ -72,8 +73,9 @@ impl<'a> LoopConverter for WhileConverter<'a> {
         ));
         if !self.node.get_nobreak().is_empty() {
             if is_while_true {
-                warning::warn(
+                warning::warn_note(
                     "'nobreak' statement in a 'while true' loop is unreachable",
+                    "A 'while true' loop can only terminate by breaking",
                     WarningType::Unreachable,
                     info,
                     self.node.get_nobreak(),
@@ -132,11 +134,15 @@ impl<'a> WhileConverter<'a> {
             }
             let mut converter = self.node.get_cond().test_converter(1);
             if let Option::Some(constant) = constant_bool(&mut converter, info)? {
-                warning::warn(
-                    format!("While loop condition always evaluates to {}", constant),
+                warning::warn_builder(
+                    ErrorBuilder::new(self.node.get_cond())
+                        .with_message(format!(
+                            "While loop condition always evaluates to {}",
+                            constant
+                        ))
+                        .with_help(format!("Replace conditional with 'while {}'", constant)),
                     WarningType::TrivialValue,
-                    info,
-                    self.node.get_cond(),
+                    info.warning_holder(),
                 )?;
                 Ok((false, Some(constant)))
             } else {
