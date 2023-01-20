@@ -84,44 +84,10 @@ impl FunctionInfoType {
     }
 
     pub fn is_subclass(&self, other: &TypeObject) -> bool {
-        // if (other.sameBaseType(Builtins.callable())) {
-        //     var generics = other.getGenerics();
-        //     assert generics.size() == 2;
-        //     var args = generics.get(0);
-        //     var rets = generics.get(1);
-        //     assert args instanceof ListTypeObject && rets instanceof ListTypeObject;
-        //     var arguments = ((ListTypeObject) args).getValues();
-        //     var returns = ((ListTypeObject) rets).getValues();
-        //     var thisArgs = info.getArgs();
-        //     if (thisArgs.getKeywordArgs().length > 0
-        //             || thisArgs.size() != arguments.length
-        //             || returns.length > info.getReturns().length) {
-        //         return false;
-        //     }
-        //     for (var pair : Zipper.of(arguments, thisArgs)) {
-        //         var arg = pair.getKey();
-        //         var thisArg = pair.getValue();
-        //         if (!thisArg.getType().isSuperclass(arg)) {
-        //             return false;
-        //         }
-        //     }
-        //     for (var pair : Zipper.of(returns, info.getReturns())) {
-        //         if (!pair.getKey().isSuperclass(pair.getValue())) {
-        //             return false;
-        //         }
-        //     }
-        //     return true;
-        // }
-        // return this.equals(other);
         if other.same_base_type(&CALLABLE) {
             let generics = other.get_generics();
-            // NOTE: feature(let_else) (#87335) would make this nicer
-            // let [TypeObject::List(args), TypeObject::List(rets)] = generics else {panic!()};
-            let (args, rets) = if let [TypeObject::List(args), TypeObject::List(rets)] = generics {
-                (args.get_values(), rets.get_values())
-            } else {
-                panic!()
-            };
+            let [TypeObject::List(args), TypeObject::List(rets)] = generics else { panic!() };
+            let (args, rets) = (args.get_values(), rets.get_values());
             let this_args = self.value.info.get_args();
             if !this_args.get_keyword_args().is_empty()
                 || this_args.len() != args.len()
