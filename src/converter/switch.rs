@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use std::collections::hash_map::Entry;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 use std::hash::Hash;
 use std::iter::zip;
@@ -9,6 +9,7 @@ use derive_new::new;
 use itertools::Itertools;
 use num::{BigInt, ToPrimitive, Zero};
 
+use crate::error::LineInfo;
 use crate::parser::dotted::DottedVariableNode;
 use crate::parser::line_info::Lined;
 use crate::parser::switch_stmt::{CaseStatementNode, SwitchStatementNode};
@@ -409,7 +410,7 @@ impl<'a> SwitchConverter<'a> {
         } else {
             self.return_type(info)?
         };
-        let mut used_variants = HashSet::new();
+        let mut used_variants = HashMap::new();
         for stmt in self.node.get_cases() {
             if stmt.is_default() {
                 if default_val.is_some() {
@@ -438,16 +439,17 @@ impl<'a> SwitchConverter<'a> {
             }
             for label in stmt.get_label() {
                 let lbl_no = label_to_variant_no(info, label, union)?;
-                if used_variants.contains(&lbl_no) {
+                if let Option::Some(used_info) = used_variants.get(&lbl_no) {
                     let name = union.variant_name(lbl_no).unwrap();
-                    // TODO: Use double_def here & refer to previous label
-                    return Err(CompilerException::of(
-                        format!("Variant {} defined twice in switch statement", name),
-                        stmt,
+                    return Err(CompilerException::from_builder(
+                        ErrorBuilder::double_def(name, used_info, stmt).with_message(format!(
+                            "Variant {} defined twice in switch statement",
+                            name
+                        )),
                     )
                     .into());
                 }
-                used_variants.insert(lbl_no);
+                used_variants.insert(lbl_no, label.line_info().clone());
                 let jump_label = Label::new();
                 bytes.add_label(jump_label.clone());
                 jumps.insert(lbl_no, jump_label);
@@ -502,7 +504,7 @@ impl<'a> SwitchConverter<'a> {
         will_return: &mut DivergingInfo,
         default_val: &Option<Label>,
         union: &UnionTypeObject,
-        used_variants: &HashSet<u16>,
+        used_variants: &HashMap<u16, LineInfo>,
     ) -> CompileResult<()> {
         if default_val.is_none() && self.ret_count > 0 {
             if let Option::Some(missing) = incomplete_union(union, used_variants) {
@@ -803,9 +805,12 @@ fn default_exception(stmt: impl Lined) -> CompilerException {
     )
 }
 
-fn incomplete_union<'a>(obj: &'a UnionTypeObject, variants: &HashSet<u16>) -> Option<Vec<&'a str>> {
+fn incomplete_union<'a>(
+    obj: &'a UnionTypeObject,
+    variants: &HashMap<u16, LineInfo>,
+) -> Option<Vec<&'a str>> {
     let result = (0..obj.variant_count())
-        .filter(|x| !variants.contains(x))
+        .filter(|x| !variants.contains_key(x))
         .map(|x| obj.variant_name(x).unwrap())
         .collect_vec();
     if result.is_empty() {
