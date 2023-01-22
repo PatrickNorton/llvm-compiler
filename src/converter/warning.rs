@@ -12,6 +12,8 @@ use super::error::CompilerException;
 use super::error_builder::ErrorBuilder;
 use super::CompileResult;
 
+/// The class representing the different types of warning.
+// TODO: Longer write-up
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WarningType {
     NoType,
@@ -25,6 +27,16 @@ pub enum WarningType {
     Todo,
 }
 
+/// A struct to hold the current warning state.
+///
+/// The warning state consists of two distinct pieces: the set of forbidden
+/// warnings and the error count, the latter of which is shared across all
+/// threads.
+///
+/// The set of warnings is implemented as a stack, where each item in the stack
+/// has a list of all the changes to the what warnings are
+/// allowed/forbidden/etc. That way, nested `$allow` declarations can be
+/// supported.
 #[derive(Debug)]
 pub struct WarningHolder {
     levels: Vec<WarningFrame>,
@@ -45,13 +57,47 @@ enum FrameType {
     Forbid,
 }
 
+/// The different levels a lint can take.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WarningLevel {
+    /// An allowed lint.
+    ///
+    /// A lint that is listed as `Allow` provides no feedback when triggered.
+    /// Lints can be allowed by the `$allow` annotation. Note that the `$allow`
+    /// annotation is itself not allowed inside code governed by a `$forbid`
+    /// annotation.
     Allow,
+
+    /// A warned lint.
+    ///
+    /// Most lints are `Warn` by default. A lint that is `Warn` prints out a
+    /// message when triggered, but does not stop compilation or prevent it from
+    /// succeeding. Lints can be explicitly warned by the `$warn` annotation.
+    /// Note that the `$warn` annotation is itself not allowed inside code
+    /// governed by a `$forbid` annotation.
     Warn,
+
+    /// A denied lint.
+    ///
+    /// A lint that is `Deny` turns it into a hard error, specifically a
+    /// `CompilerException`. This does stop compilation fully. Lints can be
+    /// specifically denied by the `$deny` annotation. In addition, the
+    /// `$forbid` annotation is similar to `$deny`, but prevents it from being
+    /// overridden by an `$allow` or `$warn` nested more deeply in the code.
     Deny,
 }
 
+/// The simplest function to output a warning.
+///
+/// This function takes a message, a warning type, a `CompilerInfo`, and the
+/// line info of the warned value. From there, it determines the correct action,
+/// builds the warning object, and does the correct action.
+///
+/// # See also
+/// [`warn_note`]
+/// [`warn_if`]
+/// [`warn_builder`]
+/// [`warn_counter`]
 pub fn warn(
     message: impl Display,
     warn: WarningType,
@@ -61,6 +107,16 @@ pub fn warn(
     warn_if(message, warn, info.warning_holder(), line_info)
 }
 
+/// Prints a warning with a note.
+///
+/// This is similar in function to [`warn`], but it also displays a note along
+/// with the rest of the warning.
+///
+/// # See also
+/// [`warn`]
+/// [`warn_if`]
+/// [`warn_builder`]
+/// [`warn_counter`]
 pub fn warn_note(
     message: impl Display,
     note: impl Display,
@@ -77,6 +133,19 @@ pub fn warn_note(
     )
 }
 
+/// Displays a warning, but does not require a `CompilerInfo`.
+///
+/// This function does the same thing as [`warn`], but takes slightly different
+/// arguments. It exists for convienence, since the vast majority of the time
+/// that [`warn`] is called, there is only a [`CompilerInfo`] in scope and the
+/// code would have to use `info.warning_holder()` instead, which is a little
+/// unwieldy.
+///
+/// # See also
+/// [`warn`]
+/// [`warn_note`]
+/// [`warn_builder`]
+/// [`warn_counter`]
 pub fn warn_if(
     message: impl Display,
     warn: WarningType,
@@ -90,6 +159,16 @@ pub fn warn_if(
     )
 }
 
+/// Displays a warning from a builder.
+///
+/// This is the function from the `warn*` family that implements the
+/// [`ErrorBuilder`] API.
+///
+/// # See also
+/// [`warn`]
+/// [`warn_note`]
+/// [`warn_if`]
+/// [`warn_counter`]
 pub fn warn_builder(
     builder: ErrorBuilder<'_>,
     warn: WarningType,
@@ -98,6 +177,16 @@ pub fn warn_builder(
     warn_level(builder, warn, holder.warning_level(warn), &holder.counter)
 }
 
+/// Displays a warning only using an [`ErrorCounter`].
+///
+/// This is intended for use in the very few places where lexical error changes
+/// (such as `$allow`) don't make sense, e.g. loading distinct files. Because of
+/// this, this function doesn't take a [`WarningHolder`] as an argument, only an
+/// [`ErrorCounter`], which is accessible from a [`GlobalCompilerInfo`] instance
+/// and therefore is accessible even outside of a single file. Because of these
+/// restrictions, it will always warn on its input, and never throw an error.
+/// Note that this function is quite rarely warranted; one of the other
+/// functions in its family should be used instead.
 pub fn warn_counter(builder: ErrorBuilder<'_>, counter: &ErrorCounter) -> CompileResult<()> {
     warn_level(builder, WarningType::NoType, WarningLevel::Warn, counter)
 }
@@ -134,6 +223,7 @@ fn warn_level(
 }
 
 impl WarningHolder {
+    /// Creates a new [`WarningHolder`].
     pub fn new(counter: Arc<ErrorCounter>) -> Self {
         Self {
             levels: Vec::new(),
@@ -141,6 +231,30 @@ impl WarningHolder {
         }
     }
 
+    /// Gets the warning level of the given [`WarningType`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut holder = WarningHolder::new(Arc::new(ErrorCounter::new()));
+    /// holder.allow(HashSet::from([WarningType::Deprecated]));
+    /// holder.warn(HashSet::from([WarningType::TrivialValue]));
+    /// holder.deny(HashSet::from([WarningType::InfiniteLoop]));
+    /// holder.forbid(HashSet::from([WarningType::IncompleteSwitch]));
+    ///
+    /// assert_eq!(holder.warning_level(WarningType::Deprecated), WarningLevel::Allow);
+    /// assert_eq!(holder.warning_level(WarningType::TrivialValue), WarningLevel::Warn);
+    /// assert_eq!(holder.warning_level(WarningType::InfiniteLoop), WarningLevel::Deny);
+    /// assert_eq!(holder.warning_level(WarningType::IncompleteSwitch), WarningLevel::Deny);
+    ///
+    /// // Further calls override previous ones
+    /// holder.deny(HashSet::from([WarningType::Deprecated]));
+    /// assert_eq!(holder.warning_level(WarningType::Deprecated), WarningLevel::Deny);
+    ///
+    /// // Calling pop_warnings undoes the most recent call
+    /// holder.pop_warnings();
+    /// assert_eq!(holder.warning_level(WarningType::Deprecated), WarningLevel::Allow);
+    /// ```
     pub fn warning_level(&self, warning: WarningType) -> WarningLevel {
         if self.levels.is_empty() {
             return warning.default_level();
@@ -157,11 +271,13 @@ impl WarningHolder {
         warning.default_level()
     }
 
+    /// Pops one level of warning from the warning stack.
     pub fn pop_warnings(&mut self) {
         self.levels.pop();
     }
 
     pub fn allow(&mut self, allowed: HashSet<WarningType>) {
+        debug_assert!(!allowed.iter().any(|&x| self.is_forbidden(x)));
         self.levels.push(WarningFrame {
             level: FrameType::Allow,
             values: allowed,
@@ -169,6 +285,7 @@ impl WarningHolder {
     }
 
     pub fn warn(&mut self, warned: HashSet<WarningType>) {
+        debug_assert!(!warned.iter().any(|&x| self.is_forbidden(x)));
         self.levels.push(WarningFrame {
             level: FrameType::Warn,
             values: warned,
@@ -268,5 +385,60 @@ impl FromStr for WarningType {
             "incompleteSwitch" => Ok(WarningType::IncompleteSwitch),
             _ => Err(()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{WarningLevel, WarningType};
+
+    #[test]
+    fn annotation_name() {
+        assert_eq!(WarningType::NoType.annotation_name(), None);
+        assert_eq!(
+            WarningType::Deprecated.annotation_name(),
+            Some("deprecated")
+        );
+        assert_eq!(WarningType::Unused.annotation_name(), Some("unused"));
+        assert_eq!(WarningType::TrivialValue.annotation_name(), Some("trivial"));
+        assert_eq!(
+            WarningType::Unreachable.annotation_name(),
+            Some("unreachable")
+        );
+        assert_eq!(
+            WarningType::InfiniteLoop.annotation_name(),
+            Some("infinite")
+        );
+        assert_eq!(WarningType::ZeroDivision.annotation_name(), Some("zero"));
+        assert_eq!(
+            WarningType::IncompleteSwitch.annotation_name(),
+            Some("incompleteSwitch")
+        );
+        assert_eq!(WarningType::Todo.annotation_name(), Some("todo"));
+    }
+
+    #[test]
+    fn default_level() {
+        assert_eq!(WarningType::NoType.default_level(), WarningLevel::Warn);
+        assert_eq!(WarningType::Deprecated.default_level(), WarningLevel::Warn);
+        assert_eq!(WarningType::Unused.default_level(), WarningLevel::Warn);
+        assert_eq!(
+            WarningType::TrivialValue.default_level(),
+            WarningLevel::Warn
+        );
+        assert_eq!(WarningType::Unreachable.default_level(), WarningLevel::Warn);
+        assert_eq!(
+            WarningType::InfiniteLoop.default_level(),
+            WarningLevel::Warn
+        );
+        assert_eq!(
+            WarningType::ZeroDivision.default_level(),
+            WarningLevel::Warn
+        );
+        assert_eq!(
+            WarningType::IncompleteSwitch.default_level(),
+            WarningLevel::Allow
+        );
+        assert_eq!(WarningType::Todo.default_level(), WarningLevel::Warn);
     }
 }
