@@ -110,18 +110,17 @@ impl<'a> DecimalRef<'a> {
 
     pub fn precision(&self) -> usize {
         // As described in "Bit Twiddling Hacks" by Sean Anderson,
-        // (http://graphics.stanford.edu/~seander/bithacks.html)
-        // integer log 10 of x is within 1 of (2776511644261678566/2^63) *
-        // (1 + integer log 2 of x). The fraction 2776511644261678566/2^63
-        // approximates log10(2). So we first do a version of log2 and
-        // then scale and check against powers table. This is a little
-        // simpler in present context than the version in Hacker's
-        // Delight sec 11-4.
+        // (http://graphics.stanford.edu/~seander/bithacks.html) integer log 10
+        // of x is within 1 of (2776511644261678566/2^63) * (1 + integer log 2
+        // of x). The fraction 2776511644261678566/2^63 approximates log10(2).
+        // So we first do a version of log2 and then scale and check against
+        // powers table. This is a little simpler in present context than the
+        // version in Hacker's Delight sec 11-4.
         if self.data.is_zero() {
             1
+        } else if let Option::Some(x) = self.data.to_u64() {
+            (x.ilog10() + 1) as usize
         } else {
-            // TODO: When feature(int_log) (#70887) stabilizes, try converting
-            // to a u64 and returning `log10(x) + 1`
             let r = (((self.data.bits() + 1) as u128 * 2776511644261678566u128) >> 63) as usize;
             if self.data < &BigInt::from(10).pow(r) {
                 r
