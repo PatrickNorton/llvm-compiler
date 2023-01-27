@@ -307,7 +307,7 @@ impl TestNode {
                     .map(Option::Some),
                 _ => Ok(None),
             },
-            t => panic!("Expected a keyword token, got {:?}", t),
+            t => panic!("Expected a keyword token, got {t:?}"),
         }
     }
 
@@ -430,7 +430,7 @@ impl TestNode {
                         LiteralNode::parse(tokens).map(TestNode::Literal)
                     }
                 }
-                x => panic!("Unknown brace found: {}", x),
+                x => panic!("Unknown brace found: {x}"),
             },
             _ => panic!(),
         }

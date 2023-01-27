@@ -130,10 +130,7 @@ impl ComprehensionNode {
         let while_cond = TestNode::parse_on_keyword(tokens, Keyword::While, true)?;
         if !tokens.token_equals(close_brace.to_string())? {
             Err(if let TokenType::CloseBrace(c) = *(tokens.token_type()?) {
-                tokens.error(format!(
-                    "Unmatched brace: {} does not match {}",
-                    close_brace, c
-                ))
+                tokens.error(format!("Unmatched brace: {close_brace} does not match {c}"))
             } else {
                 tokens.error_expected("close brace")
             })

@@ -66,7 +66,7 @@ impl ObjectType {
     }
 }
 
-fn equals_info<'a, 'b>(builtins: BuiltinRef<'a>) -> &'b FunctionInfo {
+fn equals_info<'a>(builtins: BuiltinRef<'_>) -> &'a FunctionInfo {
     static EQUALS_INFO: OnceCell<FunctionInfo> = OnceCell::new();
     EQUALS_INFO.get_or_init(|| {
         FunctionInfo::with_args(
@@ -76,12 +76,12 @@ fn equals_info<'a, 'b>(builtins: BuiltinRef<'a>) -> &'b FunctionInfo {
     })
 }
 
-fn str_info<'a, 'b>(builtins: BuiltinRef<'a>) -> &'b FunctionInfo {
+fn str_info<'a>(builtins: BuiltinRef<'_>) -> &'a FunctionInfo {
     static STR_INFO: OnceCell<FunctionInfo> = OnceCell::new();
     STR_INFO.get_or_init(|| FunctionInfo::from_returns(vec![builtins.str_type().clone()]))
 }
 
-fn bool_info<'a, 'b>(builtins: BuiltinRef<'a>) -> &'b FunctionInfo {
+fn bool_info<'a>(builtins: BuiltinRef<'_>) -> &'a FunctionInfo {
     static STR_INFO: OnceCell<FunctionInfo> = OnceCell::new();
     STR_INFO.get_or_init(|| FunctionInfo::from_returns(vec![builtins.bool_type().clone()]))
 }

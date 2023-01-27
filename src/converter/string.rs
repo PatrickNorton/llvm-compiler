@@ -102,7 +102,7 @@ impl<'a> StringConverter<'a> {
     fn check_len(&self, lit_type: &str) -> CompileResult<()> {
         if self.node.get_contents().chars().count() != 1 {
             Err(CompilerException::of(
-                format!("{} literals must have a length of 1", lit_type),
+                format!("{lit_type} literals must have a length of 1"),
                 self.node,
             )
             .into())

@@ -319,10 +319,10 @@ fn ty_not_found_err(
 ) -> CompilerException {
     CompilerException::from_builder(
         ErrorBuilder::new(node)
-            .with_message(format!("Could not find type '{}'", ty_name))
+            .with_message(format!("Could not find type '{ty_name}'"))
             .when_some(
                 levenshtein::closest_name(ty_name, exported_names(path, all_files)),
-                |builder, closest| builder.with_help(format!("Did you mean '{}'?", closest)),
+                |builder, closest| builder.with_help(format!("Did you mean '{closest}'?")),
             ),
     )
 }

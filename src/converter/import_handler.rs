@@ -389,7 +389,7 @@ impl ExportInfo {
         if let Option::Some(export) = self.exports.get(name) {
             Ok(export
                 .clone()
-                .unwrap_or_else(|| panic!("Export of {} has no type", name)))
+                .unwrap_or_else(|| panic!("Export of {name} has no type")))
         } else if let Option::Some(path) = self.from_exports.get(name) {
             previous_files.push((line_info, name));
             global_info.export_info(path).type_of_export(
@@ -427,7 +427,7 @@ impl ExportInfo {
                 ))
                 .when_some(
                     self.closest_exported_name(name, &mut HashSet::new(), global_info),
-                    |builder, closest| builder.with_help(format!("Did you mean '{}'?", closest)),
+                    |builder, closest| builder.with_help(format!("Did you mean '{closest}'?")),
                 ),
         )
     }
@@ -463,7 +463,7 @@ impl ExportInfo {
         for (info, prev_name) in previous_files {
             if info.get_path() == self.path && prev_name == &name {
                 return Err(CompilerException::of(
-                    format!("Circular import of '{}': not defined in any file", name),
+                    format!("Circular import of '{name}': not defined in any file"),
                     info,
                 )
                 .into());

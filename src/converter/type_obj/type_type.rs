@@ -123,7 +123,7 @@ impl TypeTypeObject {
     ) -> CompileResult<Cow<'_, TypeObject>> {
         match &self.value.generic {
             Option::None => Err(CompilerException::of(
-                format!("Cannot get attribute '{}' from type 'type'", name),
+                format!("Cannot get attribute '{name}' from type 'type'"),
                 line_info,
             )
             .into()),

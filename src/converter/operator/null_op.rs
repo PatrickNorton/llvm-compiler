@@ -222,7 +222,7 @@ pub(super) fn unwrap_option(info: &mut CompilerInfo, bytes: &mut BytecodeList, v
     bytes.add(Bytecode::PopTop());
     let error = info.builtins().null_error_const().clone();
     bytes.add(Bytecode::LoadConst(error.into()));
-    let message = format!("Value {} asserted non-null, was null", value);
+    let message = format!("Value {value} asserted non-null, was null");
     bytes.add(Bytecode::LoadConst(message.into()));
     bytes.add(Bytecode::ThrowQuick(1.into()));
     bytes.add_label(jump);

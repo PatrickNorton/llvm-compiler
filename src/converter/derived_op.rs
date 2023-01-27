@@ -184,9 +184,9 @@ impl<'a> DerivedOperatorConverter<'a> {
         let mut first = true;
         for field in ty.get_fields() {
             let field_name = if first {
-                format!("{} = ", field)
+                format!("{field} = ")
             } else {
-                format!(", {} = ", field)
+                format!(", {field} = ")
             };
             first = false;
             bytes.add(Bytecode::LoadConst(field_name.into()));

@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::iter::{zip, FusedIterator};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use itertools::Itertools;
 use once_cell::sync::OnceCell;
@@ -412,14 +412,14 @@ impl UserType {
             if is_const || is_const_class {
                 name.into()
             } else {
-                format!("mut {}", name).into()
+                format!("mut {name}").into()
             }
         } else {
             let values = generics.iter().map(|x| x.name()).format(", ");
             if is_const || is_const_class {
-                format!("{}[{}]", base_name, values).into()
+                format!("{base_name}[{values}]").into()
             } else {
-                format!("mut {}[{}]", base_name, values).into()
+                format!("mut {base_name}[{values}]").into()
             }
         }
     }

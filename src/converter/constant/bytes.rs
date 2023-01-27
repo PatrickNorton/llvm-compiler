@@ -33,7 +33,7 @@ impl BytesConstant {
                 if x < 0x80 {
                     string_escape::escaped(x as char).to_string()
                 } else {
-                    format!(r"\x{:02x}", x)
+                    format!(r"\x{x:02x}")
                 }
             })
             .join("")
@@ -67,7 +67,7 @@ impl Display for BytesConstant {
                 if x < 0x80 {
                     string_escape::escaped(x as char).fmt(fmt)
                 } else {
-                    write!(fmt, r"\x{:02x}", x)
+                    write!(fmt, r"\x{x:02x}")
                 }
             }))
         )

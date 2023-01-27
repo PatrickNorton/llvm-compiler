@@ -48,7 +48,7 @@ impl<'a> ConverterBase for AugAssignConverter<'a> {
                     )
                     .into()),
                     post_dot => Err(CompilerInternalError::of(
-                        format!("Type not filtered by remove_illegal(): {:?}", post_dot),
+                        format!("Type not filtered by remove_illegal(): {post_dot:?}"),
                         name,
                     )
                     .into()),
@@ -56,7 +56,7 @@ impl<'a> ConverterBase for AugAssignConverter<'a> {
             }
             NameNode::Index(_) => self.convert_index(info),
             _ => Err(CompilerInternalError::of(
-                format!("Type not filtered by removeIllegal(): {:?}", name),
+                format!("Type not filtered by removeIllegal(): {name:?}"),
                 name,
             )
             .into()),
@@ -154,7 +154,7 @@ impl<'a> AugAssignConverter<'a> {
             NameNode::Dotted(_) => self.convert_null_coerce_dot(info),
             NameNode::Index(_) => self.convert_null_coerce_index(info),
             name => Err(CompilerInternalError::of(
-                format!("Type not filtered by removeIllegal(): {:?}", name),
+                format!("Type not filtered by removeIllegal(): {name:?}"),
                 name,
             )
             .into()),
@@ -199,10 +199,7 @@ impl<'a> AugAssignConverter<'a> {
             )
             .into()),
             _ => Err(CompilerInternalError::of(
-                format!(
-                    "Post-dot type not filtered by remove_illegal(): {:?}",
-                    post_dot
-                ),
+                format!("Post-dot type not filtered by remove_illegal(): {post_dot:?}"),
                 post_dot,
             )
             .into()),
@@ -386,7 +383,7 @@ fn remove_illegal(name: &NameNode) -> CompileResult<&NameNode> {
 
 fn illegal_error(value: &str, name: impl Lined) -> CompilerException {
     CompilerException::of(
-        format!("Augmented assignment does not work on {}", value),
+        format!("Augmented assignment does not work on {value}"),
         name,
     )
 }

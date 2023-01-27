@@ -62,7 +62,7 @@ impl VariableNode {
         match token_type {
             TokenType::Name(string) => ParseResult::Ok(VariableNode::new(line_info, string)),
             tok => ParseResult::Err(
-                ParserException::of(format!("Expected name, got {:?}", tok), line_info).into(),
+                ParserException::of(format!("Expected name, got {tok:?}"), line_info).into(),
             ),
         }
     }

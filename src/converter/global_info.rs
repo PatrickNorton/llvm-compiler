@@ -343,7 +343,7 @@ fn create_default_fn(
         if !func.as_ref().unwrap().is_empty() {
             let func = Function::new(
                 LineInfo::empty(),
-                FunctionInfo::named(format!("__default__${}", i)),
+                FunctionInfo::named(format!("__default__${i}")),
                 func.clone().unwrap(),
             );
             functions.push(Some(func));

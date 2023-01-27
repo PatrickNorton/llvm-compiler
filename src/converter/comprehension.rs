@@ -186,7 +186,7 @@ impl<'a> ComprehensionConverter<'a> {
                 let name = typed_var.get_variable().get_name();
                 if FORBIDDEN_NAMES.contains(&name) {
                     return Err(CompilerException::of(
-                        format!("Illegal name for variable '{}'", name),
+                        format!("Illegal name for variable '{name}'"),
                         typed_var.get_variable(),
                     )
                     .into());

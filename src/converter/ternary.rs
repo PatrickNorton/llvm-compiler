@@ -77,7 +77,7 @@ impl<'a> ConverterBase for TernaryConverter<'a> {
 impl<'a> TernaryConverter<'a> {
     fn convert_opt(&self, info: &mut CompilerInfo, bool_val: bool) -> CompileBytes {
         warning::warn(
-            format!("Condition of ternary always evaluates to {}", bool_val),
+            format!("Condition of ternary always evaluates to {bool_val}"),
             WarningType::Unreachable,
             info,
             self.node.get_statement(),

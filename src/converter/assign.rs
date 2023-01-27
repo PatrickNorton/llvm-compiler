@@ -586,11 +586,10 @@ fn check_def(info: &CompilerInfo, variable: &VariableNode) -> CompileResult<()> 
     if info.var_is_undefined(name) {
         Err(def_error(info, variable).into())
     } else if info.variable_is_immutable(name) {
-        Err(CompilerException::of(
-            format!("Cannot assign to const variable {}", name),
-            variable,
+        Err(
+            CompilerException::of(format!("Cannot assign to const variable {name}"), variable)
+                .into(),
         )
-        .into())
     } else {
         Ok(())
     }
@@ -601,12 +600,12 @@ fn def_error(info: &CompilerInfo, variable: &VariableNode) -> CompilerException 
     if let Option::Some(closest) = levenshtein::closest_name(name, info.defined_names()) {
         CompilerException::from_builder(
             ErrorBuilder::new(variable)
-                .with_message(format!("Attempted to assign to undefined name {}", name))
-                .with_help(format!("Did you mean {}?", closest)),
+                .with_message(format!("Attempted to assign to undefined name {name}"))
+                .with_help(format!("Did you mean {closest}?")),
         )
     } else {
         CompilerException::of(
-            format!("Attempted to assign to undefined name {}", name),
+            format!("Attempted to assign to undefined name {name}"),
             variable,
         )
     }

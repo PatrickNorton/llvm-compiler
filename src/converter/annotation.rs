@@ -75,7 +75,7 @@ where
         0 => converter.convert_without_annotations(info),
         1 => convert_name(converter, info, &annotations.get_annotations()[0]),
         x => Err(CompilerTodoError::of(
-            format!("Multiple attributes on one statement (got {})", x),
+            format!("Multiple attributes on one statement (got {x})"),
             annotations,
         )
         .into()),
@@ -108,7 +108,7 @@ where
     let node = converter.get_annotatable();
     match name.get_name() {
         x @ ("cfg" | "allow" | "deny" | "forbid") => {
-            Err(CompilerException::of(format!("{} attributes require arguments", x), name).into())
+            Err(CompilerException::of(format!("{x} attributes require arguments"), name).into())
         }
         "hot" | "cold" | "inline" => {
             if !node.is_definition() {
@@ -192,7 +192,7 @@ where
             )
             .into()),
         },
-        x => Err(CompilerException::of(format!("Unknown annotation '{}'", x), name).into()),
+        x => Err(CompilerException::of(format!("Unknown annotation '{x}'"), name).into()),
     }
 }
 
@@ -295,7 +295,7 @@ where
             for feature in &features {
                 if STABLE_FEATURES.contains(feature) {
                     warning::warn(
-                        format!("Use of '$feature' attribute for stable feature {}", feature),
+                        format!("Use of '$feature' attribute for stable feature {feature}"),
                         WarningType::Todo,
                         info,
                         name,
@@ -380,7 +380,7 @@ where
                 .into())
             }
         }
-        x => Err(CompilerException::of(format!("Unknown annotation '{}'", x), name).into()),
+        x => Err(CompilerException::of(format!("Unknown annotation '{x}'"), name).into()),
     }
 }
 
@@ -436,7 +436,7 @@ fn change_warnings(
     for param in annotation.get_parameters() {
         if !param.get_variable().is_empty() || !param.get_vararg().is_empty() {
             return Err(CompilerException::of(
-                format!("Illegal format for {} annotation", name),
+                format!("Illegal format for {name} annotation"),
                 annotation,
             )
             .into());
@@ -445,7 +445,7 @@ fn change_warnings(
             TestNode::Name(NameNode::Variable(var)) => var.get_name(),
             _ => {
                 return Err(CompilerException::of(
-                    format!("Illegal format for {} annotation", name),
+                    format!("Illegal format for {name} annotation"),
                     annotation,
                 )
                 .into())
@@ -455,8 +455,7 @@ fn change_warnings(
             if annotation.get_parameters().len() > 1 {
                 return Err(CompilerException::of(
                     format!(
-                        "'all' used in conjunction with other parameters in '{}' statement",
-                        name
+                        "'all' used in conjunction with other parameters in '{name}' statement"
                     ),
                     annotation,
                 )
@@ -468,7 +467,7 @@ fn change_warnings(
             add_warning(warning, &mut allowed_types, annotation, warning_holder)?
         } else {
             return Err(CompilerException::of(
-                format!("Unknown warning type {}", arg_name),
+                format!("Unknown warning type {arg_name}"),
                 annotation,
             )
             .into());
@@ -517,10 +516,7 @@ fn warn_all(
         "forbid" => warning_holder.forbid_all(),
         _ => {
             return Err(CompilerInternalError::of(
-                format!(
-                    "Expected 'allow', 'deny', or 'forbid' for name, got {}",
-                    name
-                ),
+                format!("Expected 'allow', 'deny', or 'forbid' for name, got {name}"),
                 annotation,
             )
             .into())
@@ -570,10 +566,7 @@ fn warn_some(
         "forbid" => warning_holder.forbid(allowed_types),
         _ => {
             return Err(CompilerInternalError::of(
-                format!(
-                    "Expected 'allow', 'deny', or 'forbid' for name, got {}",
-                    name
-                ),
+                format!("Expected 'allow', 'deny', or 'forbid' for name, got {name}"),
                 annotation,
             )
             .into())

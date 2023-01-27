@@ -52,7 +52,7 @@ pub fn value_of(info: &mut CompilerInfo, value: &TestNode) -> CompileResult<bool
             "all" => convert_all(info, func),
             "any" => convert_any(info, func),
             name => Err(CompilerException::of(
-                format!("Unknown cfg function predicate {}", name),
+                format!("Unknown cfg function predicate {name}"),
                 func,
             )
             .into()),

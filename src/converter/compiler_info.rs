@@ -334,10 +334,7 @@ impl<'a> CompilerInfo<'a> {
 
     pub fn check_definition(&self, name: &str, lined: impl Lined) -> CompileResult<()> {
         if FORBIDDEN_NAMES.contains(&name) {
-            Err(
-                CompilerException::of(format!("Illegal name for variable '{}'", name), lined)
-                    .into(),
-            )
+            Err(CompilerException::of(format!("Illegal name for variable '{name}'"), lined).into())
         } else if let Option::Some(info) = self.var_holder.var_def_in_current_frame(name) {
             Err(CompilerException::double_def(name, info.declaration_info(), lined).into())
         } else {

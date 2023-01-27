@@ -58,7 +58,7 @@ impl<'a> LoopConverter for WhileConverter<'a> {
                 "no more than"
             };
             warning::warn(
-                format!("Loop executes {} once", msg),
+                format!("Loop executes {msg} once"),
                 WarningType::Unreachable,
                 info,
                 self.node,
@@ -137,10 +137,9 @@ impl<'a> WhileConverter<'a> {
                 warning::warn_builder(
                     ErrorBuilder::new(self.node.get_cond())
                         .with_message(format!(
-                            "While loop condition always evaluates to {}",
-                            constant
+                            "While loop condition always evaluates to {constant}"
                         ))
-                        .with_help(format!("Replace conditional with 'while {}'", constant)),
+                        .with_help(format!("Replace conditional with 'while {constant}'")),
                     WarningType::TrivialValue,
                     info.warning_holder(),
                 )?;

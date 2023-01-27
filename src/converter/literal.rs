@@ -492,7 +492,7 @@ impl LiteralType {
 }
 
 fn literal_err(info: impl Lined, brace: char) -> CompilerInternalError {
-    CompilerInternalError::of(format!("Unknown brace type {}", brace), info)
+    CompilerInternalError::of(format!("Unknown brace type {brace}"), info)
 }
 
 fn convert_expected(given: TypeObject, expected: TypeObject) -> TypeObject {
@@ -521,7 +521,7 @@ fn dict_splat_exception(info: impl Lined) -> CompilerException {
 }
 
 fn unknown_splat_error(info: impl Lined, splat: &str) -> CompilerInternalError {
-    CompilerInternalError::of(format!("Unknown splat type '{}'", splat), info)
+    CompilerInternalError::of(format!("Unknown splat type '{splat}'"), info)
 }
 
 test_convertible_expected!(LiteralNode, LiteralConverter);

@@ -548,10 +548,9 @@ mod tests {
         let (methods, ops) = ty.get_contract();
         assert!(
             methods.is_empty(),
-            "methods should be empty, got: {:?}",
-            methods
+            "methods should be empty, got: {methods:?}",
         );
-        assert!(ops.is_empty(), "ops should be empty, got: {:?}", ops);
+        assert!(ops.is_empty(), "ops should be empty, got: {ops:?}");
     }
 
     #[test]
@@ -570,10 +569,9 @@ mod tests {
         let (methods, ops) = ty.get_contract();
         assert!(
             methods.is_empty(),
-            "methods should be empty, got: {:?}",
-            methods
+            "methods should be empty, got: {methods:?}",
         );
-        assert!(ops.is_empty(), "ops should be empty, got: {:?}", ops);
+        assert!(ops.is_empty(), "ops should be empty, got: {ops:?}");
     }
 
     #[test]

@@ -176,11 +176,9 @@ trait ClassConverterBase<'a>: ConverterBase {
             ClassStatementNode::Method(m) => converter.methods.parse(info, m, defaults),
             ClassStatementNode::Operator(o) => converter.ops.parse(info, o, defaults),
             ClassStatementNode::Property(p) => converter.props.parse(info, p),
-            _ => Err(CompilerInternalError::of(
-                format!("Unknown class statement {:?}", stmt),
-                stmt,
-            )
-            .into()),
+            _ => Err(
+                CompilerInternalError::of(format!("Unknown class statement {stmt:?}"), stmt).into(),
+            ),
         }
     }
 
@@ -222,7 +220,7 @@ trait ClassConverterBase<'a>: ConverterBase {
         info.set_class(cls);
         if FORBIDDEN_NAMES.contains(&name) {
             Err(CompilerException::of(
-                format!("Illegal name for {} '{}'", def_type, name),
+                format!("Illegal name for {def_type} '{name}'"),
                 node.get_name(),
             )
             .into())
@@ -249,7 +247,7 @@ trait ClassConverterBase<'a>: ConverterBase {
         let class_index = info.add_class(cls);
         if FORBIDDEN_NAMES.contains(&name) {
             Err(CompilerException::of(
-                format!("Illegal name for {} '{}'", def_type, name),
+                format!("Illegal name for {def_type} '{name}'"),
                 node.get_name(),
             )
             .into())

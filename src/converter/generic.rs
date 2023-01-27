@@ -252,13 +252,11 @@ impl Display for GenerifyErrorType {
         match self {
             GenerifyErrorType::UnequalLength(len1, len2) => write!(
                 f,
-                "Type parameter list expected {} types, but got {}",
-                len1, len2
+                "Type parameter list expected {len1} types, but got {len2}",
             ),
             GenerifyErrorType::TooFewArgs(len1, len2) => write!(
                 f,
-                "Type parameter expected no fewer than {} types, but got {}",
-                len1, len2
+                "Type parameter expected no fewer than {len1} types, but got {len2}",
             ),
             GenerifyErrorType::MismatchedList(bound, value) => write!(
                 f,

@@ -48,7 +48,7 @@ mod tests {
     #[test]
     fn syscall_underscore() {
         for &(syscall, index) in SYSCALLS {
-            let underscore = format!("{}_", syscall);
+            let underscore = format!("{syscall}_");
             assert_eq!(get_syscall(&underscore), index);
         }
     }

@@ -142,33 +142,33 @@ fn print_disassembly<W: Write>(
             .expect("All classes should be set before writing to bytecode");
         let cls_name = cls.get_type().name();
         for (name, method) in cls.get_method_defs() {
-            writeln!(stream, "{}.{}:", cls_name, name)?;
+            writeln!(stream, "{cls_name}.{name}:")?;
             method
                 .get_bytes()
                 .disassemble_to(&functions, constants, builtins, stream)?;
             writeln!(stream)?;
         }
         for (name, method) in cls.get_static_methods() {
-            writeln!(stream, "{}.{}:", cls_name, name)?;
+            writeln!(stream, "{cls_name}.{name}:")?;
             method
                 .get_bytes()
                 .disassemble_to(&functions, constants, builtins, stream)?;
             writeln!(stream)?;
         }
         for (op, method) in cls.get_operator_defs() {
-            writeln!(stream, "{}.{}:", cls_name, op)?;
+            writeln!(stream, "{cls_name}.{op}:")?;
             method
                 .get_bytes()
                 .disassemble_to(&functions, constants, builtins, stream)?;
             writeln!(stream)?;
         }
         for (name, (getter, setter)) in cls.get_properties() {
-            writeln!(stream, "{}.{}.get:", cls_name, name)?;
+            writeln!(stream, "{cls_name}.{name}.get:")?;
             getter
                 .get_bytes()
                 .disassemble_to(&functions, constants, builtins, stream)?;
             writeln!(stream)?;
-            writeln!(stream, "{}.{}.set:", cls_name, name)?;
+            writeln!(stream, "{cls_name}.{name}.set:")?;
             setter
                 .get_bytes()
                 .disassemble_to(&functions, constants, builtins, stream)?;
@@ -176,7 +176,7 @@ fn print_disassembly<W: Write>(
         }
     }
     for (i, table) in info.get_tables().iter().enumerate() {
-        writeln!(stream, "Table {}:", i)?;
+        writeln!(stream, "Table {i}:")?;
         table.disassemble_to(stream)?;
         writeln!(stream)?;
     }

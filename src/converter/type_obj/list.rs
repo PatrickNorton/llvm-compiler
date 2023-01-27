@@ -185,8 +185,8 @@ mod tests {
     fn list_typedef() {
         for (i, (ty, _)) in list_name_types().into_iter().enumerate() {
             assert_eq!(
-                ty.typedef_as(format!("test_{}", i)).name(),
-                format!("test_{}", i)
+                ty.typedef_as(format!("test_{i}")).name(),
+                format!("test_{i}")
             )
         }
     }

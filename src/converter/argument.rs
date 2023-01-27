@@ -353,7 +353,7 @@ impl ArgumentInfo {
                 if self.index_of(keyword).is_none() {
                     let keyword_arg = find_name(keyword, &new_args)?;
                     return Err(CompilerException::of(
-                        format!("Keyword argument {} is unexpected", keyword),
+                        format!("Keyword argument {keyword} is unexpected"),
                         keyword_arg,
                     )
                     .into());
@@ -399,8 +399,9 @@ impl ArgumentInfo {
                     };
                     return Err(CompilerException::of(
                         format!(
-                            "Too many parameters passed: Expected {} {} unnamed parameters, got {}",
-                            count_str, unused, non_keyword_count
+                            "Too many parameters passed: \
+                             Expected {count_str} {unused} unnamed parameters, \
+                             got {non_keyword_count}",
                         ),
                         &args[0],
                     )
@@ -584,7 +585,7 @@ impl ArgumentInfo {
             )
             .into(),
             [value] => CompilerException::of(
-                format!("Missing value for positional argument {}", value),
+                format!("Missing value for positional argument {value}"),
                 arg_line_info,
             )
             .into(),
@@ -742,7 +743,7 @@ where
         .find(|x| x.name == name)
         .map(|x| &**x)
         .ok_or_else(|| {
-            CompilerInternalError::of(format!("Unknown name {}", name), LineInfo::empty()).into()
+            CompilerInternalError::of(format!("Unknown name {name}"), LineInfo::empty()).into()
         })
 }
 

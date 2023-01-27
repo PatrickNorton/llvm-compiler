@@ -443,8 +443,7 @@ impl<'a> SwitchConverter<'a> {
                     let name = union.variant_name(lbl_no).unwrap();
                     return Err(CompilerException::from_builder(
                         ErrorBuilder::double_def(name, used_info, stmt).with_message(format!(
-                            "Variant {} defined twice in switch statement",
-                            name
+                            "Variant {name} defined twice in switch statement",
                         )),
                     )
                     .into());
@@ -640,7 +639,7 @@ impl<'a> SwitchConverter<'a> {
         let constant = converter.constant_return(info)?;
         if let Option::Some(str_value) = constant.and_then(|x| x.str_value()) {
             warning::warn(
-                format!("Switch conditional always evaluates to {}", str_value),
+                format!("Switch conditional always evaluates to {str_value}"),
                 WarningType::TrivialValue,
                 info,
                 self.node.get_switched(),
@@ -730,10 +729,10 @@ fn invalid_variant_err(
 ) -> CompilerException {
     CompilerException::from_builder(
         ErrorBuilder::new(label)
-            .with_message(format!("Invalid name for union variant: {}", name))
+            .with_message(format!("Invalid name for union variant: {name}"))
             .when_some(
                 levenshtein::closest_name(name, switched_type.variant_names()),
-                |builder, closest| builder.with_help(format!("Did you mean '{}'?", closest)),
+                |builder, closest| builder.with_help(format!("Did you mean '{closest}'?")),
             ),
     )
 }

@@ -113,8 +113,8 @@ impl Error for ParserInternalError {}
 impl Display for ParserError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ParserError::Normal(n) => write!(f, "{}", n),
-            ParserError::Internal(i) => write!(f, "{}", i),
+            ParserError::Normal(n) => write!(f, "{n}"),
+            ParserError::Internal(i) => write!(f, "{i}"),
         }
     }
 }

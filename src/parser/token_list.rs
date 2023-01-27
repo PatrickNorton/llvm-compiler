@@ -496,7 +496,7 @@ impl TokenList {
             Err(e) => return e,
         };
         ParserError::Normal(ParserException::of(
-            format!("Expected {}, got {:?}", expected, first),
+            format!("Expected {expected}, got {first:?}"),
             first,
         ))
     }
@@ -975,7 +975,7 @@ impl TokenList {
             '(' => ')',
             '[' => ']',
             '{' => '}',
-            _ => panic!("Unknown brace {}", brace),
+            _ => panic!("Unknown brace {brace}"),
         }
     }
 

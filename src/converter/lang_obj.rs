@@ -45,7 +45,7 @@ impl LangObject {
     pub fn as_type(&self) -> &TypeObject {
         match self {
             LangObject::Type(x) => x,
-            x => panic!("Expected a type here, got {:?}", x),
+            x => panic!("Expected a type here, got {x:?}"),
         }
     }
 }

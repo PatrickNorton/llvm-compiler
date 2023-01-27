@@ -186,7 +186,7 @@ fn find_path(
             return Ok((get_path(builtin, name, info)?, true));
         }
     }
-    Err(CompilerException::of(format!("Cannot find module {}", name), info).into())
+    Err(CompilerException::of(format!("Cannot find module {name}"), info).into())
 }
 
 fn local_module_path(
@@ -204,7 +204,7 @@ fn local_module_path(
     if let Option::Some(path) = result.into_iter().next() {
         get_path(path, name, line_info)
     } else {
-        Err(CompilerException::of(format!("Cannot find module {}", name), line_info).into())
+        Err(CompilerException::of(format!("Cannot find module {name}"), line_info).into())
     }
 }
 
@@ -245,7 +245,7 @@ fn get_path(mut end_file: PathBuf, name: &str, line_info: &dyn Lined) -> Compile
         end_file.push(EXPORTS_FILENAME);
         if !end_file.exists() {
             Err(CompilerException::with_note(
-                format!("No exports file for module {}", name),
+                format!("No exports file for module {name}"),
                 "To use a directory as a module, it must contain a file \
                  named '__exports__.newlang'",
                 line_info,

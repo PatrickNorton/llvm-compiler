@@ -296,11 +296,11 @@ fn add_to_ops<'a>(
     Ok(())
 }
 
-fn check_ops<'a>(
+fn check_ops(
     node: impl Lined,
     op: OpSpTypeNode,
     fn_info: &FunctionInfo,
-    ops: &OpMap<'a>,
+    ops: &OpMap<'_>,
 ) -> CompileResult<()> {
     if let Option::Some(info) = ops.get(&op) {
         Err(CompilerException::double_def_op(op, node, &info.0).into())
@@ -319,7 +319,7 @@ fn derived_args(op: OpSpTypeNode, line_info: impl Lined) -> CompileResult<Argume
             Err(CompilerTodoError::of("compare operator args", line_info).into())
         }
         _ => Err(CompilerInternalError::of(
-            format!("Unexpected derived operator: {}", op),
+            format!("Unexpected derived operator: {op}"),
             line_info,
         )
         .into()),
@@ -335,7 +335,7 @@ fn derived_rets(op: OpSpTypeNode, line_info: impl Lined, builtins: BuiltinRef<'_
             Err(CompilerTodoError::of("compare operator return", line_info).into())
         }
         _ => Err(CompilerInternalError::of(
-            format!("Unexpected derived operator: {}", op),
+            format!("Unexpected derived operator: {op}"),
             line_info,
         )
         .into()),

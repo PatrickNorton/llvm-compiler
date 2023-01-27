@@ -98,7 +98,7 @@ mod tests {
     fn variable_name(node: &TestNode) -> &str {
         match node {
             TestNode::Name(NameNode::Variable(v)) => v.get_name(),
-            x => panic!("Expected variable, got {:?}", x),
+            x => panic!("Expected variable, got {x:?}"),
         }
     }
 

@@ -278,7 +278,7 @@ impl<'a> FormattedStringConverter<'a> {
     fn exp_constant_inner(&self, dec_val: DecimalRef) -> String {
         let shift = dec_val.precision() - dec_val.scale() as usize - 1;
         let result = dec_val.move_point_left(shift);
-        format!("{:.6}e{:+03}", result, shift)
+        format!("{result:.6}e{shift:+03}")
     }
 
     fn upper_exp_constant(

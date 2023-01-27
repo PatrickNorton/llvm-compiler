@@ -138,7 +138,7 @@ impl<'a> YieldConverter<'a> {
                 .when_some(name, |builder, name| {
                     builder.with_help_example(
                         "Try adding 'generator' before the function definition",
-                        format!("'generator func {}(...)'", name),
+                        format!("'generator func {name}(...)'"),
                     )
                 }),
         )

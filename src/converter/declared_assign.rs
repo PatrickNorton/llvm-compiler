@@ -90,7 +90,7 @@ impl<'a> DeclaredAssignConverter<'a> {
             let assigned_name = assigned.get_variable().get_name();
             if FORBIDDEN_NAMES.contains(&assigned_name) {
                 return Err(CompilerException::of(
-                    format!("Illegal name {}", assigned_name),
+                    format!("Illegal name {assigned_name}"),
                     self.node,
                 )
                 .into());
@@ -356,7 +356,7 @@ impl<'a> DeclaredAssignConverter<'a> {
 
     fn check_name(&self, name: &str) -> CompileResult<()> {
         if FORBIDDEN_NAMES.contains(&name) {
-            Err(CompilerException::of(format!("Illegal name {}", name), self.node).into())
+            Err(CompilerException::of(format!("Illegal name {name}"), self.node).into())
         } else {
             Ok(())
         }

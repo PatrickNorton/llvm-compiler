@@ -107,7 +107,7 @@ impl<'a> ErrorBuilder<'a> {
     pub fn double_def(name: impl Display, info_1: &'a impl Lined, info_2: &'a impl Lined) -> Self {
         Self {
             line_info: ErrorLineInfo::DoubleDef(info_1.line_info(), info_2.line_info()),
-            message: Some(Box::new(format!("Name '{}' defined twice", name))),
+            message: Some(Box::new(format!("Name '{name}' defined twice"))),
             notes: Vec::new(),
             helps: Vec::new(),
             value_def: None,
@@ -135,14 +135,14 @@ impl<'a> ErrorBuilder<'a> {
     pub fn get_message(&self, ty: ErrorType) -> String {
         let mut msg = format!("{}: {}", ty.message(), self.true_message());
         for note in &self.notes {
-            write!(msg, "\nNote: {}", note).unwrap();
+            write!(msg, "\nNote: {note}").unwrap();
         }
         for (help, suggestion) in &self.helps {
-            write!(msg, "\nHelp: {}", help).unwrap();
+            write!(msg, "\nHelp: {help}").unwrap();
             if let Option::Some(suggestion) = suggestion {
                 // NOTE: I'm not a fan of this format for help suggestions, is
                 // there a better way?
-                write!(msg, "\n```\n{}\n```", suggestion).unwrap();
+                write!(msg, "\n```\n{suggestion}\n```").unwrap();
             }
         }
         match &self.line_info {

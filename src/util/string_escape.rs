@@ -70,9 +70,9 @@ impl Display for CharEscape {
                             "ASCII characters should already be filtered out (got {:#x})",
                             x
                         ),
-                        x @ 0x80..=0xFF => write!(f, r"\x{:02X}", x),
-                        x @ 0x100..=0xFFFF => write!(f, r"\u{:04X}", x),
-                        x => write!(f, r"\U{:08X}", x),
+                        x @ 0x80..=0xFF => write!(f, r"\x{x:02X}"),
+                        x @ 0x100..=0xFFFF => write!(f, r"\u{x:04X}"),
+                        x => write!(f, r"\U{x:08X}"),
                     }
                 }
             }

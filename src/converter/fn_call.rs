@@ -543,7 +543,7 @@ impl<'a> FunctionCallConverter<'a> {
             }
         } else {
             Err(CompilerInternalError::of(
-                format!("Invalid builtin function name {}", str_name),
+                format!("Invalid builtin function name {str_name}"),
                 self.node,
             )
             .into())
@@ -561,7 +561,7 @@ impl<'a> FunctionCallConverter<'a> {
         let fn_index = info.fn_index(str_name).unwrap();
         if fn_info.is_deprecated() {
             warning::warn(
-                format!("Function '{}' is deprecated", str_name),
+                format!("Function '{str_name}' is deprecated"),
                 WarningType::Deprecated,
                 info,
                 self.node,
@@ -576,14 +576,14 @@ impl<'a> FunctionCallConverter<'a> {
             let message = fn_info.get_must_use_message();
             if message.is_empty() {
                 warning::warn(
-                    format!("Unused return {} of '{}' that must be used", val, str_name),
+                    format!("Unused return {val} of '{str_name}' that must be used"),
                     WarningType::Unused,
                     info,
                     self.node,
                 )?;
             } else {
                 warning::warn_note(
-                    format!("Unused return {} of '{}' that must be used", val, str_name),
+                    format!("Unused return {val} of '{str_name}' that must be used"),
                     message,
                     WarningType::Unused,
                     info,
@@ -673,14 +673,10 @@ fn arg_error<'a>(
     let expected_str = expected.map(|x| x.get_type().name()).format(", ");
     CompilerException::with_note(
         format!(
-            "Cannot call object of type '{}': arguments given \
-             do not match the arguments of the function",
-            name
+            "Cannot call object of type '{name}': arguments given \
+             do not match the arguments of the function"
         ),
-        format!(
-            "Arguments received: {}\nArguments expected: {}",
-            args_str, expected_str
-        ),
+        format!("Arguments received: {args_str}\nArguments expected: {expected_str}"),
         node,
     )
 }

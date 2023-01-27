@@ -182,7 +182,7 @@ mod tests {
     #[test]
     fn range_display_zero() {
         for (range, text) in &*RANGE_STRS {
-            assert_eq!(format!("{}", range), *text);
+            assert_eq!(format!("{range}"), *text);
         }
     }
 

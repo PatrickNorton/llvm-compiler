@@ -42,7 +42,7 @@ pub fn isize_to_bytes(val: isize) -> [u8; U32_BYTES] {
     i32::try_from(val).unwrap().to_be_bytes()
 }
 
-pub fn reborrow_option<'a, 'b, T>(opt: &'a mut Option<&'b mut T>) -> Option<&'a mut T> {
+pub fn reborrow_option<'a, T>(opt: &'a mut Option<&'_ mut T>) -> Option<&'a mut T> {
     match opt {
         Some(a) => Some(*a),
         None => None,

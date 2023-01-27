@@ -250,7 +250,7 @@ impl FileTypes {
                 };
                 if self.exports.contains_key(as_name) {
                     return Err(CompilerException::of(
-                        format!("Name {} already exported", as_name),
+                        format!("Name {as_name} already exported"),
                         node,
                     )
                     .into());

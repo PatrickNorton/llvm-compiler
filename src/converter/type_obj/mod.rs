@@ -574,7 +574,6 @@ impl TypeObject {
         name: &str,
         access: AccessLevel,
     ) -> CompilerException {
-        // FIXME: Remove unwrap() and return error instead
         if access != AccessLevel::Private
             && self.attr_type_access(name, AccessLevel::Private).is_some()
         {
@@ -608,7 +607,7 @@ impl TypeObject {
                         self.name()
                     ))
                     .when_some(closest, |builder, closest| {
-                        builder.with_help(format!("Did you mean '{}'?", closest))
+                        builder.with_help(format!("Did you mean '{closest}'?"))
                     }),
             )
         }
@@ -691,7 +690,7 @@ impl TypeObject {
                         self.name()
                     ))
                     .when_some(closest, |builder, closest| {
-                        builder.with_help(format!("Did you mean '{}'?", closest))
+                        builder.with_help(format!("Did you mean '{closest}'?"))
                     }),
             )
         }

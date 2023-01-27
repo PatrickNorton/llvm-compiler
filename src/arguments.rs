@@ -283,7 +283,7 @@ impl CLArgs {
                     }
                 }
                 "-V" | "--version" => {
-                    println!("Version: {}", CURRENT_VERSION)
+                    println!("Version: {CURRENT_VERSION}")
                 }
                 "--print-bytecode" => {
                     print_bytecode = true;
@@ -313,7 +313,7 @@ impl CLArgs {
                         let level = rest.parse().map_err(CLArgError::InvalidOptLevel)?;
                         check_opt_level(&opt_level)?;
                         if level > MAX_OPT {
-                            eprintln!("Warning: -O{} is equivalent to -O{}", level, MAX_OPT);
+                            eprintln!("Warning: -O{level} is equivalent to -O{MAX_OPT}");
                             opt_level = Some(MAX_OPT);
                         } else {
                             opt_level = Some(level);
@@ -430,15 +430,15 @@ impl Display for CLArgError {
             CLArgError::MultipleDebug => f.write_str("Debug defined multiple times"),
             CLArgError::MultipleBytecode => f.write_str("Redefinition of bytecode path"),
             CLArgError::MultipleStdlib => f.write_str("Redefinition of stdlib path"),
-            CLArgError::UnknownOptimization(x) => write!(f, "Unknown optimization option {}", x),
+            CLArgError::UnknownOptimization(x) => write!(f, "Unknown optimization option {x}"),
             CLArgError::OptimizationRedef(o) => {
-                write!(f, "Redefinition of optimization option {}", o)
+                write!(f, "Redefinition of optimization option {o}")
             }
             CLArgError::OptLevelRedef => f.write_str("Optimization level defined multiple times"),
             CLArgError::MissingValue => f.write_str("Argument expected value but didn't get one"),
-            CLArgError::InvalidOptLevel(e) => write!(f, "Invalid optimization level: {}", e),
-            CLArgError::RedefinedCfg(c) => write!(f, "Redefined 'cfg' option {}", c),
-            CLArgError::Illegal(arg) => write!(f, "Illegal argument {}", arg),
+            CLArgError::InvalidOptLevel(e) => write!(f, "Invalid optimization level: {e}"),
+            CLArgError::RedefinedCfg(c) => write!(f, "Redefined 'cfg' option {c}"),
+            CLArgError::Illegal(arg) => write!(f, "Illegal argument {arg}"),
         }
     }
 }

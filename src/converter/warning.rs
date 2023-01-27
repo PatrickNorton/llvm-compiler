@@ -207,10 +207,9 @@ fn warn_level(
         WarningLevel::Deny => {
             counter.add_error();
             if let Option::Some(warn_name) = warn.annotation_name() {
-                Err(CompilerException::from_builder(builder.with_note(format!(
-                    "Error because of $deny({}) or $deny(all)",
-                    warn_name
-                )))
+                Err(CompilerException::from_builder(
+                    builder.with_note(format!("Error because of $deny({warn_name}) or $deny(all)")),
+                )
                 .into())
             } else {
                 Err(CompilerException::from_builder(

@@ -44,7 +44,7 @@ impl<'a> LoopConverter for ForConverter<'a> {
         if iter_len > var_len {
             Err(CompilerException::with_note(
                 "For-loops may not have more iterables than variables",
-                format!("Got {} iterables, but {} variables", iter_len, var_len),
+                format!("Got {iter_len} iterables, but {var_len} variables"),
                 self.node,
             )
             .into())
@@ -164,7 +164,7 @@ impl<'a> ForConverter<'a> {
                 let name = var.get_name();
                 if info.variable_is_immutable(name) {
                     return Err(CompilerException::of(
-                        format!("Cannot assign to immutable variable '{}'", name),
+                        format!("Cannot assign to immutable variable '{name}'"),
                         var,
                     )
                     .into());
@@ -293,14 +293,14 @@ fn variable_exception<'a>(
     if let Option::Some(closest) = levenshtein::closest_name(name, names) {
         CompilerException::from_builder(
             ErrorBuilder::new(var)
-                .with_message(format!("Variable {} not defined", name))
-                .with_note(format!("Did you mean '{}'?", closest))
+                .with_message(format!("Variable {name} not defined"))
+                .with_note(format!("Did you mean '{closest}'?"))
                 .with_help("If not, consider adding 'var' before the variable"),
         )
     } else {
         CompilerException::from_builder(
             ErrorBuilder::new(var)
-                .with_message(format!("Variable {} not defined", name))
+                .with_message(format!("Variable {name} not defined"))
                 .with_help("Consider adding 'var' before the variable"),
         )
     }

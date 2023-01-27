@@ -71,7 +71,7 @@ mod tests {
     fn variable_name(node: &TestNode) -> &str {
         match node {
             TestNode::Name(NameNode::Variable(v)) => v.get_name(),
-            x => panic!("Expected variable, got {:?}", x),
+            x => panic!("Expected variable, got {x:?}"),
         }
     }
 
@@ -96,14 +96,14 @@ mod tests {
     fn assert_eol() {
         let mut token_list = Tokenizer::parse_str("assert\n", PathBuf::from("/"), 0).unwrap();
         let assertion = AssertStatementNode::parse(&mut token_list);
-        assert!(assertion.is_err(), "{:?}", assertion);
+        assert!(assertion.is_err(), "{assertion:?}");
     }
 
     #[test]
     fn assert_eof() {
         let mut token_list = Tokenizer::parse_str("assert", PathBuf::from("/"), 0).unwrap();
         let assertion = AssertStatementNode::parse(&mut token_list);
-        assert!(assertion.is_err(), "{:?}", assertion);
+        assert!(assertion.is_err(), "{assertion:?}");
     }
 
     #[test]
@@ -111,20 +111,20 @@ mod tests {
         let mut token_list =
             Tokenizer::parse_str("assert foo as\n", PathBuf::from("/"), 0).unwrap();
         let assertion = AssertStatementNode::parse(&mut token_list);
-        assert!(assertion.is_err(), "{:?}", assertion);
+        assert!(assertion.is_err(), "{assertion:?}");
     }
 
     #[test]
     fn assert_as_eof() {
         let mut token_list = Tokenizer::parse_str("assert foo as", PathBuf::from("/"), 0).unwrap();
         let assertion = AssertStatementNode::parse(&mut token_list);
-        assert!(assertion.is_err(), "{:?}", assertion);
+        assert!(assertion.is_err(), "{assertion:?}");
     }
 
     #[test]
     fn assert_empty_with_as() {
         let mut token_list = Tokenizer::parse_str("assert as foo", PathBuf::from("/"), 0).unwrap();
         let assertion = AssertStatementNode::parse(&mut token_list);
-        assert!(assertion.is_err(), "{:?}", assertion);
+        assert!(assertion.is_err(), "{assertion:?}");
     }
 }

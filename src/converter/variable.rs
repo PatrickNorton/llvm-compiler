@@ -81,10 +81,10 @@ impl<'a> VariableConverter<'a> {
         let name = self.node.get_name();
         CompilerException::from_builder(
             ErrorBuilder::new(self.node)
-                .with_message(format!("Variable '{}' not defined", name))
+                .with_message(format!("Variable '{name}' not defined"))
                 .when_some(
                     levenshtein::closest_name(name, info.defined_names()),
-                    |builder, closest| builder.with_help(format!("Did you mean '{}'?", closest)),
+                    |builder, closest| builder.with_help(format!("Did you mean '{closest}'?")),
                 ),
         )
     }

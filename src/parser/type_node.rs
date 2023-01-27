@@ -350,7 +350,7 @@ impl TypeLikeNode {
                             net_braces += 1;
                         }
                     }
-                    _ => panic!("Unknown brace type {}", ch),
+                    _ => panic!("Unknown brace type {ch}"),
                 },
                 TokenType::CloseBrace(_) => net_braces -= 1,
                 TokenType::Name(_) => {

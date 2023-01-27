@@ -197,10 +197,7 @@ impl<'a> IfConverter<'a> {
     ) -> CompileResult<()> {
         if let Option::Some(bool_val) = value.bool_value() {
             warning::warn(
-                format!(
-                    "Statement in conditional will always evaluate to {}",
-                    bool_val,
-                ),
+                format!("Statement in conditional will always evaluate to {bool_val}"),
                 WarningType::Unreachable,
                 info,
                 node,

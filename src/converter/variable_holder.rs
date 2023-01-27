@@ -303,7 +303,7 @@ impl VariableHolder {
                 return;
             }
         }
-        panic!("Variable {} removed but undefined", name)
+        panic!("Variable {name} removed but undefined")
     }
 
     pub fn add_local_types(
@@ -487,10 +487,10 @@ impl VariableHolder {
         let names = names.chain(builtin_iter);
         CompilerException::from_builder(
             ErrorBuilder::new(node)
-                .with_message(format!("Unknown type '{}'", name))
+                .with_message(format!("Unknown type '{name}'"))
                 .when_some(
                     levenshtein::closest_name(name, names),
-                    |builder, closest| builder.with_help(format!("Did you mean '{}'?", closest)),
+                    |builder, closest| builder.with_help(format!("Did you mean '{closest}'?")),
                 ),
         )
     }

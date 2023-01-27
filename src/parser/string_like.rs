@@ -101,7 +101,7 @@ impl StringLikeNode {
             'u' => Ok(Some(Self::process_unicode_literal(info, chars)?)),
             'U' => Ok(Some(Self::process_big_unicode_literal(info, chars)?)),
             x => Err(ParserError::Normal(ParserException::of(
-                format!("Unknown escape sequence: \\{}", x),
+                format!("Unknown escape sequence: \\{x}"),
                 info,
             ))),
         }
@@ -172,10 +172,7 @@ impl StringLikeNode {
         match char::from_u32(u32_char) {
             Option::Some(x) => Ok(x),
             Option::None => Err(ParserError::Normal(ParserException::of(
-                format!(
-                    "Invalid character for hex literal: \\U{:4x} is not a valid char",
-                    u32_char
-                ),
+                format!("Invalid character for hex literal: \\U{u32_char:4x} is not a valid char"),
                 info,
             ))),
         }
@@ -193,7 +190,7 @@ impl StringLikeNode {
         match c.to_digit(radix) {
             Option::Some(x) => Ok(x),
             Option::None => Err(ParserError::Normal(ParserException::of(
-                format!("Invalid character for {} literal: {}", literal_type, c),
+                format!("Invalid character for {literal_type} literal: {c}"),
                 info,
             ))),
         }
@@ -262,7 +259,7 @@ impl StringPrefix {
             if Self::INVALID_TOGETHER.contains(&prefix) {
                 if has_unique {
                     return Err(ParserException::with_note(
-                        format!("Invalid prefix combination: {}", chars),
+                        format!("Invalid prefix combination: {chars}"),
                         "The characters 'rbcy' may not appear in a string prefix together",
                         LineInfo::empty(),
                     )
@@ -274,7 +271,7 @@ impl StringPrefix {
             if Self::INVALID_2.contains(&prefix) {
                 if has_unique_2 {
                     return Err(ParserException::with_note(
-                        format!("Invalid prefix combination: {}", chars),
+                        format!("Invalid prefix combination: {chars}"),
                         "The characters 'fcy' may not appear in a string prefix together",
                         LineInfo::empty(),
                     )

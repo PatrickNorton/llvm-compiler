@@ -101,7 +101,7 @@ impl TypeLoader {
         } else if info.var_holder().local_parent(value).is_some() {
             Ok(None)
         } else {
-            Err(CompilerException::of(format!("Type '{}' not found", name), line_info).into())
+            Err(CompilerException::of(format!("Type '{name}' not found"), line_info).into())
         }
     }
 

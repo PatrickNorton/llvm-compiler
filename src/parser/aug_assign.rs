@@ -236,14 +236,14 @@ mod tests {
     fn variable_name(node: &TestNode) -> &str {
         match node {
             TestNode::Name(NameNode::Variable(v)) => v.get_name(),
-            x => panic!("Expected variable, got {:?}", x),
+            x => panic!("Expected variable, got {x:?}"),
         }
     }
 
     fn name_name(node: &NameNode) -> &str {
         match node {
             NameNode::Variable(v) => v.get_name(),
-            x => panic!("Expected variable, got {:?}", x),
+            x => panic!("Expected variable, got {x:?}"),
         }
     }
 
@@ -329,6 +329,6 @@ mod tests {
     fn aug_assign_err() {
         let mut token_list = Tokenizer::parse_str("x y +=", PathBuf::from("/"), 0).unwrap();
         let node = AugmentedAssignmentNode::parse(&mut token_list);
-        assert!(node.is_err(), "{:#?}", node);
+        assert!(node.is_err(), "{node:#?}");
     }
 }

@@ -506,7 +506,7 @@ impl<'a> NormalOperatorConverter<'a> {
         bytes.add(Bytecode::PopTop());
         let arith_err = info.builtins().arith_error_const();
         bytes.add(Bytecode::LoadConst(arith_err.clone().into()));
-        let message = format!("Cannot {} by zero", message);
+        let message = format!("Cannot {message} by zero");
         bytes.add(Bytecode::LoadConst(message.into()));
         bytes.add(Bytecode::ThrowQuick(1.into()));
         Ok(bytes)
