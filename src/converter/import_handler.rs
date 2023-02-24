@@ -6,8 +6,10 @@ use std::path::{Path, PathBuf};
 use derive_new::new;
 use either::Either;
 use indexmap::IndexSet;
+use itertools::Itertools;
 
 use crate::arguments::CLArgs;
+use crate::error::CompilerInternalError;
 use crate::parser::import::{ImportExportNode, ImportExportType};
 use crate::parser::line_info::{LineInfo, Lined};
 use crate::util::levenshtein;
@@ -355,6 +357,7 @@ impl ExportInfo {
                     return Ok(res);
                 }
             }
+            println!("{}", self.exports.keys().join(", "));
             return Err(self.export_error(line_info, name, global_info).into());
         }
         let export = self.export_constants.get(name);
@@ -387,9 +390,9 @@ impl ExportInfo {
         // paths of wildcard exports
         self.check_circular(name, previous_files)?;
         if let Option::Some(export) = self.exports.get(name) {
-            Ok(export
-                .clone()
-                .unwrap_or_else(|| panic!("Export of {name} has no type")))
+            export.clone().ok_or_else(|| {
+                CompilerInternalError::of(format!("Export of {name} has no type"), line_info).into()
+            })
         } else if let Option::Some(path) = self.from_exports.get(name) {
             previous_files.push((line_info, name));
             global_info.export_info(path).type_of_export(
