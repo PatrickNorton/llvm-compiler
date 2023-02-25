@@ -15,6 +15,7 @@ use crate::converter::CompileResult;
 use crate::parser::line_info::Lined;
 use crate::parser::operator_sp::OpSpTypeNode;
 
+use super::error::AccessErrorType;
 use super::macros::{arc_partial_eq, type_obj_from};
 use super::TypeObject;
 
@@ -126,11 +127,12 @@ impl TupleType {
         }
     }
 
-    pub fn attr_type(&self, value: &str) -> Option<&TypeObject> {
+    pub fn attr_type(&self, value: &str) -> Result<&TypeObject, AccessErrorType> {
         value
             .parse::<usize>()
             .ok()
             .and_then(|x| self.value.generics.get(x))
+            .ok_or(AccessErrorType::NotFound)
     }
 
     pub fn operator_info(&self, o: OpSpTypeNode, builtins: BuiltinRef<'_>) -> Option<FunctionInfo> {

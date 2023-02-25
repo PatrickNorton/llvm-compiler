@@ -18,6 +18,7 @@ use crate::converter::CompileResult;
 use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::operator_sp::OpSpTypeNode;
 
+use super::error::AccessErrorType;
 use super::supers::{SuperHolder, SuperRef};
 use super::{InterfaceType, StdTypeObject, TypeObject, UnionTypeObject};
 
@@ -143,12 +144,20 @@ pub trait UserTypeLike: UserTypeInner + PartialEq<TypeObject> {
         }
     }
 
-    fn attr_type(&self, value: &str, access: AccessLevel) -> Option<Cow<'_, TypeObject>> {
+    fn attr_type(
+        &self,
+        value: &str,
+        access: AccessLevel,
+    ) -> Result<Cow<'_, TypeObject>, AccessErrorType> {
         self.attr_type_with_generics(value, access)
             .map(|x| self.generify_attr_type(x))
     }
 
-    fn static_attr_type(&self, value: &str, access: AccessLevel) -> Option<Cow<'_, TypeObject>> {
+    fn static_attr_type(
+        &self,
+        value: &str,
+        access: AccessLevel,
+    ) -> Result<Cow<'_, TypeObject>, AccessErrorType> {
         self.static_attr_type_with_generics(value, access)
             .map(|y| self.generify_attr_type(y))
     }
@@ -248,7 +257,11 @@ impl UserType {
         user_match_all!(self: x => x.get_generics())
     }
 
-    pub fn attr_ty_access(&self, attr: &str, access: AccessLevel) -> Option<Cow<'_, TypeObject>> {
+    pub fn attr_ty_access(
+        &self,
+        attr: &str,
+        access: AccessLevel,
+    ) -> Result<Cow<'_, TypeObject>, AccessErrorType> {
         user_match_all!(self: x => x.attr_type(attr, access))
     }
 
@@ -450,6 +463,7 @@ mod private {
     use crate::converter::fn_info::FunctionInfo;
     use crate::converter::global_info::GlobalCompilerInfo;
     use crate::converter::mutable::MutableType;
+    use crate::converter::type_obj::error::{AccessErrorType, AccessTooStrict};
     use crate::converter::type_obj::{InterfaceType, ObjectType, TypeObject};
     use crate::converter::CompileResult;
     use crate::parser::line_info::LineInfo;
@@ -498,12 +512,16 @@ mod private {
             &self,
             value: &str,
             access: AccessLevel,
-        ) -> Option<Cow<'_, TypeObject>> {
+        ) -> Result<Cow<'_, TypeObject>, AccessErrorType> {
             let info = self.get_info();
             // Early return should only be taken during auto-interface check of superclass.
             // Given that, the auto interface will be applied to this type instead
             // of the superclass and thus still work.
-            let attr = info.attributes.get()?.get(value);
+            let attr = info
+                .attributes
+                .get()
+                .ok_or(AccessErrorType::NotFound)?
+                .get(value);
             match attr {
                 Option::None => {
                     let new_access = if access == AccessLevel::Private {
@@ -513,13 +531,13 @@ mod private {
                     };
                     for super_cls in info.supers.iter() {
                         let sup_attr = super_cls.attr_type_with_generics(value, new_access);
-                        if let Option::Some(sup_attr) = sup_attr {
+                        if let Result::Ok(sup_attr) = sup_attr {
                             if attr_has_impl(value, super_cls) {
-                                return Some(sup_attr);
+                                return Ok(sup_attr);
                             }
                         }
                     }
-                    None
+                    Err(AccessErrorType::NotFound) // FIXME: Get correct error
                 }
                 Option::Some(attr) => type_from_attr(self.is_const(), attr.as_ref(), access),
             }
@@ -529,14 +547,15 @@ mod private {
             &self,
             value: &str,
             access: AccessLevel,
-        ) -> Option<Cow<'_, TypeObject>> {
+        ) -> Result<Cow<'_, TypeObject>, AccessErrorType> {
             let info = self.get_info();
             match info.static_attributes.get().unwrap().get(value) {
                 Option::None => info
                     .info
                     .get_param_map()
                     .get(value)
-                    .map(|x| Cow::Owned(x.get_type())),
+                    .map(|x| Cow::Owned(x.get_type()))
+                    .ok_or(AccessErrorType::NotFound),
                 Option::Some(attr) => type_from_attr(self.is_const(), attr.as_ref(), access),
             }
         }
@@ -612,7 +631,7 @@ mod private {
         let (names, ops) = contractor.contract();
         names
             .iter()
-            .all(|attr| cls.attr_type(attr, AccessLevel::Public).is_some())
+            .all(|attr| cls.attr_type(attr, AccessLevel::Public).is_ok())
             && ops.iter().all(|&op| {
                 cls.operator_info(op, AccessLevel::Public, builtins)
                     .is_some()
@@ -673,34 +692,37 @@ mod private {
         is_const: bool,
         attr: &AttributeInfo,
         access: AccessLevel,
-    ) -> Option<Cow<'_, TypeObject>> {
+    ) -> Result<Cow<'_, TypeObject>, AccessErrorType> {
         // TODO: Reduce unnecessary clones (make_mut and make_const)
         if attr.get_mut_type() == MutableType::MutMethod {
             if is_const {
-                None
+                Err(AccessErrorType::NeedsMut)
             } else {
-                Some(Cow::Borrowed(attr.get_type()))
+                Ok(Cow::Borrowed(attr.get_type()))
             }
         } else if is_const {
             if AccessLevel::can_access(attr.get_access_level(), access) {
-                Some(Cow::Owned(attr.get_type().make_const()))
+                Ok(Cow::Owned(attr.get_type().make_const()))
             } else {
-                None
+                Err(AccessErrorType::NeedsMut)
             }
         } else if attr.get_access_level() == AccessLevel::Pubget {
             if AccessLevel::can_access(AccessLevel::Private, access) {
-                Some(Cow::Owned(attr.get_type().make_mut()))
+                Ok(Cow::Owned(attr.get_type().make_mut()))
             } else {
-                Some(Cow::Owned(attr.get_type().make_const()))
+                Ok(Cow::Owned(attr.get_type().make_const()))
             }
         } else if AccessLevel::can_access(attr.get_access_level(), access) {
             if attr.get_mut_type().is_const_type() {
-                Some(Cow::Owned(attr.get_type().make_const()))
+                Ok(Cow::Owned(attr.get_type().make_const()))
             } else {
-                Some(Cow::Owned(attr.get_type().make_mut()))
+                Ok(Cow::Owned(attr.get_type().make_mut()))
             }
         } else {
-            None
+            Err(AccessErrorType::WeakAccess(AccessTooStrict {
+                level_gotten: access,
+                level_expected: attr.get_access_level(),
+            }))
         }
     }
 

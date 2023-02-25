@@ -1,5 +1,6 @@
 mod base;
 mod defined;
+pub mod error;
 mod fn_info;
 mod interface;
 mod list;
@@ -17,6 +18,7 @@ mod user;
 
 pub use self::base::BaseType;
 use self::defined::{get_defined, static_defined};
+use self::error::{AccessError, AccessErrorType, AttrValue};
 pub use self::fn_info::{FunctionInfoType, GenerifiedFnInfoType};
 pub use self::interface::{InterfaceAttrInfo, InterfaceFnInfo, InterfaceType};
 pub use self::list::ListTypeObject;
@@ -45,13 +47,11 @@ use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::name::NameNode;
 use crate::parser::operator_sp::OpSpTypeNode;
 use crate::parser::test_node::TestNode;
-use crate::util::levenshtein;
 
 use super::access_handler::AccessLevel;
 use super::builtins::{BuiltinRef, OBJECT};
 use super::compiler_info::CompilerInfo;
 use super::error::CompilerException;
-use super::error_builder::ErrorBuilder;
 use super::fn_info::FunctionInfo;
 use super::{CompileResult, CompileTypes};
 
@@ -561,63 +561,31 @@ impl TypeObject {
     ) -> CompileResult<Cow<'_, TypeObject>> {
         match self {
             TypeObject::Type(t) => t.try_attr_type(line_info, value, info.access_level(self)),
-            t => t.attr_type(value, info).ok_or_else(|| {
-                self.attr_exception(line_info, value, info.access_level(self))
-                    .into()
+            t => t.attr_type(value, info).map_err(|err| {
+                AccessError::new(
+                    err,
+                    AttrValue::Attribute(value.to_string()),
+                    self.clone(),
+                    line_info.line_info().clone(),
+                )
+                .into_compiler_err()
             }),
         }
     }
 
-    fn attr_exception(
+    pub fn attr_type(
         &self,
-        line_info: impl Lined,
         name: &str,
-        access: AccessLevel,
-    ) -> CompilerException {
-        if access != AccessLevel::Private
-            && self.attr_type_access(name, AccessLevel::Private).is_some()
-        {
-            CompilerException::with_note(
-                format!(
-                    "Cannot get attribute '{}' from type '{}'",
-                    name,
-                    self.name()
-                ),
-                "Too strict of an access level required",
-                line_info,
-            )
-        } else if self.make_mut().attr_type_access(name, access).is_some() {
-            CompilerException::of(
-                format!(
-                    "Attribute '{}' requires a mut variable for '{}'",
-                    name,
-                    self.name()
-                ),
-                line_info,
-            )
-        } else {
-            let closest = self
-                .get_defined()
-                .and_then(|x| levenshtein::closest_name(name, x));
-            CompilerException::from_builder(
-                ErrorBuilder::new(&line_info)
-                    .with_message(format!(
-                        "Attribute '{}' does not exist in type '{}'",
-                        name,
-                        self.name()
-                    ))
-                    .when_some(closest, |builder, closest| {
-                        builder.with_help(format!("Did you mean '{closest}'?"))
-                    }),
-            )
-        }
-    }
-
-    pub fn attr_type(&self, name: &str, info: &mut CompilerInfo) -> Option<Cow<'_, TypeObject>> {
+        info: &mut CompilerInfo,
+    ) -> Result<Cow<'_, TypeObject>, AccessErrorType> {
         self.attr_type_access(name, info.access_level(self))
     }
 
-    pub fn attr_type_access(&self, name: &str, access: AccessLevel) -> Option<Cow<'_, TypeObject>> {
+    pub fn attr_type_access(
+        &self,
+        name: &str,
+        access: AccessLevel,
+    ) -> Result<Cow<'_, TypeObject>, AccessErrorType> {
         match self {
             TypeObject::Interface(i) => i.attr_type(name, access),
             TypeObject::Module(m) => m.attr_type(name).map(Cow::Borrowed),
@@ -627,17 +595,21 @@ impl TypeObject {
             TypeObject::Tuple(t) => t.attr_type(name).map(Cow::Borrowed),
             TypeObject::Type(t) => t.attr_type(name, access),
             TypeObject::Union(u) => u.attr_type(name, access),
-            _ => None,
+            _ => Err(AccessErrorType::NotFound),
         }
     }
 
-    pub fn static_attr_type(&self, name: &str, access: AccessLevel) -> Option<Cow<'_, TypeObject>> {
+    pub fn static_attr_type(
+        &self,
+        name: &str,
+        access: AccessLevel,
+    ) -> Result<Cow<'_, TypeObject>, AccessErrorType> {
         match self {
             TypeObject::Interface(i) => i.static_attr_type(name, access),
             TypeObject::Std(s) => s.static_attr_type(name, access),
             TypeObject::Template(t) => t.static_attr_type(name, access),
             TypeObject::Union(u) => u.static_attr_type(name, access),
-            _ => None,
+            _ => Err(AccessErrorType::NotFound),
         }
     }
 
@@ -647,60 +619,22 @@ impl TypeObject {
         name: &str,
         access: AccessLevel,
     ) -> CompileResult<Cow<'_, TypeObject>> {
-        self.static_attr_type(name, access)
-            .ok_or_else(|| self.static_attr_exception(line_info, name, access).into())
-    }
-
-    fn static_attr_exception(
-        &self,
-        line_info: &dyn Lined,
-        name: &str,
-        access: AccessLevel,
-    ) -> CompilerException {
-        if access != AccessLevel::Private
-            && self.static_attr_type(name, AccessLevel::Private).is_some()
-        {
-            CompilerException::of(
-                format!(
-                    "Cannot get static attribute '{}' from type '{}': \
-                     too strict of an access level required",
-                    name,
-                    self.name()
-                ),
-                line_info,
+        self.static_attr_type(name, access).map_err(|err| {
+            AccessError::new(
+                err,
+                AttrValue::StaticAttr(name.to_string()),
+                self.clone(),
+                line_info.line_info().clone(),
             )
-        } else if self.make_mut().static_attr_type(name, access).is_some() {
-            CompilerException::of(
-                format!(
-                    "Static attribute '{}' requires a mut variable for '{}'",
-                    name,
-                    self.name()
-                ),
-                line_info,
-            )
-        } else {
-            let closest = self
-                .static_defined()
-                .and_then(|x| levenshtein::closest_name(name, x));
-            CompilerException::from_builder(
-                ErrorBuilder::new(line_info)
-                    .with_message(format!(
-                        "Static attribute '{}' does not exist in type '{}'",
-                        name,
-                        self.name()
-                    ))
-                    .when_some(closest, |builder, closest| {
-                        builder.with_help(format!("Did you mean '{closest}'?"))
-                    }),
-            )
-        }
+            .into_compiler_err()
+        })
     }
 
     pub(self) fn attr_type_with_generics(
         &self,
         name: &str,
         access: AccessLevel,
-    ) -> Option<Cow<'_, TypeObject>> {
+    ) -> Result<Cow<'_, TypeObject>, AccessErrorType> {
         match self {
             TypeObject::Interface(i) => i.attr_type_with_generics(name, access),
             TypeObject::Std(s) => s.attr_type_with_generics(name, access),

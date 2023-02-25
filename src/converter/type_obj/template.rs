@@ -15,6 +15,7 @@ use crate::macros::hash_map;
 use crate::parser::operator_sp::OpSpTypeNode;
 use crate::parser::type_node::TypeNode;
 
+use super::error::AccessErrorType;
 use super::macros::{arc_eq_hash, arc_partial_eq, try_from_type_obj, type_obj_from};
 use super::{ListTypeObject, TypeObject};
 
@@ -188,7 +189,11 @@ impl TemplateParam {
             .collect()
     }
 
-    pub fn attr_type(&self, value: &str, access: AccessLevel) -> Option<Cow<'_, TypeObject>> {
+    pub fn attr_type(
+        &self,
+        value: &str,
+        access: AccessLevel,
+    ) -> Result<Cow<'_, TypeObject>, AccessErrorType> {
         self.get_bound().attr_type_access(value, access)
     }
 
@@ -196,7 +201,7 @@ impl TemplateParam {
         &self,
         value: &str,
         access: AccessLevel,
-    ) -> Option<Cow<'_, TypeObject>> {
+    ) -> Result<Cow<'_, TypeObject>, AccessErrorType> {
         self.get_bound().static_attr_type(value, access)
     }
 

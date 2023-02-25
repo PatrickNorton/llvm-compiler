@@ -16,6 +16,7 @@ use crate::converter::type_obj::TemplateParam;
 use crate::parser::line_info::LineInfo;
 use crate::parser::operator_sp::OpSpTypeNode;
 
+use super::error::AccessErrorType;
 use super::macros::{arc_eq_hash, try_from_type_obj, type_obj_from};
 use super::TypeObject;
 
@@ -127,23 +128,21 @@ impl OptionTypeObject {
         }
     }
 
-    pub fn attr_type(&self, value: &str) -> Option<TypeObject> {
+    pub fn attr_type(&self, value: &str) -> Result<TypeObject, AccessErrorType> {
         match value {
-            "map" => Some(
-                self.value
-                    .map_fn
-                    .get_or_init(|| Self::get_map(self.get_option_val().clone()))
-                    .clone()
-                    .into(),
-            ),
-            "flatMap" => Some(
-                self.value
-                    .flat_map_fn
-                    .get_or_init(|| Self::get_flat_map(self.get_option_val().clone()))
-                    .clone()
-                    .into(),
-            ),
-            _ => None,
+            "map" => Ok(self
+                .value
+                .map_fn
+                .get_or_init(|| Self::get_map(self.get_option_val().clone()))
+                .clone()
+                .into()),
+            "flatMap" => Ok(self
+                .value
+                .flat_map_fn
+                .get_or_init(|| Self::get_flat_map(self.get_option_val().clone()))
+                .clone()
+                .into()),
+            _ => Err(AccessErrorType::NotFound),
         }
     }
 

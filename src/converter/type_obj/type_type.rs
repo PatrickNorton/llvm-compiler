@@ -12,6 +12,7 @@ use crate::parser::line_info::Lined;
 use crate::parser::operator_sp::OpSpTypeNode;
 use crate::util::first;
 
+use super::error::AccessErrorType;
 use super::macros::{arc_partial_eq, try_from_type_obj, type_obj_from};
 use super::TypeObject;
 
@@ -108,9 +109,13 @@ impl TypeTypeObject {
         }
     }
 
-    pub fn attr_type(&self, name: &str, access: AccessLevel) -> Option<Cow<'_, TypeObject>> {
+    pub fn attr_type(
+        &self,
+        name: &str,
+        access: AccessLevel,
+    ) -> Result<Cow<'_, TypeObject>, AccessErrorType> {
         match &self.value.generic {
-            Option::None => None,
+            Option::None => Err(AccessErrorType::NotFound),
             Option::Some(generic) => generic.static_attr_type(name, access),
         }
     }

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
+use super::error::AccessErrorType;
 use super::macros::{arc_eq_hash, try_from_type_obj, type_obj_from};
 use super::TypeObject;
 
@@ -32,8 +33,8 @@ impl ModuleType {
         "[anonymous module type]".into()
     }
 
-    pub fn attr_type(&self, name: &str) -> Option<&TypeObject> {
-        self.value.values.get(name)
+    pub fn attr_type(&self, name: &str) -> Result<&TypeObject, AccessErrorType> {
+        self.value.values.get(name).ok_or(AccessErrorType::NotFound)
     }
 
     pub fn get_defined(&self) -> impl Iterator<Item = &'_ str> {
