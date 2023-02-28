@@ -514,7 +514,7 @@ pub(self) fn check_contract(
         }
         if let Option::Some((methods, operators)) = contract_by_ref(sup) {
             for attr in methods {
-                if mut_ty.attr_ty_access(attr, AccessLevel::Public).is_none() {
+                if mut_ty.attr_ty_access(attr, AccessLevel::Public).is_err() {
                     return Err(CompilerException::of(
                         format!(
                             "Missing impl for method '{}' (defined by interface '{}')",
