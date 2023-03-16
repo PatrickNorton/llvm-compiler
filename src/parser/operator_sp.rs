@@ -211,13 +211,14 @@ impl OpSpTypeNode {
             OperatorTypeNode::LessEqual => OpSpTypeNode::LessEqual,
             OperatorTypeNode::LeftBitshift => OpSpTypeNode::LeftBitshift,
             OperatorTypeNode::RightBitshift => OpSpTypeNode::RightBitshift,
-            OperatorTypeNode::BitwiseAnd => OpSpTypeNode::BitwiseOr,
+            OperatorTypeNode::BitwiseAnd => OpSpTypeNode::BitwiseAnd,
+            OperatorTypeNode::BitwiseOr => OpSpTypeNode::BitwiseOr,
             OperatorTypeNode::BitwiseXor => OpSpTypeNode::BitwiseXor,
             OperatorTypeNode::BitwiseNot => OpSpTypeNode::BitwiseNot,
             OperatorTypeNode::Modulo => OpSpTypeNode::Modulo,
             OperatorTypeNode::In => OpSpTypeNode::In,
             OperatorTypeNode::Compare => OpSpTypeNode::Compare,
-            _ => panic!("Unexpected node"),
+            _ => panic!("Unexpected node {}", node.sequence()),
         }
     }
 
