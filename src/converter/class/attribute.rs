@@ -124,7 +124,7 @@ impl<'a> AttributeConverter<'a> {
     }
 
     pub fn get_static_vars(&self) -> &HashMap<String, AttributeInfo> {
-        &self.vars
+        &self.static_vars
     }
 
     pub fn get_colons(&self) -> &HashMap<String, RawMethod<'a>> {
