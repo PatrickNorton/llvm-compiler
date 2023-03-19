@@ -177,8 +177,9 @@ impl FunctionInfo {
     pub fn generify_args(
         &self,
         args: &[Argument],
+        line_info: &LineInfo,
     ) -> CompileResult<(HashMap<u16, TypeObject>, HashSet<u16>)> {
-        self.value.arguments.generify_args(self, args)
+        self.value.arguments.generify_args(self, args, line_info)
     }
 
     pub fn generify(&self, parent: &TypeObject, args: Vec<TypeObject>) -> FunctionInfo {

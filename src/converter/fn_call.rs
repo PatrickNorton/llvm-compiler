@@ -118,7 +118,7 @@ impl<'a> FunctionCallConverter<'a> {
         ret_count: Option<u16>,
     ) -> CompileTypes {
         let args = get_args(info, params)?;
-        let generics = fn_info.generify_args(&args)?.0;
+        let generics = fn_info.generify_args(&args, node.line_info())?.0;
         if generics.is_empty() {
             let returns = fn_info.get_returns();
             return if ret_count.map_or(false, |ret| returns.len() < ret as usize) {
@@ -456,8 +456,9 @@ impl<'a> FunctionCallConverter<'a> {
         args: &[ArgumentNode],
     ) -> CompileResult<(Cow<'t, FunctionInfo>, HashSet<u16>)> {
         let args = get_args(info, args)?;
-        let operator_info = caller_type.try_operator_info(line_info, OpSpTypeNode::Call, info)?;
-        let op_generics = operator_info.generify_args(&args)?;
+        let operator_info =
+            caller_type.try_operator_info(line_info.line_info(), OpSpTypeNode::Call, info)?;
+        let op_generics = operator_info.generify_args(&args, line_info.line_info())?;
         Ok((operator_info, op_generics.1))
     }
 

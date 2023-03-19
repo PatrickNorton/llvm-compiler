@@ -10,6 +10,7 @@ use derive_new::new;
 use itertools::Itertools;
 use once_cell::sync::OnceCell;
 
+use crate::error::ErrorBuilder;
 use crate::parser::line_info::{LineInfo, Lined};
 use crate::parser::test_node::TestNode;
 use crate::parser::typed_arg::{TypedArgumentListNode, TypedArgumentNode};
@@ -303,13 +304,17 @@ impl ArgumentInfo {
     }
 
     pub fn matches(&self, parent: &FunctionInfo, args: &[Argument]) -> bool {
-        self.generify_args(parent, args).is_ok()
+        // Since we only check whether the result is OK or not here, it's fine
+        // if we pass an empty LineInfo.
+        self.generify_args(parent, args, LineInfo::empty_ref())
+            .is_ok()
     }
 
     pub fn generify_args(
         &self,
         parent: &FunctionInfo,
         args: &[Argument],
+        line_info: &LineInfo,
     ) -> CompileResult<(HashMap<u16, TypeObject>, HashSet<u16>)> {
         assert!(ptr::eq(parent.get_args(), self));
         let par = parent.to_callable();
@@ -410,7 +415,7 @@ impl ArgumentInfo {
             }
             Option::Some(defaults_used) if defaults_used > default_count => {
                 if !self.has_vararg() || defaults_used != default_count + 1 {
-                    return Err(self.not_enough_args(&new_args, &keyword_map));
+                    return Err(self.not_enough_args(&new_args, &keyword_map, line_info));
                 }
             }
             _ => (),
@@ -441,14 +446,24 @@ impl ArgumentInfo {
                 arg_value,
                 arg.get_type(),
             ) {
-                return Err(CompilerInternalError::of(
-                    format!(
-                        "Argument mismatch: Argument is of type '{}', \
-                         which is not assignable to type '{}'",
-                        arg.type_val.name(),
-                        arg_value.get_type().name()
-                    ),
-                    &**arg,
+                return Err(CompilerInternalError::from_builder(
+                    ErrorBuilder::new(&**arg)
+                        .with_message(format!(
+                            "Argument mismatch: Argument is of type '{}', \
+                             which is not assignable to type '{}'",
+                            arg.type_val.name(),
+                            arg_value.get_type().name()
+                        ))
+                        // TODO: More portable way to add line information
+                        .when(!parent.line_info().is_empty(), |builder| {
+                            builder.with_note(format!(
+                                "Function '{}' defined here:\nFile {} Line {}\n{}",
+                                parent.get_name(),
+                                parent.line_info().get_path().display(),
+                                parent.line_info().get_line_number(),
+                                parent.line_info().info_string()
+                            ))
+                        }),
                 )
                 .into());
             }
@@ -569,24 +584,22 @@ impl ArgumentInfo {
         &self,
         new_args: &[T],
         keyword_map: &HashMap<&str, &TypeObject>,
+        line_info: &LineInfo,
     ) -> CompilerError {
         let unmatched = self
             .iter_rev()
             .map(|x| &*x.name)
             .filter(|x| !keyword_map.contains_key(x))
             .collect_vec();
-        let arg_line_info = new_args
-            .first()
-            .map_or(LineInfo::empty_ref(), |x| x.line_info());
         match *unmatched {
             [] => CompilerInternalError::of(
                 "`Argument::not_enough_args` was called with no unmatched arguments",
-                arg_line_info,
+                line_info,
             )
             .into(),
             [value] => CompilerException::of(
                 format!("Missing value for positional argument {value}"),
-                arg_line_info,
+                line_info,
             )
             .into(),
             _ => CompilerException::of(
@@ -594,7 +607,7 @@ impl ArgumentInfo {
                     "Missing value for positional arguments {}",
                     unmatched.iter().format(", ")
                 ),
-                arg_line_info,
+                line_info,
             )
             .into(),
         }
@@ -706,6 +719,7 @@ impl DefaultValue {
     }
 }
 
+// TODO: Return more meaningful error type
 fn update(
     i: u16,
     par: &TypeObject,
