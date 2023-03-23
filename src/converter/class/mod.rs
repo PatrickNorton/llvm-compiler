@@ -393,9 +393,21 @@ pub fn set_supers(info: &mut CompilerInfo, node: BaseClassRef<'_>) -> CompileRes
     let supers = convert_supers(&node, info.types_of(node.get_superclasses())?)?;
     let true_supers = supers.into_iter().map_into().collect();
     match user_type {
-        UserType::Interface(_) => {} // TODO
         UserType::Std(s) => s.set_supers(true_supers),
         UserType::Union(u) => u.set_supers(true_supers),
+        UserType::Interface(_) => {
+            if !true_supers.is_empty() {
+                warning::warn(
+                    format!(
+                        "Cannot yet set superclasses for interface '{}'",
+                        node.str_name()
+                    ),
+                    WarningType::Todo,
+                    info,
+                    LineInfo::empty(),
+                )?;
+            }
+        } // TODO
     }
     info.remove_local_types();
     Ok(())
