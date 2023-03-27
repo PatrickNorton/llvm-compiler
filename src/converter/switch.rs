@@ -100,6 +100,7 @@ impl<'a> LoopConverter for SwitchConverter<'a> {
         let mut had_default = false;
         let mut will_return = None;
         for case_stmt in self.node.get_cases() {
+            // FIXME: Switch statement on enums with all cases covered
             if case_stmt.is_default() {
                 had_default = true;
             } else if had_default {
@@ -142,7 +143,7 @@ impl<'a> SwitchConverter<'a> {
                 )
                 .into());
             }
-            let has_as = case.get_as().is_empty();
+            let has_as = !case.get_as().is_empty();
             if has_as {
                 info.add_stack_frame();
                 let switch_ret = <&UnionTypeObject>::try_from(&switch_ret).map_err(|_| {
