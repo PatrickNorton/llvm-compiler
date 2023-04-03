@@ -531,10 +531,16 @@ mod private {
                     };
                     for super_cls in info.supers.iter() {
                         let sup_attr = super_cls.attr_type_with_generics(value, new_access);
-                        if let Result::Ok(sup_attr) = sup_attr {
-                            if attr_has_impl(value, super_cls) {
-                                return Ok(sup_attr);
+                        match sup_attr {
+                            Ok(sup_attr) => {
+                                if attr_has_impl(value, super_cls) {
+                                    return Ok(sup_attr);
+                                }
                             }
+                            e @ Err(AccessErrorType::WeakAccess(_) | AccessErrorType::NeedsMut) => {
+                                return e;
+                            }
+                            Err(AccessErrorType::NotFound) => {}
                         }
                     }
                     Err(AccessErrorType::NotFound) // FIXME: Get correct error
@@ -704,7 +710,10 @@ mod private {
             if AccessLevel::can_access(attr.get_access_level(), access) {
                 Ok(Cow::Owned(attr.get_type().make_const()))
             } else {
-                Err(AccessErrorType::NeedsMut)
+                Err(AccessErrorType::WeakAccess(AccessTooStrict {
+                    level_gotten: access,
+                    level_expected: attr.get_access_level(),
+                }))
             }
         } else if attr.get_access_level() == AccessLevel::Pubget {
             if AccessLevel::can_access(AccessLevel::Private, access) {
