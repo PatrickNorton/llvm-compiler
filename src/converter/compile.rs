@@ -30,13 +30,15 @@ use super::permission::PermissionLevel;
 use super::type_obj::{InterfaceType, TypeObject};
 use super::{builtins, CompileResult};
 
+// TODO: This function is massive; break it up?
 pub fn compile_all(
     global_info: &GlobalCompilerInfo,
     root_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
     // File-finding algorithm:
+    //   Calculate builtins & set that up
     //   Each file returns list of dependent files
-    //     Push list of required files to HashMap of files->FileTypes (new struct)
+    //     Push list of required files to HashMap of files->FileTypes
     //   For file in files:
     //     Create ImportHandler from FileTypes
     //   For file in files:
@@ -45,6 +47,12 @@ pub fn compile_all(
     //   Link all files
     //   Compile all files
     // TODO? Turn PathBufs into Arc<Path>
+
+    // First, we compile the builtins file.
+    //
+    // This file needs to be treated separately because it contains stuff that
+    // is known to the compiler. This is mostly handled in the `parse_builtins`
+    // function.
     let builtin_path = builtins_file(global_info.get_arguments());
     let auto_interfaces = builtins::auto_interfaces()
         .into_iter()
@@ -54,6 +62,17 @@ pub fn compile_all(
         PathBuf::new() => auto_interfaces
     );
     parse_builtins(global_info, builtin_path.clone(), &mut default_interfaces)?;
+
+    // After we've dealt with the builtins, we need to determine the set of
+    // files to compile. We do this by recursively finding the dependents of
+    // each file (using `FileTypes::find_dependents`), and from there, we
+    // continue until we find no new files to add, at which point we can stop
+    // looking.
+    //
+    // A secondary part of this process is that it registers all the class
+    // definitions, specifically their names. It also does a bit more for the
+    // default interfaces, so that they can be correctly registered as
+    // superclasses.
     let mut all_files = HashMap::new();
     let mut new_files = FileTypes::find_dependents(
         root_path,
@@ -81,6 +100,9 @@ pub fn compile_all(
             }
         }
     }
+
+    // Here, we set the default interfaces that we registered as part of the
+    // above file-finding.
     global_info.set_default_interfaces(
         default_interfaces
             .iter()
@@ -88,8 +110,11 @@ pub fn compile_all(
             .map(|(x, _)| x.clone())
             .collect(),
     );
-    // TODO? See if it's possible to calculate typedefs as part of an earlier
-    // pass
+
+    // Here, we calculate all the `typedef` declarations. These can not be done
+    // as part of an earlier pass because they depend on the type declarations,
+    // and they can not come later because they are used in function
+    // declarations and superclass lists. Thus, they need to be their own pass.
     let addl_typedefs = all_files
         .iter()
         .map(|(file, (node, _))| {
@@ -102,6 +127,10 @@ pub fn compile_all(
         let (_, types) = all_files.get_mut(&path).unwrap();
         types.types.extend(typedefs)
     }
+
+    // Once we have dealt with all the type names, we need to create the import
+    // handler. For that, we defer to `ImportHandler::from_file_types`.
+    //
     // NOTE: feature(iterator_try_collect) (#94047) would improve this
     let import_handlers = all_files
         .iter()
@@ -110,6 +139,11 @@ pub fn compile_all(
             Ok((file, handler))
         })
         .collect::<CompileResult<HashMap<_, _>>>()?;
+
+    // Now that we have the import handlers, our next step is to create the
+    // CompilerInfos. First, we calculate the predeclared types, then create the
+    // CompilerInfo, then we calculate the types defined in the file and set the
+    // AccessHandler.
     let mut all_infos = import_handlers
         .into_iter()
         .map(|(file, handler)| {
@@ -118,12 +152,16 @@ pub fn compile_all(
             Ok((file, info))
         })
         .collect::<CompileResult<HashMap<_, _>>>()?;
+
+    // After we've created the import handlers, we need to load the default
+    // interfaces. One step of that involves linking the default holders, hence
+    // why we create the list of default holders here.
     let mut default_holders = default_interfaces
         .into_iter()
-        // builtins::auto_interfaces (which we don't want to load) is in an
-        // empty file, so we filter that out
+        // `builtins::auto_interfaces` (which we don't want to load) is in an
+        // empty file, so we filter that out.
         // Additionally, __builtins__.newlang has already had its auto
-        // interfaces loaded, so we filter that out too
+        // interfaces loaded, so we filter that out too.
         .filter(|(file, _)| !file.as_os_str().is_empty() && file != &builtin_path)
         .map(|(file, vals)| {
             let mut defaults = DefaultHolder::new();
@@ -135,20 +173,34 @@ pub fn compile_all(
             Ok((file, defaults))
         })
         .collect::<CompileResult<HashMap<_, _>>>()?;
+
+    // Having loaded the `auto` interfaces, we need to set the superclasses of
+    // each type. This is necessary for the rest of compilation, since variable
+    // assignment and the like require knowledge of superclass trees.
     for (&file, info) in &mut all_infos {
         info.set_supers(&all_files[file].0)?;
     }
+
+    // After all interfaces are loaded, we can finally start actually compiling
+    // code. The first thing we compile is default-valued arguments.
     for (&file, info) in &mut all_infos {
         let mut defaults = default_holders.remove(file).unwrap();
         info.link(&all_files[file].0, &mut defaults)?;
         defaults.compile(info)?;
     }
+
+    // After having compiled default arguments, we then compute the export
+    // information, as all types are complete.
     let export_infos = all_infos
         .iter()
         .map(|(&path, info)| (path.clone(), info.import_handler().export_info()))
         .collect::<HashMap<_, _>>();
     global_info.set_export_infos(export_infos);
+
+    // Now, we finally get to the meat of the function. This compiles the code.
+    println!("{} files to compile", all_infos.len());
     for (&file, info) in &mut all_infos {
+        println!("Compiling {}", file.display());
         info.compile(&all_files[file].0)?
     }
     Ok(())
@@ -426,12 +478,12 @@ impl<'a> Iterator for ExportedNamesIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         // The first thing we iterate over is the list of explicitly exported
-        // names
+        // names.
         if let Option::Some((x, _)) = self.export_iter.next() {
             return Some(x);
         }
         // Once we've finished those, we check if the current recursive export
-        // has finished iterating; if not, return the next one in the list
+        // has finished iterating; if not, return the next one in the list.
         if let Option::Some(x) = self.recursive.as_mut().and_then(|x| x.next()) {
             return Some(x);
         }
@@ -453,7 +505,7 @@ impl<'a> Iterator for ExportedNamesIter<'a> {
                 let file_types = &self.all_files[next].1;
                 // Recursively create an ExportedNamesIter for the inner file,
                 // but sharing the same `already_checked` as the current
-                // iterator
+                // iterator.
                 let mut iter = ExportedNamesIter {
                     all_files: self.all_files,
                     export_iter: file_types.exports.iter(),
@@ -463,7 +515,7 @@ impl<'a> Iterator for ExportedNamesIter<'a> {
                 };
                 // Grab the next item from the iterator before assigning it--
                 // this (somewhat strange) order of operations removes the need
-                // for an unwrap() call
+                // for an unwrap() call.
                 let next = iter.next();
                 // This is our new recursive file, so we have to move it to
                 // self.recursive.
@@ -474,7 +526,7 @@ impl<'a> Iterator for ExportedNamesIter<'a> {
             }
             // If we've gotten here, the file we tried has either already been
             // iterated over or has no exports--either way, we need to move on
-            // to the next wildcard export before returning
+            // to the next wildcard export before returning.
         }
     }
 
