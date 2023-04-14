@@ -1,7 +1,6 @@
 use std::borrow::Cow;
 use std::collections::hash_map::Entry;
-use std::collections::HashMap;
-use std::path::PathBuf;
+use std::collections::{HashMap, HashSet};
 
 use either::Either;
 
@@ -27,7 +26,7 @@ use super::lang_obj::{LangInstance, LangObject};
 use super::loop_converter::LoopManager;
 use super::permission::PermissionLevel;
 use super::switch_table::SwitchTable;
-use super::type_obj::{TypeObject, UserType};
+use super::type_obj::{BaseType, TypeObject, UserType};
 use super::variable_holder::{VariableHolder, VariableInfo};
 use super::warning::WarningHolder;
 use super::{linker, CompileResult, CompileTypes};
@@ -56,44 +55,35 @@ pub struct CompilerInfo<'a> {
 }
 
 impl<'a> CompilerInfo<'a> {
-    pub fn new(
-        global_info: &'a GlobalCompilerInfo,
-        path: PathBuf,
-        builtins: &'a Builtins,
-        perms: PermissionLevel,
-    ) -> CompileResult<Self> {
-        Self::new_inner(
-            global_info,
-            Either::Left(builtins),
-            ImportHandler::new(path, perms),
-            HashMap::new(),
-        )
-    }
-
     pub fn new_builtins(
         global_info: &'a GlobalCompilerInfo,
         builtins: &'a mut ParsedBuiltins,
         handler: ImportHandler,
         predeclared_types: HashMap<String, (TypeObject, LineInfo)>,
+        defined_in_file: HashSet<BaseType>,
     ) -> CompileResult<Self> {
         Self::new_inner(
             global_info,
             Either::Right(builtins),
             handler,
             predeclared_types,
+            defined_in_file,
         )
     }
 
+    // TODO? Rename to CompilerInfo::new()
     pub fn with_handler(
         global_info: &'a GlobalCompilerInfo,
         handler: ImportHandler,
         predeclared_types: HashMap<String, (TypeObject, LineInfo)>,
+        defined_in_file: HashSet<BaseType>,
     ) -> CompileResult<Self> {
         Self::new_inner(
             global_info,
             Either::Left(global_info.global_builtins().unwrap()),
             handler,
             predeclared_types,
+            defined_in_file,
         )
     }
 
@@ -102,10 +92,10 @@ impl<'a> CompilerInfo<'a> {
         builtins: Either<&'a Builtins, &'a mut ParsedBuiltins>,
         import_handler: ImportHandler,
         predeclared_types: HashMap<String, (TypeObject, LineInfo)>,
+        defined_in_file: HashSet<BaseType>,
     ) -> CompileResult<Self> {
+        // TODO: Remove CompileResult
         let perms = import_handler.permission_level();
-        let mut var_holder = VariableHolder::new();
-        var_holder.add_predeclared_types(predeclared_types)?;
         Ok(Self {
             global_info,
             import_handler,
@@ -115,7 +105,7 @@ impl<'a> CompilerInfo<'a> {
             warnings: WarningHolder::new(global_info.clone_errors()),
             builtins,
             features: HashMap::new(),
-            var_holder,
+            var_holder: VariableHolder::with_predeclared(predeclared_types, defined_in_file),
             fn_returns: FunctionReturnInfo::new(),
             permission_level: perms,
             compiled: false,

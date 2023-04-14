@@ -60,6 +60,12 @@ pub struct DefaultValue {
     bytes_index: OnceCell<u16>,
 }
 
+#[derive(Debug)]
+struct UpdateError<'a> {
+    arg: &'a Argument,
+    passed_type: &'a TypeObject,
+}
+
 impl Argument {
     pub fn new(name: String, type_val: TypeObject) -> Self {
         Self {
@@ -326,28 +332,16 @@ impl ArgumentInfo {
         let mut matched_count = 0;
         for arg in self.all_keywords() {
             if let Option::Some(&keyword_type) = keyword_map.get(&*arg.name) {
-                if update(
+                update(
                     self.index_of(&arg.name).unwrap(),
                     &par,
                     &mut result,
                     &mut needs_make_option,
                     arg,
                     keyword_type,
-                ) {
-                    matched_count += 1;
-                } else {
-                    return Err(CompilerException::of(
-                        format!(
-                            "Argument mismatch: Keyword argument {} is of type '{}', \
-                            which is not assignable to type '{}'",
-                            arg.name,
-                            keyword_type.name(),
-                            arg.get_type().name()
-                        ),
-                        find_name(&arg.name, &new_args)?,
-                    )
-                    .into());
-                }
+                )
+                .map_err(|e| e.into_compiler_err(parent, Some(&*arg.name)))?;
+                matched_count += 1;
             }
         }
         // Ensure the number of matched keywords is the same as the total number of keywords
@@ -438,35 +432,15 @@ impl ArgumentInfo {
                 .into());
             }
             let arg_value = &self[next_arg];
-            if !update(
+            update(
                 next_arg as u16,
                 &par,
                 &mut result,
                 &mut needs_make_option,
                 arg_value,
                 arg.get_type(),
-            ) {
-                return Err(CompilerInternalError::from_builder(
-                    ErrorBuilder::new(&**arg)
-                        .with_message(format!(
-                            "Argument mismatch: Argument is of type '{}', \
-                             which is not assignable to type '{}'",
-                            arg.type_val.name(),
-                            arg_value.get_type().name()
-                        ))
-                        // TODO: More portable way to add line information
-                        .when(!parent.line_info().is_empty(), |builder| {
-                            builder.with_note(format!(
-                                "Function '{}' defined here:\nFile {} Line {}\n{}",
-                                parent.get_name(),
-                                parent.line_info().get_path().display(),
-                                parent.line_info().get_line_number(),
-                                parent.line_info().info_string()
-                            ))
-                        }),
-                )
-                .into());
-            }
+            )
+            .map_err(|err| err.into_compiler_err(parent, None))?;
             if arg_value.default_val.is_some() {
                 defaults_unused -= 1;
             }
@@ -719,21 +693,56 @@ impl DefaultValue {
     }
 }
 
-// TODO: Return more meaningful error type
-fn update(
+impl<'a> UpdateError<'a> {
+    pub fn into_compiler_err(
+        self,
+        parent: &FunctionInfo,
+        keyword: Option<&str>,
+    ) -> CompilerException {
+        CompilerException::from_builder(
+            ErrorBuilder::new(self.arg)
+                .with_message(format!(
+                    "Argument mismatch: {} is of type '{}', \
+                     which is not assignable to type '{}'",
+                    keyword.map_or_else(
+                        || "Argument".to_string(),
+                        |name| format!("Keyword argument '{}'", name),
+                    ),
+                    self.passed_type.name(),
+                    self.arg.get_name()
+                ))
+                // TODO: More portable way to add LineInfo
+                .when(!parent.line_info().is_empty(), |builder| {
+                    builder.with_note(format!(
+                        "Function '{}' defined here:\nFile {} Line {}\n{}",
+                        parent.get_name(),
+                        parent.line_info().get_path().display(),
+                        parent.line_info().get_line_number(),
+                        parent.line_info().info_string()
+                    ))
+                }),
+        )
+    }
+}
+
+fn update<'a>(
     i: u16,
     par: &TypeObject,
     result: &mut HashMap<u16, TypeObject>,
     needs_make_option: &mut HashSet<u16>,
-    arg: &Argument,
-    passed_type: &TypeObject,
-) -> bool {
+    arg: &'a Argument,
+    passed_type: &'a TypeObject,
+) -> Result<(), UpdateError<'a>> {
     if let Option::Some(arg_generics) = arg.type_val.generify_as(par, passed_type) {
-        TypeObject::add_generics_to_map(arg_generics, result)
+        if TypeObject::add_generics_to_map(arg_generics, result) {
+            Ok(())
+        } else {
+            Err(UpdateError { arg, passed_type })
+        }
     } else {
         if OptionTypeObject::needs_and_super(&arg.type_val, passed_type) {
             needs_make_option.insert(i);
-            return true;
+            return Ok(());
         }
         let option_generics = arg
             .get_type()
@@ -741,10 +750,10 @@ fn update(
         if option_generics.is_none()
             || !TypeObject::add_generics_to_map(option_generics.unwrap(), result)
         {
-            false
+            Err(UpdateError { arg, passed_type })
         } else {
             needs_make_option.insert(i);
-            true
+            Ok(())
         }
     }
 }

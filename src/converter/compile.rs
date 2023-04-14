@@ -27,12 +27,12 @@ use super::global_info::GlobalCompilerInfo;
 use super::import_handler::{builtins_file, ImportHandler};
 use super::lang_obj::LangObject;
 use super::permission::PermissionLevel;
-use super::type_obj::{InterfaceType, TypeObject};
+use super::type_obj::{BaseType, InterfaceType, TypeObject};
 use super::{builtins, CompileResult};
 
 // TODO: This function is massive; break it up?
 pub fn compile_all(
-    global_info: &GlobalCompilerInfo,
+    global_info: &mut GlobalCompilerInfo,
     root_path: PathBuf,
 ) -> Result<(), Box<dyn Error>> {
     // File-finding algorithm:
@@ -141,14 +141,20 @@ pub fn compile_all(
         .collect::<CompileResult<HashMap<_, _>>>()?;
 
     // Now that we have the import handlers, our next step is to create the
-    // CompilerInfos. First, we calculate the predeclared types, then create the
-    // CompilerInfo, then we calculate the types defined in the file and set the
-    // AccessHandler.
+    // CompilerInfos. First, we calculate the predeclared types and the types
+    // defined in the file. Having done that, we can create the CompilerInfo and
+    // add it to our map.
     let mut all_infos = import_handlers
         .into_iter()
         .map(|(file, handler)| {
             let predeclared = predeclared_types(file, &all_files);
-            let info = CompilerInfo::with_handler(global_info, handler, predeclared)?;
+            let defined = all_files[file]
+                .1
+                .types
+                .values()
+                .map(|(ty, _)| BaseType::new(ty.clone()))
+                .collect();
+            let info = CompilerInfo::with_handler(global_info, handler, predeclared, defined)?;
             Ok((file, info))
         })
         .collect::<CompileResult<HashMap<_, _>>>()?;
@@ -229,8 +235,18 @@ fn parse_builtins(
     let (node, file_types) = all_files.remove(&path).unwrap();
     drop(all_files); // Should be empty now; this prevents accidental reuse
     let import_handler = ImportHandler::from_file_types(&file_types)?;
-    let mut info =
-        CompilerInfo::new_builtins(global_info, &mut builtins, import_handler, file_types.types)?;
+    let defined = file_types
+        .types
+        .values()
+        .map(|(ty, _)| BaseType::new(ty.clone()))
+        .collect();
+    let mut info = CompilerInfo::new_builtins(
+        global_info,
+        &mut builtins,
+        import_handler,
+        file_types.types,
+        defined,
+    )?;
     let mut defaults = DefaultHolder::new();
     load_default_interfaces(
         &mut info,
@@ -239,6 +255,7 @@ fn parse_builtins(
         &mut defaults,
         &node,
     )?;
+    info.set_supers(&node)?;
     info.link(&node, &mut defaults)?;
     defaults.compile(&mut info)?;
     info.compile(&node)?;

@@ -121,6 +121,17 @@ impl AccessHandler {
         }
     }
 
+    pub fn with_defined(defined_in_file: HashSet<BaseType>) -> Self {
+        Self {
+            classes_with_access: HashMap::new(),
+            classes_with_protected: HashMap::new(),
+            cls_types: Vec::new(),
+            super_types: Vec::new(),
+            constructors: Vec::new(),
+            defined_in_file,
+        }
+    }
+
     /// The current type that is referred to by the `cls` variable.
     ///
     /// This returns a reference to the last type added via [`Self::add_cls`],
@@ -472,7 +483,7 @@ impl AccessHandler {
     /// assert!(handler.is_in_constructor(&OBJECT));
     /// handler.enter_constructor(NULL_TYPE);
     /// // Note that multiple calls of `enter_constructor` do not override each
-    /// // other
+    /// // other:
     /// assert!(handler.is_in_constructor(&OBJECT));
     /// assert!(handler.is_in_constructor(&NULL_TYPE));
     /// ```

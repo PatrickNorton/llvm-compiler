@@ -1,5 +1,4 @@
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::iter::zip;
 use std::mem::replace;
 
@@ -19,7 +18,7 @@ use super::global_info::GlobalCompilerInfo;
 use super::import_handler::{ImportHandler, ImportInfo};
 use super::lang_obj::LangObject;
 use super::mutable::MutableType;
-use super::type_obj::{ModuleType, TypeObject};
+use super::type_obj::{BaseType, ModuleType, TypeObject};
 use super::warning::{self, WarningHolder, WarningType};
 use super::{CompileResult, CompileTypes};
 
@@ -56,6 +55,20 @@ impl VariableHolder {
             access_handler: AccessHandler::new(),
             variables: vec![HashMap::new()],
             type_map: HashMap::new(),
+            local_types: Vec::new(),
+            var_numbers: IntAllocator::new(),
+            max_var_size: 0,
+        }
+    }
+
+    pub fn with_predeclared(
+        predeclared: HashMap<String, (TypeObject, LineInfo)>,
+        defined_in_file: HashSet<BaseType>,
+    ) -> Self {
+        Self {
+            access_handler: AccessHandler::with_defined(defined_in_file),
+            variables: vec![HashMap::new()],
+            type_map: predeclared.into_iter().map(|(x, (y, _))| (x, y)).collect(),
             local_types: Vec::new(),
             var_numbers: IntAllocator::new(),
             max_var_size: 0,
@@ -338,30 +351,6 @@ impl VariableHolder {
 
     pub fn get_type_obj(&self, type_name: &str) -> Option<&TypeObject> {
         self.type_map.get(type_name)
-    }
-
-    pub fn add_predeclared_types(
-        &mut self,
-        types: HashMap<String, (TypeObject, LineInfo)>,
-    ) -> CompileResult<()> {
-        self.type_map.reserve(types.len());
-        for (name, (obj, line_info)) in types {
-            // NOTE: This might be made cleaner with feature(map_try_insert) (#82766)
-            match self.type_map.entry(name) {
-                Entry::Occupied(e) => {
-                    return Err(CompilerException::double_def(
-                        e.key(),
-                        line_info,
-                        LineInfo::empty(),
-                    )
-                    .into())
-                }
-                Entry::Vacant(e) => {
-                    e.insert(obj);
-                }
-            }
-        }
-        Ok(())
     }
 
     pub fn local_parent(&self, ty: &TypeObject) -> Option<&TypeObject> {
