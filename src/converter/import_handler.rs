@@ -6,10 +6,9 @@ use std::path::{Path, PathBuf};
 use derive_new::new;
 use either::Either;
 use indexmap::IndexSet;
-use itertools::Itertools;
 
 use crate::arguments::CLArgs;
-use crate::error::CompilerInternalError;
+use crate::error::{CompilerError, CompilerInternalError};
 use crate::parser::import::{ImportExportNode, ImportExportType};
 use crate::parser::line_info::{LineInfo, Lined};
 use crate::util::levenshtein;
@@ -54,6 +53,13 @@ pub struct ExportInfo {
     from_exports: HashMap<String, PathBuf>,
     export_constants: HashMap<String, Option<LangConstant>>,
     wildcard_exports: HashSet<PathBuf>,
+}
+
+#[derive(Debug)]
+enum ExportTypeError {
+    Internal(CompilerInternalError),
+    NotFound,
+    Circular,
 }
 
 impl ImportHandler {
@@ -309,7 +315,8 @@ impl ExportInfo {
         previous_files: &mut Vec<(&'a LineInfo, &'b str)>,
     ) -> CompileResult<Option<TypeObject>> {
         assert_ne!(name, "*");
-        self.check_circular(name, previous_files)?;
+        self.check_circular(name, previous_files)
+            .map_err(|e| e.into_compiler_exception(self, line_info, name, global_info))?;
         if let Option::Some(export) = self.exports.get(name) {
             if let Option::Some(TypeObject::Type(ty)) = export {
                 Ok(Some(ty.represented_type().clone()))
@@ -346,9 +353,18 @@ impl ExportInfo {
         previous_files: &mut Vec<(&'a LineInfo, &'b str)>,
     ) -> CompileResult<Option<LangConstant>> {
         assert_ne!(name, "*");
-        self.check_circular(name, previous_files)?;
+        self.check_circular(name, previous_files)
+            .map_err(|e| e.into_compiler_exception(self, line_info, name, global_info))?;
         if !self.exports.contains_key(name) {
             previous_files.push((line_info, name));
+            if let Option::Some(path) = self.from_exports.get(name) {
+                return global_info.export_info(path).exported_const(
+                    name,
+                    line_info,
+                    global_info,
+                    previous_files,
+                );
+            }
             for path in &self.wildcard_exports {
                 let handler = global_info.export_info(path);
                 if let Result::Ok(res) =
@@ -357,7 +373,6 @@ impl ExportInfo {
                     return Ok(res);
                 }
             }
-            println!("{}", self.exports.keys().join(", "));
             return Err(self.export_error(line_info, name, global_info).into());
         }
         let export = self.export_constants.get(name);
@@ -385,33 +400,57 @@ impl ExportInfo {
         global_info: &GlobalCompilerInfo,
         previous_files: &mut Vec<(&'a LineInfo, &'b str)>,
     ) -> CompileResult<TypeObject> {
+        self.export_type_inner(name, line_info, global_info, previous_files)
+            .map_err(|err| err.into_compiler_exception(self, line_info, name, global_info))
+    }
+
+    // FIXME: I feel like `exported_type` should reuse stuff from this function
+    fn export_type_inner<'a, 'b>(
+        &self,
+        name: &'b str,
+        line_info: &'a LineInfo,
+        global_info: &GlobalCompilerInfo,
+        previous_files: &mut Vec<(&'a LineInfo, &'b str)>,
+    ) -> Result<TypeObject, ExportTypeError> {
         assert_ne!(name, "*");
         // FIXME: This won't work (will fail when it shouldn't) on circular
         // paths of wildcard exports
         self.check_circular(name, previous_files)?;
         if let Option::Some(export) = self.exports.get(name) {
             export.clone().ok_or_else(|| {
-                CompilerInternalError::of(format!("Export of {name} has no type"), line_info).into()
+                ExportTypeError::Internal(CompilerInternalError::of(
+                    format!("Export of {name} has no type"),
+                    line_info,
+                ))
             })
         } else if let Option::Some(path) = self.from_exports.get(name) {
             previous_files.push((line_info, name));
-            global_info.export_info(path).type_of_export(
+            let result = global_info.export_info(path).export_type_inner(
                 name,
                 line_info,
                 global_info,
                 previous_files,
-            )
+            );
+            previous_files.pop();
+            result
         } else {
             previous_files.push((line_info, name));
             for path in &self.wildcard_exports {
                 let handler = global_info.export_info(path);
-                if let Result::Ok(res) =
-                    handler.type_of_export(name, line_info, global_info, previous_files)
-                {
-                    return Ok(res);
+                match handler.export_type_inner(name, line_info, global_info, previous_files) {
+                    Ok(res) => {
+                        previous_files.pop();
+                        return Ok(res);
+                    }
+                    Err(e @ ExportTypeError::Internal(_)) => {
+                        previous_files.pop();
+                        return Err(e);
+                    }
+                    _ => {}
                 }
             }
-            Err(self.export_error(line_info, name, global_info).into())
+            previous_files.pop();
+            Err(ExportTypeError::NotFound)
         }
     }
 
@@ -462,17 +501,35 @@ impl ExportInfo {
         &self,
         name: &str,
         previous_files: &[(&LineInfo, &str)],
-    ) -> CompileResult<()> {
+    ) -> Result<(), ExportTypeError> {
         for (info, prev_name) in previous_files {
             if info.get_path() == self.path && prev_name == &name {
-                return Err(CompilerException::of(
-                    format!("Circular import of '{name}': not defined in any file"),
-                    info,
-                )
-                .into());
+                return Err(ExportTypeError::Circular);
             }
         }
         Ok(())
+    }
+}
+
+impl ExportTypeError {
+    fn into_compiler_exception(
+        self,
+        export_info: &ExportInfo,
+        line_info: impl Lined,
+        name: &str,
+        global_info: &GlobalCompilerInfo,
+    ) -> CompilerError {
+        match self {
+            ExportTypeError::Internal(i) => i.into(),
+            ExportTypeError::Circular => CompilerException::of(
+                format!("Circular import of '{name}': not defined in any file"),
+                line_info,
+            )
+            .into(),
+            ExportTypeError::NotFound => export_info
+                .export_error(line_info, name, global_info)
+                .into(),
+        }
     }
 }
 
