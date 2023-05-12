@@ -1,5 +1,6 @@
 use derive_new::new;
 
+use crate::error::ErrorBuilder;
 use crate::parser::aug_assign::{AugAssignTypeNode, AugmentedAssignmentNode};
 use crate::parser::dotted::DottedVariableNode;
 use crate::parser::index::IndexNode;
@@ -73,6 +74,7 @@ impl<'a> AugAssignConverter<'a> {
         let operator = self.node.get_operator().get_operator();
         let op_info = converter_return.operator_info(OpSpTypeNode::translate(operator), info);
         let value_return = first(value_converter.return_type(info)?);
+        self.check_mutable_var(name, info)?;
         self.check_info(op_info.as_deref(), &converter_return, &value_return)?;
         let mut bytes = assigned_converter.convert(info)?;
         bytes.extend(value_converter.convert(info)?);
@@ -163,11 +165,7 @@ impl<'a> AugAssignConverter<'a> {
 
     fn convert_null_coerce_var(&self, info: &mut CompilerInfo) -> CompileBytes {
         let variable = <&VariableNode>::try_from(self.node.get_name()).unwrap();
-        if info.variable_is_immutable(variable.get_name()) {
-            return Err(
-                CompilerException::of("Cannot assign to immutable variable", self.node).into(),
-            );
-        }
+        self.check_mutable_var(variable, info)?;
         let mut assigned_converter = variable.test_converter(1);
         let mut value_converter = self.node.get_value().test_converter(1);
         let variable_type = first(assigned_converter.return_type(info)?);
@@ -368,6 +366,31 @@ impl<'a> AugAssignConverter<'a> {
                 self.node,
             )
             .into())
+        }
+    }
+
+    fn check_mutable_var(
+        &self,
+        variable: &VariableNode,
+        info: &mut CompilerInfo,
+    ) -> CompileResult<()> {
+        if info.variable_is_immutable(variable.get_name()) {
+            Err(CompilerException::from_builder(
+                ErrorBuilder::new(self.node)
+                    .with_message(format!(
+                        "Cannot assign to immutable variable '{}'",
+                        variable.get_name()
+                    ))
+                    .try_value_def(
+                        variable.get_name(),
+                        info.var_holder()
+                            .declaration_info(variable.get_name())
+                            .unwrap(),
+                    ),
+            )
+            .into())
+        } else {
+            Ok(())
         }
     }
 }

@@ -429,6 +429,10 @@ impl VariableHolder {
         }
     }
 
+    pub fn declaration_info(&self, name: &str) -> Option<&LineInfo> {
+        self.var_info(name).map(|x| x.declaration_info())
+    }
+
     fn convert_type_inner(
         &self,
         node: &TypeNode,
