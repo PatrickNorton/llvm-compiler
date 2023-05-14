@@ -4,6 +4,7 @@ use std::slice;
 
 use derive_new::new;
 
+use crate::error::LineInfo;
 use crate::parser::assign::{AssignableNode, AssignmentNode};
 use crate::parser::dotted::DottedVariableNode;
 use crate::parser::index::IndexNode;
@@ -100,14 +101,16 @@ impl<'a> AssignConverter<'a> {
         let names = self.node.get_names();
         let values = self.node.get_values();
         if names.len() != values.len() {
-            return Err(CompilerException::of(
-                format!(
-                    "Multiple returns are not supported in = statements \
-                 with more than one operand (expected {}, got {})",
-                    names.len(),
-                    values.len()
-                ),
-                self.node,
+            return Err(CompilerException::from_builder(
+                ErrorBuilder::new(self.node)
+                    .with_message(format!(
+                        "Expected {} values in = statement, got {}",
+                        names.len(),
+                        values.len()
+                    ))
+                    .with_note(
+                        "Multiple returns are not supported in statements with multiple operands",
+                    ),
             )
             .into());
         }
@@ -352,7 +355,7 @@ impl<'a> AssignConverter<'a> {
             .collect::<CompileResult<Vec<_>>>()?;
         index_types.push(Argument::new(String::new(), set_type.clone()));
         let op_info = var_type.try_operator_info(self.node, OpSpTypeNode::SetAttr, info)?;
-        op_info.generify_args(&index_types)?;
+        op_info.generify_args(&index_types, self.node.line_info())?;
         Ok(())
     }
 
@@ -383,7 +386,7 @@ impl<'a> AssignConverter<'a> {
             Argument::new(String::new(), info.builtins().slice_type().clone()),
             Argument::new(String::new(), set_type.clone()),
         ];
-        ops.generify_args(&args)?;
+        ops.generify_args(&args, self.node.line_info())?;
         Ok(())
     }
 
@@ -586,10 +589,17 @@ fn check_def(info: &CompilerInfo, variable: &VariableNode) -> CompileResult<()> 
     if info.var_is_undefined(name) {
         Err(def_error(info, variable).into())
     } else if info.variable_is_immutable(name) {
-        Err(
-            CompilerException::of(format!("Cannot assign to const variable {name}"), variable)
-                .into(),
+        Err(CompilerException::from_builder(
+            ErrorBuilder::new(variable)
+                .with_message(format!("Cannot assign to const variable {name}"))
+                .try_value_def(
+                    name,
+                    info.var_holder()
+                        .declaration_info(name)
+                        .unwrap_or_else(LineInfo::empty_ref),
+                ),
         )
+        .into())
     } else {
         Ok(())
     }
