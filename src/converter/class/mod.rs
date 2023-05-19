@@ -395,19 +395,8 @@ pub fn set_supers(info: &mut CompilerInfo, node: BaseClassRef<'_>) -> CompileRes
     match user_type {
         UserType::Std(s) => s.set_supers(true_supers),
         UserType::Union(u) => u.set_supers(true_supers),
-        UserType::Interface(_) => {
-            if !true_supers.is_empty() {
-                warning::warn(
-                    format!(
-                        "Cannot yet set superclasses for interface '{}'",
-                        node.str_name()
-                    ),
-                    WarningType::Todo,
-                    info,
-                    LineInfo::empty(),
-                )?;
-            }
-        } // TODO
+        // FIXME: Find out why setting supers here isn't needed and document it
+        UserType::Interface(_) => {}
     }
     info.remove_local_types();
     Ok(())

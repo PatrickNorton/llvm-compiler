@@ -373,7 +373,6 @@ impl<'a> UnionConverter<'a> {
                 let stmt = VariantCreationNode::new(
                     self.node.line_info().clone(),
                     TestNode::Name(NameNode::Variable(self_var)),
-                    name.clone(),
                     *variant_no,
                     TestNode::Name(NameNode::Variable(variant)),
                 );

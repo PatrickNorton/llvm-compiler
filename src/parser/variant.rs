@@ -7,7 +7,6 @@ use crate::parser::test_node::TestNode;
 pub struct VariantCreationNode {
     line_info: LineInfo,
     union: TestNode,
-    variant_name: String,
     variant_no: u16,
     value: TestNode,
 }
