@@ -5,6 +5,23 @@ use crate::parser::operator::OperatorTypeNode;
 
 use super::constant::{LangConstant, NumberConstant, StringConstant};
 
+/// Computes constant-folding for a list of [`LangConstant`]s.
+///
+/// This does not do any type-checking, but instead returns `None` in any cases
+/// where the operation is not well-defined. Type checks should be done at the
+/// level of the function calling this code.
+///
+/// In addition to returning `None` in cases where the operation is undefined,
+/// it also does so in cases in which the operation would error; for example in
+/// the code
+///
+/// ```text
+/// var foo = "abc" * ((1 << 64) + 1)
+/// ```
+///
+/// which would not fit into any computer's memory. As such, note that returning
+/// `None` does not necessarily signify that an error occurred, just that the
+/// operation could not be completed statically.
 pub fn compute_const(op: OperatorTypeNode, consts: Vec<LangConstant>) -> Option<LangConstant> {
     match op {
         OperatorTypeNode::Add => add(consts).map(Into::into),
