@@ -396,13 +396,18 @@ impl ArgumentInfo {
                     } else {
                         "no more than"
                     };
-                    return Err(CompilerException::of(
-                        format!(
-                            "Too many parameters passed: \
-                             Expected {count_str} {unused} unnamed parameters, \
-                             got {non_keyword_count}",
-                        ),
-                        &args[0],
+                    return Err(CompilerException::from_builder(
+                        ErrorBuilder::new(&args[0])
+                            .with_message(format!(
+                                "Too many parameters passed: \
+                                 Expected {count_str} {unused} unnamed parameters, \
+                                 got {non_keyword_count}",
+                            ))
+                            // TODO: Improve this note
+                            .with_note(format!(
+                                "Function has argument list {}",
+                                self.iter().map(|x| &x.name).format(", ")
+                            )),
                     )
                     .into());
                 }
@@ -711,16 +716,7 @@ impl<'a> UpdateError<'a> {
                     self.passed_type.name(),
                     self.arg.get_name()
                 ))
-                // TODO: More portable way to add LineInfo
-                .when(!parent.line_info().is_empty(), |builder| {
-                    builder.with_note(format!(
-                        "Function '{}' defined here:\nFile {} Line {}\n{}",
-                        parent.get_name(),
-                        parent.line_info().get_path().display(),
-                        parent.line_info().get_line_number(),
-                        parent.line_info().info_string()
-                    ))
-                }),
+                .try_value_def(parent.get_name(), parent.line_info()),
         )
     }
 }

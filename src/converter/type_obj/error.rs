@@ -74,13 +74,17 @@ impl AttrValue {
 impl From<AccessError> for CompilerException {
     fn from(err: AccessError) -> Self {
         match err.ty {
-            AccessErrorType::WeakAccess(_) => CompilerException::with_note(
+            AccessErrorType::WeakAccess(access) => CompilerException::with_note(
                 format!(
                     "Cannot get {} from type '{}'",
                     err.name_str(false),
                     err.parent.name()
                 ),
-                "Operator has too strict of an access level",
+                // TODO: Make more user-friendly
+                format!(
+                    "Operator has too strict of an access level (expected {:?}, got {:?})",
+                    access.level_expected, access.level_gotten,
+                ),
                 err.line_info,
             ),
             AccessErrorType::NeedsMut => CompilerException::of(

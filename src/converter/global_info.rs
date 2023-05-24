@@ -194,7 +194,7 @@ impl GlobalCompilerInfo {
         *self
             .class_map
             .get(&BaseType::new(ty.clone().into()))
-            .unwrap()
+            .unwrap_or_else(|| panic!("Could not get class {} from map", ty.name()))
     }
 
     pub fn add_table(&self, table: SwitchTable) -> u16 {

@@ -48,7 +48,7 @@ impl<'a> ConverterBase for RaiseConverter<'a> {
         if !info.builtins().throwable().is_superclass(&ret_type) {
             return Err(CompilerException::of(
                 format!(
-                    "Expected superclass of 'Throwable' in raise statement body, got '{}'",
+                    "Expected subclass of 'Throwable' in raise statement body, got '{}'",
                     ret_type.name()
                 ),
                 self.node,
