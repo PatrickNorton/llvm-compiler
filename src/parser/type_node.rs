@@ -34,14 +34,18 @@ pub struct VarNode {
 }
 
 impl TypeNode {
-    pub fn from_dotted_var(name: DottedVariableNode, optional: bool) -> TypeNode {
+    pub fn from_dotted_var(
+        name: DottedVariableNode,
+        optional: bool,
+        mutability: Option<DescriptorNode>,
+    ) -> TypeNode {
         TypeNode {
             line_info: name.line_info().clone(),
             name,
             sub_types: Vec::new(),
             is_vararg: false,
             optional,
-            mutability: Option::None,
+            mutability,
         }
     }
 
@@ -190,7 +194,7 @@ impl TypeNode {
                 TokenType::Operator(OperatorTypeNode::Optional)
             )?
             .is_some();
-            return Ok(TypeNode::from_dotted_var(main, optional));
+            return Ok(TypeNode::from_dotted_var(main, optional, mutability));
         }
         tokens.next_tok(true)?;
         let mut subtypes = Vec::new();
